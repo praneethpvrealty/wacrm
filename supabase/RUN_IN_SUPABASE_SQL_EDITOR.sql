@@ -1529,6 +1529,13 @@ BEGIN
   WHERE account_role IN ('owner', 'admin')
   LIMIT 1;
 
+  IF v_user_id IS NULL THEN
+    SELECT user_id, account_id 
+    INTO v_user_id, v_account_id
+    FROM profiles
+    LIMIT 1;
+  END IF;
+
   IF v_user_id IS NOT NULL AND v_account_id IS NOT NULL THEN
     -- Delete existing if any to avoid uniqueness clashes
     DELETE FROM message_templates 

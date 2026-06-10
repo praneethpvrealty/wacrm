@@ -229,7 +229,7 @@ export function PropertyForm({
       const { data, error } = await supabase
         .from('message_templates')
         .select('*')
-        .eq('status', 'APPROVED')
+        .in('status', ['APPROVED', 'Approved'])
         .order('name');
       if (error) throw error;
       setTemplates(data || []);
