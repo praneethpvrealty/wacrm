@@ -1519,28 +1519,18 @@ ALTER TABLE message_templates ALTER COLUMN status SET DEFAULT 'DRAFT';
 -- ============================================================
 DO $$
 DECLARE
-  v_user_id UUID;
-  v_account_id UUID;
+  r RECORD;
 BEGIN
-  -- Resolve the first owner/admin user to link the template to
-  SELECT user_id, account_id 
-  INTO v_user_id, v_account_id
-  FROM profiles
-  WHERE account_role IN ('owner', 'admin')
-  LIMIT 1;
-
-  IF v_user_id IS NULL THEN
-    SELECT user_id, account_id 
-    INTO v_user_id, v_account_id
-    FROM profiles
-    LIMIT 1;
-  END IF;
-
-  IF v_user_id IS NOT NULL AND v_account_id IS NOT NULL THEN
+  -- Iterate through every distinct account/user in profiles to seed templates for everyone
+  FOR r IN (
+    SELECT DISTINCT ON (account_id) user_id, account_id 
+    FROM profiles 
+    WHERE account_id IS NOT NULL
+  ) LOOP
     -- Delete existing if any to avoid uniqueness clashes
     DELETE FROM message_templates 
     WHERE name = 'share_property_details' 
-      AND user_id = v_user_id;
+      AND account_id = r.account_id;
 
     INSERT INTO message_templates (
       user_id,
@@ -1554,8 +1544,8 @@ BEGIN
       status
     )
     VALUES (
-      v_user_id,
-      v_account_id,
+      r.user_id,
+      r.account_id,
       'share_property_details',
       'Marketing',
       'en_US',
@@ -1568,7 +1558,7 @@ BEGIN
     -- Also seed an image-header version of the template for sharing property details
     DELETE FROM message_templates 
     WHERE name = 'share_property_details_with_image' 
-      AND user_id = v_user_id;
+      AND account_id = r.account_id;
 
     INSERT INTO message_templates (
       user_id,
@@ -1583,8 +1573,8 @@ BEGIN
       status
     )
     VALUES (
-      v_user_id,
-      v_account_id,
+      r.user_id,
+      r.account_id,
       'share_property_details_with_image',
       'Marketing',
       'en_US',
@@ -1597,7 +1587,5 @@ BEGIN
       ]'::jsonb,
       'APPROVED'
     );
-  END IF;
+  END LOOP;
 END $$;
-
-
