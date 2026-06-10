@@ -415,10 +415,10 @@ export function PropertyForm({
               } else if (mapping.value === 'highlights') {
                 const parsedHighlights = nearbyHighlights.filter(Boolean);
                 if (parsedHighlights.length > 0) {
-                  val = parsedHighlights.map((h) => `- ${h}`).join('\n');
+                  val = parsedHighlights.map((h) => `• ${h}`).join(' | ');
                 } else {
                   const parsedFeatures = features.filter(Boolean);
-                  val = parsedFeatures.map((f) => `- ${f}`).join('\n');
+                  val = parsedFeatures.map((f) => `• ${f}`).join(' | ');
                 }
               } else if (mapping.value === 'agent') {
                 val = profile?.full_name || '';
@@ -2100,10 +2100,10 @@ export function PropertyForm({
                                         } else if (mapping.value === 'highlights') {
                                           const parsedHighlights = nearbyHighlights.filter(Boolean);
                                           if (parsedHighlights.length > 0) {
-                                            val = parsedHighlights.map((h) => `- ${h}`).join('\n');
+                                            val = parsedHighlights.map((h) => `• ${h}`).join(' | ');
                                           } else {
                                             const parsedFeatures = features.filter(Boolean);
-                                            val = parsedFeatures.length > 0 ? parsedFeatures.map((f) => `- ${f}`).join('\n') : `[Highlights / Features]`;
+                                            val = parsedFeatures.length > 0 ? parsedFeatures.map((f) => `• ${f}`).join(' | ') : `[Highlights / Features]`;
                                           }
                                         } else if (mapping.value === 'agent') {
                                           val = profile?.full_name || `[Agent Name]`;
