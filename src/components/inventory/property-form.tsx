@@ -128,7 +128,7 @@ export function PropertyForm({
   onSaved,
 }: PropertyFormProps) {
   const supabase = createClient();
-  const { user, accountId } = useAuth();
+  const { user, accountId, profile } = useAuth();
   const isEdit = !!property;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -288,20 +288,89 @@ export function PropertyForm({
     if (selectedTemplate && placeholders.length > 0) {
       const mappings: Record<string, { type: 'field' | 'static'; value: string }> = {};
       const customVals: Record<string, string> = {};
+      const lines = selectedTemplate.body_text.split('\n');
 
       placeholders.forEach((placeholder, idx) => {
         const key = placeholder.replace(/^\{\{|\}\}$/g, '');
-        // Default mapping: idx 0 -> Name, idx 1 -> Title, idx 2 -> Price, idx 3 -> Location
-        if (idx === 0) {
-          mappings[key] = { type: 'field', value: 'name' };
-        } else if (idx === 1) {
-          mappings[key] = { type: 'static', value: 'title' };
-        } else if (idx === 2) {
-          mappings[key] = { type: 'static', value: 'price' };
-        } else if (idx === 3) {
-          mappings[key] = { type: 'static', value: 'location' };
-        } else {
-          mappings[key] = { type: 'static', value: 'custom' };
+        
+        let guessedType: 'field' | 'static' = 'static';
+        let guessedValue = 'custom';
+        let resolved = false;
+
+        // Scan the line containing the placeholder for text context clues
+        const matchingLine = lines.find((line) => line.includes(placeholder));
+        if (matchingLine) {
+          const lowerLine = matchingLine.toLowerCase();
+          if (lowerLine.includes('hi ') || lowerLine.includes('hello ') || lowerLine.includes('dear ')) {
+            guessedType = 'field';
+            guessedValue = 'name';
+            resolved = true;
+          } else if (lowerLine.includes('location') || lowerLine.includes('address') || lowerLine.includes('📍')) {
+            guessedType = 'static';
+            guessedValue = 'location';
+            resolved = true;
+          } else if (lowerLine.includes('price') || lowerLine.includes('budget') || lowerLine.includes('💰') || lowerLine.includes('₹') || lowerLine.includes('$')) {
+            guessedType = 'static';
+            guessedValue = 'price';
+            resolved = true;
+          } else if (lowerLine.includes('area') || lowerLine.includes('size') || lowerLine.includes('built') || lowerLine.includes('sq') || lowerLine.includes('📐')) {
+            guessedType = 'static';
+            guessedValue = 'area';
+            resolved = true;
+          } else if (lowerLine.includes('highlight') || lowerLine.includes('feature') || lowerLine.includes('amenit')) {
+            guessedType = 'static';
+            guessedValue = 'highlights';
+            resolved = true;
+          } else if (lowerLine.includes('regards') || lowerLine.includes('thanks') || lowerLine.includes('agent') || lowerLine.includes('sincerely')) {
+            guessedType = 'static';
+            guessedValue = 'agent';
+            resolved = true;
+          }
+        }
+
+        // If the placeholder is on a line by itself, check the line before
+        if (!resolved) {
+          const placeholderLineIdx = lines.findIndex((line) => line.includes(placeholder));
+          if (placeholderLineIdx > 0) {
+            const prevLine = lines[placeholderLineIdx - 1].toLowerCase();
+            if (prevLine.includes('highlight') || prevLine.includes('feature') || prevLine.includes('amenit')) {
+              guessedType = 'static';
+              guessedValue = 'highlights';
+              resolved = true;
+            } else if (prevLine.includes('regards') || prevLine.includes('thanks') || prevLine.includes('sincerely')) {
+              guessedType = 'static';
+              guessedValue = 'agent';
+              resolved = true;
+            }
+          }
+        }
+
+        // Position-based fallbacks if no heuristic matches
+        if (!resolved) {
+          if (idx === 0) {
+            guessedType = 'field';
+            guessedValue = 'name';
+          } else if (idx === 1) {
+            guessedType = 'static';
+            guessedValue = 'title';
+          } else if (idx === 2) {
+            guessedType = 'static';
+            guessedValue = 'location';
+          } else if (idx === 3) {
+            guessedType = 'static';
+            guessedValue = 'price';
+          } else if (idx === 4) {
+            guessedType = 'static';
+            guessedValue = 'area';
+          } else {
+            guessedType = 'static';
+            guessedValue = 'custom';
+            customVals[key] = '';
+          }
+        }
+
+        mappings[key] = { type: guessedType, value: guessedValue };
+        if (guessedType === 'static' && guessedValue === 'custom') {
           customVals[key] = '';
         }
       });
@@ -338,7 +407,24 @@ export function PropertyForm({
               if (mapping.value === 'title') val = title || '';
               else if (mapping.value === 'price') val = formattedPrice || '';
               else if (mapping.value === 'location') val = sublocality || fullLoc || '';
-              else if (mapping.value === 'custom') val = customVariableValues[key] || '';
+              else if (mapping.value === 'area') {
+                const isLand = type === 'Land / Plot';
+                const areaVal = isLand ? landArea : areaSqft;
+                const unitVal = isLand ? landAreaUnit : areaUnit;
+                val = areaVal ? `${areaVal} ${unitVal}` : '';
+              } else if (mapping.value === 'highlights') {
+                const parsedHighlights = nearbyHighlights.filter(Boolean);
+                if (parsedHighlights.length > 0) {
+                  val = parsedHighlights.map((h) => `- ${h}`).join('\n');
+                } else {
+                  const parsedFeatures = features.filter(Boolean);
+                  val = parsedFeatures.map((f) => `- ${f}`).join('\n');
+                }
+              } else if (mapping.value === 'agent') {
+                val = profile?.full_name || '';
+              } else if (mapping.value === 'custom') {
+                val = customVariableValues[key] || '';
+              }
             }
           }
           params.push(val);
@@ -1954,6 +2040,9 @@ export function PropertyForm({
                                         <option value="static-title">Property Title</option>
                                         <option value="static-price">Price (Formatted)</option>
                                         <option value="static-location">Location / Area</option>
+                                        <option value="static-area">Property Area / Size</option>
+                                        <option value="static-highlights">Nearby Highlights / Amenities</option>
+                                        <option value="static-agent">Agent Name</option>
                                       </optgroup>
                                       <optgroup label="Custom Static Value">
                                         <option value="static-custom">Custom Text...</option>
@@ -2003,7 +2092,24 @@ export function PropertyForm({
                                         if (mapping.value === 'title') val = title || `[Property Title]`;
                                         else if (mapping.value === 'price') val = formattedPrice || `[Formatted Price]`;
                                         else if (mapping.value === 'location') val = sublocality || fullLoc || `[Location]`;
-                                        else if (mapping.value === 'custom') val = customVariableValues[key] || `[Custom Text]`;
+                                        else if (mapping.value === 'area') {
+                                          const isLand = type === 'Land / Plot';
+                                          const areaVal = isLand ? landArea : areaSqft;
+                                          const unitVal = isLand ? landAreaUnit : areaUnit;
+                                          val = areaVal ? `${areaVal} ${unitVal}` : `[Property Area]`;
+                                        } else if (mapping.value === 'highlights') {
+                                          const parsedHighlights = nearbyHighlights.filter(Boolean);
+                                          if (parsedHighlights.length > 0) {
+                                            val = parsedHighlights.map((h) => `- ${h}`).join('\n');
+                                          } else {
+                                            const parsedFeatures = features.filter(Boolean);
+                                            val = parsedFeatures.length > 0 ? parsedFeatures.map((f) => `- ${f}`).join('\n') : `[Highlights / Features]`;
+                                          }
+                                        } else if (mapping.value === 'agent') {
+                                          val = profile?.full_name || `[Agent Name]`;
+                                        } else if (mapping.value === 'custom') {
+                                          val = customVariableValues[key] || `[Custom Text]`;
+                                        }
                                       }
                                     }
                                     body = body.replace(placeholder, val);
