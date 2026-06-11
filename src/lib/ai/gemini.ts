@@ -19,7 +19,10 @@ export async function generateText(prompt: string, systemInstruction?: string): 
       console.log(`[Gemini AI] Attempting generation using model: ${model}`);
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-      const payload: any = {
+      const payload: {
+        contents: Array<{ parts: Array<{ text: string }> }>;
+        systemInstruction?: { parts: Array<{ text: string }> };
+      } = {
         contents: [
           {
             parts: [{ text: prompt }]
@@ -54,17 +57,18 @@ export async function generateText(prompt: string, systemInstruction?: string): 
 
       console.log(`[Gemini AI] Generation succeeded with model: ${model}`);
       return text.trim();
-    } catch (err: any) {
-      console.warn(`[Gemini AI] Failed with model ${model}:`, err.message);
-      lastError = err;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.warn(`[Gemini AI] Failed with model ${model}:`, errorMessage);
+      lastError = err instanceof Error ? err : new Error(errorMessage);
 
       // If it is a transient error (rate limit, service unavailable, high demand),
       // we proceed to try the fallback model.
       const isTransientError = 
-        err.message.includes("high demand") || 
-        err.message.includes("quota") || 
-        err.message.includes("429") || 
-        err.message.includes("503");
+        errorMessage.includes("high demand") || 
+        errorMessage.includes("quota") || 
+        errorMessage.includes("429") || 
+        errorMessage.includes("503");
 
       if (isTransientError && model !== models[models.length - 1]) {
         console.log("[Gemini AI] Falling back to the next model due to transient error...");

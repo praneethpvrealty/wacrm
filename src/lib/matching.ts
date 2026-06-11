@@ -155,16 +155,13 @@ export function getMatchingContacts(
     // Contact is a match if all criteria are satisfied
     if (budgetMatch && areaMatch && interestMatch) {
       let score = 0;
-      let matchedCount = 0;
 
       // Score components:
       // Budget: 30 pts if specific budget is defined and matches, 15 if no_budget
       if (minBudget || maxBudget) {
         score += 30;
-        matchedCount++;
       } else if (noBudget) {
         score += 15;
-        matchedCount++;
       }
 
       // Location: 35 pts if specific areas match
@@ -174,13 +171,11 @@ export function getMatchingContacts(
       );
       if (specificAreas.length > 0) {
         score += 35;
-        matchedCount++;
       }
 
       // Interests: 35 pts if specific interests match
       if (interests.length > 0) {
         score += 35;
-        matchedCount++;
       }
 
       // If contact is completely open (no preferences set), give a base match score of 50

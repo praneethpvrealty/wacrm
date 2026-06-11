@@ -162,21 +162,23 @@ export default function ContactsPage() {
   const [tagsMap, setTagsMap] = useState<Record<string, Tag>>({});
 
   const fetchTags = useCallback(async () => {
-    const { data } = await supabase.from('tags').select('*');
+    const supabaseClient = createClient();
+    const { data } = await supabaseClient.from('tags').select('*');
     if (data) {
       const map: Record<string, Tag> = {};
       data.forEach((t) => (map[t.id] = t));
       setTagsMap(map);
     }
-  }, [supabase]);
+  }, []);
 
   const fetchContacts = useCallback(async () => {
     setLoading(true);
+    const supabaseClient = createClient();
 
     const from = page * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
 
-    let query = supabase
+    let query = supabaseClient
       .from('contacts')
       .select('*', { count: 'exact' })
       .order('created_at', { ascending: false })
@@ -205,7 +207,7 @@ export default function ContactsPage() {
 
     // Fetch tags for these contacts
     const contactIds = data.map((c) => c.id);
-    const { data: contactTags } = await supabase
+    const { data: contactTags } = await supabaseClient
       .from('contact_tags')
       .select('contact_id, tag_id')
       .in('contact_id', contactIds);
@@ -225,7 +227,7 @@ export default function ContactsPage() {
 
     setContacts(enriched);
     setLoading(false);
-  }, [supabase, page, search, tagsMap]);
+  }, [page, search, tagsMap]);
 
   // Load-once-on-mount-ish data fetches. Each setter inside runs
   // inside an async promise completion (Supabase await), not

@@ -9,15 +9,10 @@ import {
   Calendar as CalendarIcon,
   ChevronLeft,
   ChevronRight,
-  Clock,
-  MapPin,
   Plus,
   Trash2,
   CheckCircle,
   Circle,
-  AlertTriangle,
-  User,
-  Home,
   X,
   CalendarDays,
   ListTodo
@@ -71,6 +66,19 @@ interface Todo {
   } | null;
 }
 
+interface SimpleContact {
+  id: string;
+  name: string;
+  phone: string;
+}
+
+interface SimpleProperty {
+  id: string;
+  title: string;
+  location: string | null;
+  sublocality: string | null;
+}
+
 export default function CalendarPage() {
   const supabase = createClient();
   const { accountId } = useAuth();
@@ -78,8 +86,8 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [todos, setTodos] = useState<Todo[]>([]);
-  const [contacts, setContacts] = useState<any[]>([]);
-  const [properties, setProperties] = useState<any[]>([]);
+  const [contacts, setContacts] = useState<SimpleContact[]>([]);
+  const [properties, setProperties] = useState<SimpleProperty[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Modals state
@@ -107,7 +115,7 @@ export default function CalendarPage() {
   const [mentionSearch, setMentionSearch] = useState("");
 
   // Fetch appointments and todos
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -146,18 +154,19 @@ export default function CalendarPage() {
         .eq("account_id", accountId)
         .order("title");
       setProperties(propsList || []);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to load calendar data");
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errorMessage || "Failed to load calendar data");
     } finally {
       setLoading(false);
     }
-  };
+  }, [accountId, supabase]);
 
   useEffect(() => {
     if (accountId) {
       loadData();
     }
-  }, [accountId]);
+  }, [accountId, loadData]);
 
   // Calendar math
   const year = currentDate.getFullYear();
@@ -318,8 +327,9 @@ export default function CalendarPage() {
 
       setIsApptModalOpen(false);
       loadData();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to save appointment");
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errorMessage || "Failed to save appointment");
     }
   };
 
@@ -338,8 +348,9 @@ export default function CalendarPage() {
       toast.success("Appointment deleted successfully");
       setIsApptModalOpen(false);
       loadData();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to delete appointment");
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errorMessage || "Failed to delete appointment");
     }
   };
 
@@ -396,7 +407,7 @@ export default function CalendarPage() {
     const contactName = todo.contact?.name;
     const propertyTitle = todo.property?.title;
 
-    let elements: React.ReactNode[] = [];
+    const elements: React.ReactNode[] = [];
     const matches: { start: number; end: number; type: "contact" | "property"; label: string; url: string }[] = [];
 
     // Parse contact mention (e.g. @Praneeth or @Praneeth Kumar)
@@ -562,8 +573,9 @@ export default function CalendarPage() {
       setMentionType(null);
       setMentionSearch("");
       loadData();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to add task");
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errorMessage || "Failed to add task");
     }
   };
 
@@ -577,8 +589,9 @@ export default function CalendarPage() {
 
       if (error) throw error;
       loadData();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to toggle task");
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errorMessage || "Failed to toggle task");
     }
   };
 
@@ -592,8 +605,9 @@ export default function CalendarPage() {
 
       if (error) throw error;
       loadData();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to delete task");
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errorMessage || "Failed to delete task");
     }
   };
 
@@ -775,7 +789,7 @@ export default function CalendarPage() {
             <div className="flex gap-2">
               <select
                 value={todoPriority}
-                onChange={(e) => setTodoPriority(e.target.value as any)}
+                onChange={(e) => setTodoPriority(e.target.value as "low" | "medium" | "high")}
                 className="flex-1 rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-1.5 text-xs text-slate-300 focus:border-primary focus:outline-none"
               >
                 <option value="low">Low Priority</option>
@@ -1000,7 +1014,7 @@ export default function CalendarPage() {
                   {selectedAppt && (
                     <select
                       value={apptStatus}
-                      onChange={(e) => setApptStatus(e.target.value as any)}
+                      onChange={(e) => setApptStatus(e.target.value as "scheduled" | "completed" | "cancelled")}
                       className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
                     >
                       <option value="scheduled">Scheduled</option>

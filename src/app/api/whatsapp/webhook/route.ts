@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption'
-import { getMediaUrl, downloadMedia, sendTextMessage } from '@/lib/whatsapp/meta-api'
+import { getMediaUrl, sendTextMessage } from '@/lib/whatsapp/meta-api'
 import { normalizePhone, phonesMatch } from '@/lib/whatsapp/phone-utils'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
@@ -719,7 +719,16 @@ async function processMessage(
     } else {
       replyText = `Hi ${contactRecord.name || 'there'},\n\nHere are your upcoming scheduled visits:\n\n`
       
-      appointments.forEach((appt: any, idx: number) => {
+      appointments.forEach((appt: {
+        start_time: string;
+        title: string;
+        location?: string | null;
+        property?: {
+          title?: string | null;
+          location?: string | null;
+          sublocality?: string | null;
+        } | null;
+      }, idx: number) => {
         const dateStr = new Date(appt.start_time).toLocaleString('en-IN', {
           timeZone: 'Asia/Kolkata',
           dateStyle: 'medium',

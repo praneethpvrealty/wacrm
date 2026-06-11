@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
-import type { Contact, Tag, ContactTag, ContactNote, CustomField, ContactCustomValue, Deal } from '@/types';
+import type { Contact, Tag, ContactNote, CustomField, Deal } from '@/types';
 import { POPULAR_SUBLOCALITIES } from '@/lib/data/real-estate-data';
 import {
   Sheet,
@@ -20,7 +20,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Phone,
   Mail,
@@ -145,7 +144,7 @@ export function ContactDetailView({
       setEditPhone(data.phone);
       setEditEmail(data.email ?? '');
       setEditCompany(data.company ?? '');
-      setEditClassification((data as any).classification ?? 'Others');
+      setEditClassification((data as Contact).classification ?? 'Others');
       setEditMinBudget(data.min_budget ? String(data.min_budget) : '');
       setEditMaxBudget(data.max_budget ? String(data.max_budget) : '');
       setEditNoBudget(!!data.no_budget);
@@ -645,7 +644,7 @@ export function ContactDetailView({
                     <Label className="text-slate-400 text-xs">Classification</Label>
                     <select
                       value={editClassification}
-                      onChange={(e) => setEditClassification(e.target.value as any)}
+                      onChange={(e) => setEditClassification(e.target.value as 'Owner' | 'Seller' | 'Buyer' | 'Agent' | 'Others')}
                       className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-white focus:border-primary focus:outline-none"
                     >
                       <option value="Others">Others</option>

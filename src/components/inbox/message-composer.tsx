@@ -25,7 +25,6 @@ interface MessageComposerProps {
 }
 
 export function MessageComposer({
-  conversationId,
   sessionExpired,
   onSend,
   onOpenTemplates,

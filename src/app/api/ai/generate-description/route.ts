@@ -7,7 +7,7 @@ import { generateText } from "@/lib/ai/gemini";
 export async function POST(request: NextRequest) {
   try {
     // Security: Only logged-in agents or admins can perform AI generation tasks
-    const ctx = await requireRole("agent");
+    await requireRole("agent");
 
     if (!process.env.GEMINI_API_KEY) {
       return NextResponse.json(
