@@ -11,7 +11,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,12 +28,10 @@ import {
   ChevronUp,
   Users,
   Send,
-  Check,
   CheckSquare,
   Square,
   ArrowLeft,
   Smartphone,
-  ExternalLink,
 } from 'lucide-react';
 import { getMatchingContacts } from '@/lib/matching';
 import type { Contact, MessageTemplate } from '@/types';
@@ -192,22 +189,7 @@ export function PropertyForm({
   const [sendingBroadcast, setSendingBroadcast] = useState(false);
 
   // Fetch contacts and templates
-  useEffect(() => {
-    if (open) {
-      fetchContacts();
-      fetchTemplates();
-      // Reset broadcast wizard
-      setBroadcastStep('matches');
-      setSelectedContactIds([]);
-      setSelectedTemplate(null);
-      setVariableMappings({});
-      setCustomVariableValues({});
-      setBroadcastResults([]);
-      setActiveTab('details');
-    }
-  }, [open]);
-
-  async function fetchContacts() {
+  const fetchContacts = useCallback(async () => {
     setLoadingContacts(true);
     try {
       const { data, error } = await supabase
@@ -221,9 +203,9 @@ export function PropertyForm({
     } finally {
       setLoadingContacts(false);
     }
-  }
+  }, [supabase]);
 
-  async function fetchTemplates() {
+  const fetchTemplates = useCallback(async () => {
     setLoadingTemplates(true);
     try {
       const { data, error } = await supabase
@@ -238,7 +220,22 @@ export function PropertyForm({
     } finally {
       setLoadingTemplates(false);
     }
-  }
+  }, [supabase]);
+
+  useEffect(() => {
+    if (open) {
+      fetchContacts();
+      fetchTemplates();
+      // Reset broadcast wizard
+      setBroadcastStep('matches');
+      setSelectedContactIds([]);
+      setSelectedTemplate(null);
+      setVariableMappings({});
+      setCustomVariableValues({});
+      setBroadcastResults([]);
+      setActiveTab('details');
+    }
+  }, [open, fetchContacts, fetchTemplates]);
 
   const formattedPrice = useMemo(() => {
     const amount = Number(price);
@@ -471,7 +468,7 @@ export function PropertyForm({
       
       const resultsMap = selectedContacts.map((c) => {
         const matchResult = resData.results?.find(
-          (r: any) =>
+          (r: { phone: string; status?: 'sent' | 'failed' | null; error?: string | null }) =>
             r.phone === c.phone ||
             r.phone.includes(c.phone) ||
             c.phone.includes(r.phone)
@@ -487,8 +484,9 @@ export function PropertyForm({
       setBroadcastResults(resultsMap);
       setBroadcastStep('results');
       toast.success(`Broadcast finished: ${resData.sent} sent, ${resData.failed} failed.`);
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to send broadcast');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errorMessage || 'Failed to send broadcast');
       setBroadcastStep('configure');
     } finally {
       setSendingBroadcast(false);
@@ -555,8 +553,9 @@ export function PropertyForm({
       const data = await response.json();
       setDescription(data.description || '');
       toast.success('Description generated successfully!');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to generate description');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errorMessage || 'Failed to generate description');
     } finally {
       setGeneratingDescription(false);
     }

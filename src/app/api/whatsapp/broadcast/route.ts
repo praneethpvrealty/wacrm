@@ -86,7 +86,7 @@ async function findOrCreateContactForBroadcast(
     console.error('[Broadcast] findOrCreateContactForBroadcast error:', error)
   }
 
-  const existing = contacts?.find((c: any) => phonesMatch(c.phone, phone))
+  const existing = contacts?.find((c: { phone: string }) => phonesMatch(c.phone, phone))
   if (existing) return existing
 
   const { data: newContact, error: createError } = await supabase
