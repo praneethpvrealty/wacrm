@@ -399,26 +399,58 @@ export default function CalendarPage() {
     let elements: React.ReactNode[] = [];
     const matches: { start: number; end: number; type: "contact" | "property"; label: string; url: string }[] = [];
 
-    if (contactName && title.includes(`@${contactName}`)) {
-      const start = title.indexOf(`@${contactName}`);
-      matches.push({
-        start,
-        end: start + `@${contactName}`.length,
-        type: "contact",
-        label: `@${contactName}`,
-        url: `/contacts?search=${encodeURIComponent(contactName)}`,
-      });
+    // Parse contact mention (e.g. @Praneeth or @Praneeth Kumar)
+    if (todo.contact_id && contactName) {
+      const firstName = contactName.split(" ")[0];
+      let matchedText = "";
+      if (title.includes(`@${contactName}`)) {
+        matchedText = `@${contactName}`;
+      } else if (title.includes(`@${firstName}`)) {
+        matchedText = `@${firstName}`;
+      } else {
+        const match = title.match(/@([A-Za-z0-9_]+)/);
+        if (match) {
+          matchedText = match[0];
+        }
+      }
+
+      if (matchedText) {
+        const start = title.indexOf(matchedText);
+        matches.push({
+          start,
+          end: start + matchedText.length,
+          type: "contact",
+          label: matchedText,
+          url: `/contacts?search=${encodeURIComponent(contactName)}`,
+        });
+      }
     }
 
-    if (propertyTitle && title.includes(`#${propertyTitle}`)) {
-      const start = title.indexOf(`#${propertyTitle}`);
-      matches.push({
-        start,
-        end: start + `#${propertyTitle}`.length,
-        type: "property",
-        label: `#${propertyTitle}`,
-        url: `/inventory?search=${encodeURIComponent(propertyTitle)}`,
-      });
+    // Parse property mention (e.g. #2400JP Nagar or #2400JP)
+    if (todo.property_id && propertyTitle) {
+      const firstWord = propertyTitle.split(" ")[0];
+      let matchedText = "";
+      if (title.includes(`#${propertyTitle}`)) {
+        matchedText = `#${propertyTitle}`;
+      } else if (title.includes(`#${firstWord}`)) {
+        matchedText = `#${firstWord}`;
+      } else {
+        const match = title.match(/#([A-Za-z0-9_]+)/);
+        if (match) {
+          matchedText = match[0];
+        }
+      }
+
+      if (matchedText) {
+        const start = title.indexOf(matchedText);
+        matches.push({
+          start,
+          end: start + matchedText.length,
+          type: "property",
+          label: matchedText,
+          url: `/inventory?search=${encodeURIComponent(propertyTitle)}`,
+        });
+      }
     }
 
     matches.sort((a, b) => a.start - b.start);
@@ -433,15 +465,15 @@ export default function CalendarPage() {
           key={match.start}
           href={match.url}
           className={cn(
-            "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold transition-all mx-0.5 whitespace-nowrap",
+            "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold transition-all mx-0.5 whitespace-nowrap",
             match.type === "contact"
               ? cn(
                   "bg-violet-500/10 text-violet-400 border border-violet-500/20",
-                  todo.completed ? "opacity-50 line-through" : "hover:bg-violet-500/25"
+                  todo.completed ? "opacity-50 line-through" : "hover:bg-violet-500/25 hover:scale-105 active:scale-95"
                 )
               : cn(
                   "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20",
-                  todo.completed ? "opacity-50 line-through" : "hover:bg-emerald-500/25"
+                  todo.completed ? "opacity-50 line-through" : "hover:bg-emerald-500/25 hover:scale-105 active:scale-95"
                 )
           )}
         >
@@ -468,20 +500,44 @@ export default function CalendarPage() {
 
     try {
       let finalContactId = null;
+      // First try matching full contact names
       const sortedContacts = [...contacts].sort((a, b) => b.name.length - a.name.length);
       for (const c of sortedContacts) {
-        if (todoTitle.includes(`@${c.name}`)) {
+        if (todoTitle.toLowerCase().includes(`@${c.name.toLowerCase()}`)) {
           finalContactId = c.id;
           break;
         }
       }
+      // Fallback: match by contact name word prefix
+      if (!finalContactId) {
+        const contactMentionMatch = todoTitle.match(/@([A-Za-z0-9_]+)/);
+        if (contactMentionMatch) {
+          const query = contactMentionMatch[1].toLowerCase();
+          const matchedContact = contacts.find((c) => c.name.toLowerCase().includes(query));
+          if (matchedContact) {
+            finalContactId = matchedContact.id;
+          }
+        }
+      }
 
       let finalPropertyId = null;
+      // First try matching full property titles
       const sortedProps = [...properties].sort((a, b) => b.title.length - a.title.length);
       for (const p of sortedProps) {
-        if (todoTitle.includes(`#${p.title}`)) {
+        if (todoTitle.toLowerCase().includes(`#${p.title.toLowerCase()}`)) {
           finalPropertyId = p.id;
           break;
+        }
+      }
+      // Fallback: match by property title word prefix
+      if (!finalPropertyId) {
+        const propertyMentionMatch = todoTitle.match(/#([A-Za-z0-9_]+)/);
+        if (propertyMentionMatch) {
+          const query = propertyMentionMatch[1].toLowerCase();
+          const matchedProp = properties.find((p) => p.title.toLowerCase().includes(query));
+          if (matchedProp) {
+            finalPropertyId = matchedProp.id;
+          }
         }
       }
 
