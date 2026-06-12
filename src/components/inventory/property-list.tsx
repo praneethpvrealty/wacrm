@@ -210,8 +210,16 @@ export function PropertyList({
                   <span className="truncate" title={property.location}>{property.location}</span>
                 </div>
 
-                <div className="text-lg font-black text-white mb-4">
-                  {formatPrice(property.price)}
+                <div className="flex items-center justify-between mb-4">
+                  <div className="text-lg font-black text-white">
+                    {formatPrice(property.price)}
+                  </div>
+                  {property.owner && (
+                    <div className="text-xs text-slate-400 flex items-center gap-1 bg-slate-800/40 px-2 py-0.5 rounded border border-slate-800" title={`${property.owner.name} (${property.owner.phone})`}>
+                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Owner:</span>
+                      <span className="text-slate-350 font-semibold">{property.owner.name || 'Unnamed'}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Specs Row */}

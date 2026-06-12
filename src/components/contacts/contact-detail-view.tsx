@@ -32,6 +32,7 @@ import {
   Save,
   DollarSign,
   MessageSquare,
+  Users,
 } from 'lucide-react';
 
 const SUGGESTED_AREAS = ['Whitefield', 'Koramangala', 'Not specific', 'East Bangalore', 'Indiranagar', 'Jayanagar'];
@@ -87,6 +88,10 @@ export function ContactDetailView({
   const [editEmail, setEditEmail] = useState('');
   const [editCompany, setEditCompany] = useState('');
   const [editClassification, setEditClassification] = useState<'Owner' | 'Seller' | 'Buyer' | 'Agent' | 'Others'>('Others');
+  const [editReferrer, setEditReferrer] = useState('');
+  const [editReferrerContactId, setEditReferrerContactId] = useState<string | null>(null);
+  const [showReferrerSuggestions, setShowReferrerSuggestions] = useState(false);
+  const [contactsList, setContactsList] = useState<Contact[]>([]);
   const [savingDetails, setSavingDetails] = useState(false);
   const [approving, setApproving] = useState(false);
 
@@ -146,6 +151,8 @@ export function ContactDetailView({
       setEditEmail(data.email ?? '');
       setEditCompany(data.company ?? '');
       setEditClassification((data as Contact).classification ?? 'Others');
+      setEditReferrer(data.referrer ?? '');
+      setEditReferrerContactId(data.referrer_contact_id ?? null);
       setEditMinBudget(data.min_budget ? String(data.min_budget) : '');
       setEditMaxBudget(data.max_budget ? String(data.max_budget) : '');
       setEditNoBudget(!!data.no_budget);
@@ -156,6 +163,29 @@ export function ContactDetailView({
     }
     setLoading(false);
   }, [contactId, supabase]);
+
+  useEffect(() => {
+    async function loadContacts() {
+      const { data } = await supabase
+        .from('contacts')
+        .select('*')
+        .order('name');
+      if (data) setContactsList(data);
+    }
+    if (contactId) {
+      loadContacts();
+    }
+  }, [contactId, supabase]);
+
+  const filteredReferrerContacts = useMemo(() => {
+    if (!editReferrer.trim()) return [];
+    return contactsList.filter(
+      (c) =>
+        c.id !== contactId &&
+        ((c.name && c.name.toLowerCase().includes(editReferrer.toLowerCase())) ||
+         (c.phone && c.phone.includes(editReferrer)))
+    ).slice(0, 5);
+  }, [contactsList, editReferrer, contactId]);
 
   const fetchTags = useCallback(async () => {
     if (!contactId) return;
@@ -243,49 +273,64 @@ export function ContactDetailView({
       return;
     }
 
-    try {
-      const cleanPhone = contact.phone.replace(/\D/g, '');
-      if (cleanPhone) {
-        window.open(`https://wa.me/${cleanPhone}`, '_blank');
-      }
-
-      const { data: existing, error } = await supabase
-        .from('conversations')
-        .select('id')
-        .eq('account_id', accountId)
-        .eq('contact_id', contact.id)
-        .maybeSingle();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error finding conversation:', error);
-      }
-
-      if (existing) {
-        router.push(`/inbox?c=${existing.id}`);
-        return;
-      }
-
-      const { data: newConv, error: createError } = await supabase
-        .from('conversations')
-        .insert({
-          account_id: accountId,
-          user_id: user?.id,
-          contact_id: contact.id,
-        })
-        .select('id')
-        .single();
-
-      if (createError) {
-        toast.error('Failed to start chat thread');
-        console.error('Create conversation error:', createError);
-        return;
-      }
-
-      router.push(`/inbox?c=${newConv.id}`);
-    } catch (err) {
-      console.error('WhatsApp redirect error:', err);
-      toast.error('Something went wrong');
+    const cleanPhone = contact.phone.replace(/\D/g, '');
+    if (!cleanPhone) {
+      toast.error('Invalid phone number');
+      return;
     }
+
+    let appOpened = false;
+    const handleBlur = () => {
+      appOpened = true;
+    };
+    window.addEventListener('blur', handleBlur);
+
+    // Try opening native WhatsApp client
+    window.location.href = `whatsapp://send?phone=${cleanPhone}`;
+
+    setTimeout(async () => {
+      window.removeEventListener('blur', handleBlur);
+      if (!appOpened) {
+        try {
+          const { data: existing, error } = await supabase
+            .from('conversations')
+            .select('id')
+            .eq('account_id', accountId)
+            .eq('contact_id', contact.id)
+            .maybeSingle();
+
+          if (error && error.code !== 'PGRST116') {
+            console.error('Error finding conversation:', error);
+          }
+
+          if (existing) {
+            router.push(`/inbox?c=${existing.id}`);
+            return;
+          }
+
+          const { data: newConv, error: createError } = await supabase
+            .from('conversations')
+            .insert({
+              account_id: accountId,
+              user_id: user?.id,
+              contact_id: contact.id,
+            })
+            .select('id')
+            .single();
+
+          if (createError) {
+            toast.error('Failed to start chat thread');
+            console.error('Create conversation error:', createError);
+            return;
+          }
+
+          router.push(`/inbox?c=${newConv.id}`);
+        } catch (err) {
+          console.error('WhatsApp redirect error:', err);
+          toast.error('Something went wrong');
+        }
+      }
+    }, 1500);
   }
 
   async function saveDetails() {
@@ -303,6 +348,8 @@ export function ContactDetailView({
         email: editEmail.trim() || null,
         company: editCompany.trim() || null,
         classification: editClassification,
+        referrer: editReferrer.trim() || null,
+        referrer_contact_id: editReferrerContactId,
         updated_at: new Date().toISOString(),
       })
       .eq('id', contactId);
@@ -588,6 +635,12 @@ export function ContactDetailView({
                         {contact.company}
                       </span>
                     )}
+                    {contact.referrer && (
+                      <span className="flex items-center gap-1 text-slate-400">
+                        <Users className="size-3 text-slate-500" />
+                        Ref: {contact.referrer}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -693,6 +746,58 @@ export function ContactDetailView({
                       onChange={(e) => setEditCompany(e.target.value)}
                       className="bg-slate-800 border-slate-700 text-white h-8 text-sm"
                     />
+                  </div>
+                  <div className="space-y-1.5 relative">
+                    <Label className="text-slate-400 text-xs">Referer</Label>
+                    <div className="relative">
+                      <Input
+                        value={editReferrer}
+                        onChange={(e) => {
+                          setEditReferrer(e.target.value);
+                          setEditReferrerContactId(null);
+                          setShowReferrerSuggestions(true);
+                        }}
+                        onFocus={() => setShowReferrerSuggestions(true)}
+                        onBlur={() => {
+                          setTimeout(() => setShowReferrerSuggestions(false), 200);
+                        }}
+                        className="bg-slate-800 border-slate-700 text-white h-8 text-sm w-full pr-16 animate-none"
+                        placeholder="Search existing contact or type a name..."
+                      />
+                      {editReferrerContactId && (
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] bg-primary/20 text-primary border border-primary/30 px-1.5 py-0.5 rounded font-medium">
+                          Linked
+                        </span>
+                      )}
+                    </div>
+
+                    {showReferrerSuggestions && filteredReferrerContacts.length > 0 && (
+                      <div className="absolute z-50 w-full mt-1 bg-slate-900 border border-slate-700 rounded-md shadow-lg max-h-48 overflow-y-auto p-1 space-y-0.5">
+                        <div className="text-[10px] text-slate-500 font-semibold px-2 py-1 border-b border-slate-800 mb-1">
+                          Link to existing contact:
+                        </div>
+                        {filteredReferrerContacts.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onMouseDown={() => {
+                              setEditReferrer(c.name || 'Unnamed');
+                              setEditReferrerContactId(c.id);
+                              setShowReferrerSuggestions(false);
+                            }}
+                            className="w-full text-left flex items-center justify-between px-2 py-1.5 hover:bg-slate-800 rounded text-xs text-slate-200"
+                          >
+                            <div>
+                              <span className="font-semibold">{c.name || 'Unnamed'}</span>
+                              <span className="text-slate-400 ml-1.5 text-[10px]">({c.phone})</span>
+                            </div>
+                            <span className="text-[10px] bg-slate-800 px-1 py-0.5 rounded text-slate-400 font-bold">
+                              {c.classification}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-slate-400 text-xs">Classification</Label>

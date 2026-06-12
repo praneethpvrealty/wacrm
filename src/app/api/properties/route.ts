@@ -10,7 +10,7 @@ export async function GET() {
 
     const { data, error } = await ctx.supabase
       .from("properties")
-      .select("*")
+      .select("*, owner:contacts(*)")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -76,6 +76,7 @@ export async function POST(request: Request) {
       road_width_unit,
       facing_direction,
       nearby_highlights,
+      owner_contact_id,
     } = body;
 
     // Validation
@@ -136,6 +137,7 @@ export async function POST(request: Request) {
       road_width_unit: typeof road_width_unit === "string" ? road_width_unit.trim() : "Feet",
       facing_direction: typeof facing_direction === "string" ? facing_direction.trim() : null,
       nearby_highlights: Array.isArray(nearby_highlights) ? nearby_highlights.filter(h => typeof h === "string") : [],
+      owner_contact_id: typeof owner_contact_id === "string" && owner_contact_id.trim().length > 0 ? owner_contact_id.trim() : null,
       is_published: typeof is_published === "boolean" ? is_published : false,
       features: Array.isArray(features) ? features.filter(f => typeof f === "string") : [],
       images: Array.isArray(images) ? images.filter(img => typeof img === "string") : [],
@@ -144,7 +146,7 @@ export async function POST(request: Request) {
     const { data, error } = await ctx.supabase
       .from("properties")
       .insert(insertData)
-      .select()
+      .select("*, owner:contacts(*)")
       .single();
 
     if (error) {

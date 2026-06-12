@@ -101,6 +101,8 @@ export interface Contact {
   areas_of_interest?: string[];
   property_interests?: string[];
   status?: 'active' | 'pending_review';
+  referrer?: string;
+  referrer_contact_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -571,6 +573,8 @@ export interface Property {
   is_published: boolean;
   features: string[];
   images: string[];
+  owner_contact_id?: string | null;
+  owner?: Contact | null;
   created_at: string;
   updated_at: string;
 }
