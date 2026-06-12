@@ -44,7 +44,7 @@ export function normalizePhoneWithCountryCode(phone: string, defaultCountryCode:
     digits = defaultCountryCode + digits
   }
   
-  return digits
+  return digits ? '+' + digits : ''
 }
 
 /**

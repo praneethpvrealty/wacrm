@@ -244,6 +244,11 @@ export function ContactDetailView({
     }
 
     try {
+      const cleanPhone = contact.phone.replace(/\D/g, '');
+      if (cleanPhone) {
+        window.open(`https://wa.me/${cleanPhone}`, '_blank');
+      }
+
       const { data: existing, error } = await supabase
         .from('conversations')
         .select('id')

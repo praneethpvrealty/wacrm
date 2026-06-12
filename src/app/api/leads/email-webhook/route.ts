@@ -215,12 +215,12 @@ export async function POST(request: Request) {
       });
     }
 
-    // 3. Check if contact exists
+    const cleanPhone = normalizedPhoneNum.replace(/\D/g, '');
     const { data: existingContact } = await supabase
       .from('contacts')
       .select('id, name')
       .eq('account_id', accountId)
-      .eq('phone', normalizedPhoneNum)
+      .or(`phone.eq.${normalizedPhoneNum},phone.eq.${cleanPhone}`)
       .maybeSingle();
 
     if (existingContact) {
