@@ -1,7 +1,20 @@
 import { MetadataRoute } from 'next';
 
+interface ExtendedManifest extends MetadataRoute.Manifest {
+  share_target?: {
+    action: string;
+    method?: 'get' | 'post' | 'GET' | 'POST';
+    enctype?: 'application/x-www-form-urlencoded' | 'multipart/form-data';
+    params: {
+      title?: string;
+      text?: string;
+      url?: string;
+    };
+  };
+}
+
 export default function manifest(): MetadataRoute.Manifest {
-  return {
+  const manifestObj: ExtendedManifest = {
     name: 'waCRM',
     short_name: 'waCRM',
     description: 'WhatsApp CRM for Real Estate',
@@ -31,6 +44,9 @@ export default function manifest(): MetadataRoute.Manifest {
         text: 'text',
         url: 'url',
       },
-    } as any,
+    },
   };
+
+  return manifestObj as MetadataRoute.Manifest;
 }
+

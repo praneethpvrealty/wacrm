@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { normalizePhone } from '@/lib/whatsapp/phone-utils';
 
 // Lazy-initialized admin client
-let _adminClient: any = null;
-function getAdminClient() {
+let _adminClient: SupabaseClient | null = null;
+function getAdminClient(): SupabaseClient {
   if (!_adminClient) {
     _adminClient = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -225,7 +225,12 @@ export async function POST(request: Request) {
 
     if (existingContact) {
       // Update existing contact preferences
-      const updatePayload: any = {};
+      const updatePayload: {
+        max_budget?: number | null;
+        areas_of_interest?: string[];
+        property_interests?: string[];
+        company?: string;
+      } = {};
       if (maxBudget) updatePayload.max_budget = maxBudget;
       if (areasOfInterest.length > 0) updatePayload.areas_of_interest = areasOfInterest;
       if (propertyInterests.length > 0) updatePayload.property_interests = propertyInterests;
@@ -281,8 +286,9 @@ export async function POST(request: Request) {
       contactId: newContact.id,
       name: newContact.name,
     });
-  } catch (err: any) {
-    console.error('[lead-webhook] Request failed:', err);
-    return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 });
+  } catch (err) {
+    const error = err as Error;
+    console.error('[lead-webhook] Request failed:', error);
+    return NextResponse.json({ error: error.message || 'Server error' }, { status: 500 });
   }
 }

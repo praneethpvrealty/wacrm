@@ -3,7 +3,6 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ContactForm } from '@/components/contacts/contact-form';
-import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
 import { Loader2, Smartphone, AlertCircle } from 'lucide-react';
@@ -52,7 +51,7 @@ function parseSharedData(title: string, text: string, url: string) {
     }
 
     // Clean up labels to guess the name
-    let cleanText = fullPayload
+    const cleanText = fullPayload
       .replace(email || '', '')
       .replace(phone || '', '')
       .replace(/(?:name|phone|email|tel|mobile|contact|address):/gi, '')
@@ -77,7 +76,7 @@ function parseSharedData(title: string, text: string, url: string) {
 function ImportSharedContactContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { accountId, user } = useAuth();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [contactData, setContactData] = useState<Contact | null>(null);
 
@@ -89,6 +88,7 @@ function ImportSharedContactContent() {
     const url = searchParams.get('url') || '';
 
     if (!title && !text && !url) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
       return;
     }
@@ -97,17 +97,18 @@ function ImportSharedContactContent() {
 
     setContactData({
       id: '',
-      name: parsed.name,
+      user_id: user?.id || '',
       phone: parsed.phone,
+      name: parsed.name,
       email: parsed.email,
       company: '',
       classification: 'Others',
-      account_id: accountId || '',
-      user_id: user?.id || '',
+      status: 'active',
       created_at: new Date().toISOString(),
-    } as any);
+      updated_at: new Date().toISOString(),
+    });
     setLoading(false);
-  }, [searchParams, accountId, user]);
+  }, [searchParams, user]);
 
   if (loading) {
     return (

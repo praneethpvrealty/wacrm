@@ -1,20 +1,21 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { normalizePhone } from '@/lib/whatsapp/phone-utils';
 
-// Lazy admin client
-let _adminClient: any = null;
-function getAdminClient() {
-  if (!_adminClient) {
-    _adminClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
-  }
-  return _adminClient;
+interface ImapClient {
+  connect(): Promise<void>;
+  getMailboxLock(box: string): Promise<{ release(): void }>;
+  search(query: { seen: boolean }): Promise<number[]>;
+  fetchOne(
+    seq: number,
+    options: { source: boolean; envelope: boolean; bodyStructure: boolean }
+  ): Promise<{
+    envelope: { subject?: string };
+    source: { toString(): string };
+  }>;
+  messageFlagsAdd(seq: number, flags: string[]): Promise<void>;
+  logout(): Promise<void>;
 }
 
-export async function GET(request: Request) {
+export async function GET() {
   const host = process.env.IMAP_HOST;
   const port = process.env.IMAP_PORT ? parseInt(process.env.IMAP_PORT) : 993;
   const user = process.env.IMAP_USER;
@@ -29,14 +30,14 @@ export async function GET(request: Request) {
     });
   }
 
-  let client: any = null;
+  let client: ImapClient | null = null;
   try {
     // Dynamically import imapflow to ensure it compiles fine if package is not installed
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
     const { ImapFlow } = await import('imapflow');
     
-    client = new ImapFlow({
+    const activeClient: ImapClient = new ImapFlow({
       host,
       port,
       secure,
@@ -46,20 +47,20 @@ export async function GET(request: Request) {
       },
       logger: false,
     });
+    client = activeClient;
 
-    await client.connect();
+    await activeClient.connect();
     
     // Select Inbox
-    const lock = await client.getMailboxLock('INBOX');
-    const newLeadsCount = 0;
+    const lock = await activeClient.getMailboxLock('INBOX');
     const processedEmails: string[] = [];
 
     try {
       // Fetch unread messages
-      const searchResults = await client.search({ seen: false });
+      const searchResults = await activeClient.search({ seen: false });
       
       for (const seq of searchResults) {
-        const message = await client.fetchOne(seq, {
+        const message = await activeClient.fetchOne(seq, {
           source: true,
           envelope: true,
           bodyStructure: true,
@@ -91,7 +92,7 @@ export async function GET(request: Request) {
             processedEmails.push(`Subject: "${subject}" -> ${result.status} (Contact ID: ${result.contactId})`);
             
             // Mark email as read / seen
-            await client.messageFlagsAdd(seq, ['\\Seen']);
+            await activeClient.messageFlagsAdd(seq, ['\\Seen']);
           }
         }
       }
@@ -99,23 +100,26 @@ export async function GET(request: Request) {
       lock.release();
     }
 
-    await client.logout();
+    await activeClient.logout();
 
     return NextResponse.json({
       status: 'success',
       processed: processedEmails.length,
       details: processedEmails,
     });
-  } catch (err: any) {
-    console.error('[imap-sync] Sync failed:', err);
+  } catch (err) {
+    const error = err as Error;
+    console.error('[imap-sync] Sync failed:', error);
     if (client) {
       try {
         await client.logout();
-      } catch (_) {}
+      } catch {
+        // Safe check
+      }
     }
     return NextResponse.json({
       status: 'failed',
-      error: err.message || 'IMAP connection failed',
+      error: error.message || 'IMAP connection failed',
       note: 'Ensure imapflow is installed in package.json if executing syncs.',
     }, { status: 500 });
   }

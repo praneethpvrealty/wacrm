@@ -264,12 +264,10 @@ export default function ContactsPage() {
   // synchronously in the effect body, so the cascade the lint rule
   // warns about doesn't apply here.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchTags();
   }, [fetchTags]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchContacts();
   }, [fetchContacts]);
 
@@ -279,6 +277,18 @@ export default function ContactsPage() {
     setFormOpen(true);
   }
 
+  interface ContactsManager {
+    getProperties(): Promise<string[]>;
+    select(
+      properties: string[],
+      options?: { multiple?: boolean }
+    ): Promise<Array<{
+      name?: string[];
+      tel?: string[];
+      email?: string[];
+    }>>;
+  }
+
   const handleDeviceImport = async () => {
     if (typeof navigator === 'undefined' || !('contacts' in navigator)) {
       toast.error('Device contacts picker is not supported on this browser/device.');
@@ -286,10 +296,11 @@ export default function ContactsPage() {
     }
 
     try {
-      const supportedProps = await (navigator.contacts as any).getProperties();
+      const manager = (navigator as unknown as { contacts: ContactsManager }).contacts;
+      const supportedProps = await manager.getProperties();
       const fields = ['name', 'tel', 'email'].filter((f) => supportedProps.includes(f));
       
-      const picked = await (navigator.contacts as any).select(fields, { multiple: true });
+      const picked = await manager.select(fields, { multiple: true });
       if (!picked || picked.length === 0) return;
 
       if (picked.length === 1) {
@@ -300,21 +311,23 @@ export default function ContactsPage() {
         
         setEditContact({
           id: '',
-          name,
+          user_id: user?.id || '',
           phone: normalizePhone(phone) || phone,
+          name,
           email,
           company: '',
           classification: 'Others',
-          account_id: accountId || '',
-          user_id: user?.id || '',
-        } as any);
+          status: 'active',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        } as Contact);
         setEditContactTags([]);
         setFormOpen(true);
       } else {
         setBulkImportContacts(
-          picked.map((c: any) => ({
+          picked.map((c) => ({
             name: c.name?.[0] || '',
-            phone: normalizePhone(c.tel?.[0]) || c.tel?.[0] || '',
+            phone: c.tel?.[0] ? (normalizePhone(c.tel[0]) || c.tel[0]) : '',
             email: c.email?.[0] || '',
             classification: 'Others' as const,
             selected: true,
@@ -322,10 +335,11 @@ export default function ContactsPage() {
         );
         setBulkImportOpen(true);
       }
-    } catch (err: any) {
-      console.error('Device contact select failed:', err);
-      if (err.name !== 'AbortError') {
-        toast.error(err.message || 'Failed to select contacts from device');
+    } catch (err) {
+      const error = err as Error;
+      console.error('Device contact select failed:', error);
+      if (error.name !== 'AbortError') {
+        toast.error(error.message || 'Failed to select contacts from device');
       }
     }
   };
@@ -353,10 +367,11 @@ export default function ContactsPage() {
 
       toast.success(`Successfully imported ${records.length} contacts`);
       fetchContacts();
-    } catch (err: any) {
-      console.error('Bulk insert failed:', err);
-      toast.error(err.message || 'Failed to save contacts');
-      throw err;
+    } catch (err) {
+      const error = err as Error;
+      console.error('Bulk insert failed:', error);
+      toast.error(error.message || 'Failed to save contacts');
+      throw error;
     }
   };
 
