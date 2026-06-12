@@ -62,6 +62,7 @@ export async function PUT(
       road_width_unit,
       facing_direction,
       nearby_highlights,
+      owner_contact_id,
     } = body;
 
     // Validate only if passed
@@ -205,6 +206,10 @@ export async function PUT(
       updateData.nearby_highlights = Array.isArray(nearby_highlights) ? nearby_highlights.filter(h => typeof h === "string") : [];
     }
 
+    if (owner_contact_id !== undefined) {
+      updateData.owner_contact_id = typeof owner_contact_id === "string" && owner_contact_id.trim().length > 0 ? owner_contact_id.trim() : null;
+    }
+
     // Verify it exists in this account before updating (defensive check)
     const { data: existing, error: findError } = await ctx.supabase
       .from("properties")
@@ -233,7 +238,7 @@ export async function PUT(
       .update(updateData)
       .eq("id", id)
       .eq("account_id", ctx.accountId)
-      .select()
+      .select("*, owner:contacts(*)")
       .single();
 
     if (error) {

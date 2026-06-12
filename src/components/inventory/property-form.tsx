@@ -161,6 +161,7 @@ export function PropertyForm({
   const [localitiesDb, setLocalitiesDb] = useState<{ detailed: string[] } | null>(null);
   
   const [saving, setSaving] = useState(false);
+  const [ownerContactId, setOwnerContactId] = useState<string | null>(null);
 
   async function ensureLocalitiesLoaded() {
     if (!localitiesDb) {
@@ -620,6 +621,7 @@ export function PropertyForm({
         setFeatures(property.features || []);
         setNearbyHighlights(property.nearby_highlights || []);
         setImages(property.images && property.images.length > 0 ? property.images : ['']);
+        setOwnerContactId(property.owner_contact_id ?? null);
 
         // Set unified query string on open
         if (property.project) {
@@ -676,6 +678,7 @@ export function PropertyForm({
         setNearbyHighlights([]);
         setImages(['']);
         setSearchQuery('');
+        setOwnerContactId(null);
       }
     }
   }, [open, property]);
@@ -1026,6 +1029,7 @@ export function PropertyForm({
         is_published: isPublished,
         features: parsedFeatures,
         images: parsedImages,
+        owner_contact_id: ownerContactId,
         updated_at: new Date().toISOString(),
       };
 
@@ -1209,6 +1213,25 @@ export function PropertyForm({
                       </select>
                     </div>
                   )}
+
+                  <div className="space-y-1.5 col-span-2">
+                    <Label htmlFor="prop-owner" className="text-slate-300">
+                      Property Owner
+                    </Label>
+                    <select
+                      id="prop-owner"
+                      value={ownerContactId || ''}
+                      onChange={(e) => setOwnerContactId(e.target.value || null)}
+                      className="flex h-9 w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-slate-950 font-medium"
+                    >
+                      <option value="">No Owner Selected</option>
+                      {contacts.map((contact) => (
+                        <option key={contact.id} value={contact.id}>
+                          {contact.name || 'Unnamed'} ({contact.phone}) - {contact.classification}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 {/* Description */}

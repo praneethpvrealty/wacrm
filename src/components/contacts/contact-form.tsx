@@ -69,6 +69,10 @@ export function ContactForm({
   const [email, setEmail] = useState('');
   const [company, setCompany] = useState('');
   const [classification, setClassification] = useState<'Owner' | 'Seller' | 'Buyer' | 'Agent' | 'Others'>('Others');
+  const [referrer, setReferrer] = useState('');
+  const [referrerContactId, setReferrerContactId] = useState<string | null>(null);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [showReferrerSuggestions, setShowReferrerSuggestions] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Real estate preferences
@@ -102,6 +106,14 @@ export function ContactForm({
     setLoadingTags(false);
   }, [supabase]);
 
+  const fetchContacts = useCallback(async () => {
+    const { data } = await supabase
+      .from('contacts')
+      .select('*')
+      .order('name');
+    if (data) setContacts(data);
+  }, [supabase]);
+
   useEffect(() => {
     if (open) {
       setName(contact?.name ?? '');
@@ -109,6 +121,8 @@ export function ContactForm({
       setEmail(contact?.email ?? '');
       setCompany(contact?.company ?? '');
       setClassification((contact as Contact)?.classification ?? 'Others');
+      setReferrer(contact?.referrer ?? '');
+      setReferrerContactId(contact?.referrer_contact_id ?? null);
       setMinBudget(contact?.min_budget ? String(contact.min_budget) : '');
       setMaxBudget(contact?.max_budget ? String(contact.max_budget) : '');
       setNoBudget(!!contact?.no_budget);
@@ -118,8 +132,19 @@ export function ContactForm({
       setPropertyInterests(contact?.property_interests ?? []);
       setSelectedTagIds(contactTags.map((ct) => ct.tag_id));
       fetchTags();
+      fetchContacts();
     }
-  }, [open, contact, contactTags, fetchTags]);
+  }, [open, contact, contactTags, fetchTags, fetchContacts]);
+
+  const filteredReferrerContacts = useMemo(() => {
+    if (!referrer.trim()) return [];
+    return contacts.filter(
+      (c) =>
+        c.id !== contact?.id &&
+        ((c.name && c.name.toLowerCase().includes(referrer.toLowerCase())) ||
+         (c.phone && c.phone.includes(referrer)))
+    ).slice(0, 5);
+  }, [contacts, referrer, contact]);
 
   const activeQuery = useMemo(() => {
     const segments = areasText.split(',');
@@ -195,6 +220,8 @@ export function ContactForm({
         email: email.trim() || null,
         company: company.trim() || null,
         classification,
+        referrer: referrer.trim() || null,
+        referrer_contact_id: referrerContactId,
         min_budget: minBudget ? Number(minBudget) : null,
         max_budget: maxBudget ? Number(maxBudget) : null,
         no_budget: noBudget,
@@ -323,6 +350,62 @@ export function ContactForm({
               placeholder="Acme Inc."
               className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
             />
+          </div>
+
+          <div className="space-y-2 relative">
+            <Label htmlFor="cf-referrer" className="text-slate-300">
+              Referer
+            </Label>
+            <div className="relative">
+              <Input
+                id="cf-referrer"
+                value={referrer}
+                onChange={(e) => {
+                  setReferrer(e.target.value);
+                  setReferrerContactId(null);
+                  setShowReferrerSuggestions(true);
+                }}
+                onFocus={() => setShowReferrerSuggestions(true)}
+                onBlur={() => {
+                  setTimeout(() => setShowReferrerSuggestions(false), 200);
+                }}
+                placeholder="Search existing contact or type a name..."
+                className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 pr-16 animate-none"
+              />
+              {referrerContactId && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] bg-primary/20 text-primary border border-primary/30 px-1.5 py-0.5 rounded font-medium">
+                  Linked
+                </span>
+              )}
+            </div>
+            
+            {showReferrerSuggestions && filteredReferrerContacts.length > 0 && (
+              <div className="absolute z-50 w-full mt-1 bg-slate-900 border border-slate-700 rounded-md shadow-lg max-h-48 overflow-y-auto p-1 space-y-0.5">
+                <div className="text-[10px] text-slate-500 font-semibold px-2 py-1 border-b border-slate-800 mb-1">
+                  Link to existing contact:
+                </div>
+                {filteredReferrerContacts.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onMouseDown={() => {
+                      setReferrer(c.name || 'Unnamed');
+                      setReferrerContactId(c.id);
+                      setShowReferrerSuggestions(false);
+                    }}
+                    className="w-full text-left flex items-center justify-between px-2 py-1.5 hover:bg-slate-800 rounded text-xs text-slate-200"
+                  >
+                    <div>
+                      <span className="font-semibold">{c.name || 'Unnamed'}</span>
+                      <span className="text-slate-400 ml-1.5 text-[10px]">({c.phone})</span>
+                    </div>
+                    <span className="text-[10px] bg-slate-800 px-1 py-0.5 rounded text-slate-400 font-bold">
+                      {c.classification}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">

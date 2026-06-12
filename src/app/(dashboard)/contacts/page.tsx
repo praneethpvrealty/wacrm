@@ -104,49 +104,64 @@ export default function ContactsPage() {
       return;
     }
     
-    try {
-      const cleanPhone = contact.phone.replace(/\D/g, '');
-      if (cleanPhone) {
-        window.open(`https://wa.me/${cleanPhone}`, '_blank');
-      }
-
-      const { data: existing, error } = await supabase
-        .from('conversations')
-        .select('id')
-        .eq('account_id', accountId)
-        .eq('contact_id', contact.id)
-        .maybeSingle();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error finding conversation:', error);
-      }
-
-      if (existing) {
-        router.push(`/inbox?c=${existing.id}`);
-        return;
-      }
-
-      const { data: newConv, error: createError } = await supabase
-        .from('conversations')
-        .insert({
-          account_id: accountId,
-          user_id: user?.id,
-          contact_id: contact.id,
-        })
-        .select('id')
-        .single();
-
-      if (createError) {
-        toast.error('Failed to start chat thread');
-        console.error('Create conversation error:', createError);
-        return;
-      }
-
-      router.push(`/inbox?c=${newConv.id}`);
-    } catch (err) {
-      console.error('WhatsApp redirect error:', err);
-      toast.error('Something went wrong');
+    const cleanPhone = contact.phone.replace(/\D/g, '');
+    if (!cleanPhone) {
+      toast.error('Invalid phone number');
+      return;
     }
+
+    let appOpened = false;
+    const handleBlur = () => {
+      appOpened = true;
+    };
+    window.addEventListener('blur', handleBlur);
+
+    // Try opening native WhatsApp client
+    window.location.href = `whatsapp://send?phone=${cleanPhone}`;
+
+    setTimeout(async () => {
+      window.removeEventListener('blur', handleBlur);
+      if (!appOpened) {
+        try {
+          const { data: existing, error } = await supabase
+            .from('conversations')
+            .select('id')
+            .eq('account_id', accountId)
+            .eq('contact_id', contact.id)
+            .maybeSingle();
+
+          if (error && error.code !== 'PGRST116') {
+            console.error('Error finding conversation:', error);
+          }
+
+          if (existing) {
+            router.push(`/inbox?c=${existing.id}`);
+            return;
+          }
+
+          const { data: newConv, error: createError } = await supabase
+            .from('conversations')
+            .insert({
+              account_id: accountId,
+              user_id: user?.id,
+              contact_id: contact.id,
+            })
+            .select('id')
+            .single();
+
+          if (createError) {
+            toast.error('Failed to start chat thread');
+            console.error('Create conversation error:', createError);
+            return;
+          }
+
+          router.push(`/inbox?c=${newConv.id}`);
+        } catch (err) {
+          console.error('WhatsApp redirect error:', err);
+          toast.error('Something went wrong');
+        }
+      }
+    }, 1500);
   };
 
   const [contacts, setContacts] = useState<ContactWithTags[]>([]);
