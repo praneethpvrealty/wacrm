@@ -739,11 +739,12 @@ async function processMessage(
       if (!normalizedImportPhone) continue;
 
       // Check if contact already exists in account
+      const cleanPhone = normalizedImportPhone.replace(/\D/g, '');
       const { data: existingContact } = await supabaseAdmin()
         .from('contacts')
         .select('id, name')
         .eq('account_id', accountId)
-        .eq('phone', normalizedImportPhone)
+        .or(`phone.eq.${normalizedImportPhone},phone.eq.${cleanPhone}`)
         .maybeSingle();
 
       if (!existingContact) {
