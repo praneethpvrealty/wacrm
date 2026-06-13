@@ -603,19 +603,23 @@ async function processMessage(
   const { contentText, mediaUrl, mediaType, interactiveReplyId } =
     await parseMessageContent(message, accessToken)
 
-  // If incoming text matches a property title, link the contact to it and mark as pending review
+  // If incoming text matches a property title or code, link the contact to it and mark as pending review
   if (contentText) {
     try {
       const { data: properties } = await supabaseAdmin()
         .from('properties')
-        .select('id, title')
+        .select('id, title, property_code')
         .eq('account_id', accountId)
         .eq('is_published', true);
 
       if (properties) {
-        const matchedProperty = properties.find((p: { id: string; title: string }) => 
-          contentText.toLowerCase().includes(p.title.toLowerCase())
-        );
+        const matchedProperty = properties.find((p: { id: string; title: string; property_code?: string }) => {
+          const textLower = contentText.toLowerCase();
+          const titleMatches = textLower.includes(p.title.toLowerCase());
+          const codeMatches = p.property_code ? textLower.includes(p.property_code.toLowerCase()) : false;
+          return titleMatches || codeMatches;
+        });
+
         if (matchedProperty) {
           await supabaseAdmin()
             .from('contacts')

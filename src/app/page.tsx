@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 };
 
 interface PageProps {
-  searchParams: Promise<{ account_id?: string; ref?: string; agent_id?: string }>;
+  searchParams: Promise<{ account_id?: string; ref?: string; agent_id?: string; property_id?: string }>;
 }
 
 // Server Component: fetches public listings & configuration details
@@ -26,6 +26,7 @@ export default async function RootPage({ searchParams }: PageProps) {
   let filterUserId: string | null = null;
 
   const ref = resolvedParams.ref || resolvedParams.account_id || resolvedParams.agent_id;
+  const initialPropertyId = resolvedParams.property_id;
 
   if (ref) {
     // 1. Check if ref matches an account
@@ -104,7 +105,39 @@ export default async function RootPage({ searchParams }: PageProps) {
     .eq('account_id', accountId)
     .maybeSingle();
 
-  // 3. Fetch Published & Available Properties
+  // 3. Securely resolve referrer's phone number
+  let referrerPhone: string | null = null;
+  if (filterContactId) {
+    const { data: contact } = await admin
+      .from('contacts')
+      .select('phone')
+      .eq('id', filterContactId)
+      .maybeSingle();
+    if (contact) {
+      referrerPhone = contact.phone;
+    }
+  } else if (filterUserId) {
+    const { data: profile } = await admin
+      .from('profiles')
+      .select('email')
+      .eq('user_id', filterUserId)
+      .maybeSingle();
+    if (profile) {
+      const { data: contact } = await admin
+        .from('contacts')
+        .select('phone, id')
+        .eq('account_id', accountId)
+        .eq('email', profile.email)
+        .maybeSingle();
+      if (contact) {
+        referrerPhone = contact.phone;
+        // Map filterContactId as well so the public inquiry form routes back correctly
+        filterContactId = contact.id;
+      }
+    }
+  }
+
+  // 4. Fetch Published & Available Properties
   let query = admin
     .from('properties')
     .select('*')
@@ -120,13 +153,15 @@ export default async function RootPage({ searchParams }: PageProps) {
 
   const { data: properties } = await query.order('created_at', { ascending: false });
 
-  // 4. Render
+  // 5. Render
   return (
     <ShowcaseView
       properties={properties || []}
       settings={settings}
       accountId={accountId}
       referrerContactId={filterContactId || undefined}
+      referrerPhone={referrerPhone || undefined}
+      initialPropertyId={initialPropertyId}
     />
   );
 }

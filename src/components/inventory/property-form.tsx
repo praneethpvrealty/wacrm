@@ -1107,7 +1107,14 @@ export function PropertyForm({
           <div className="px-6 pt-5 border-b border-slate-800 bg-slate-950/40">
             <DialogHeader className="pb-3">
               <DialogTitle className="text-white flex items-center justify-between">
-                <span>{isEdit ? 'Edit Property Listing' : 'Add New Property Listing'}</span>
+                <span>
+                  {isEdit ? 'Edit Property Listing' : 'Add New Property Listing'}
+                  {isEdit && property?.property_code && (
+                    <span className="ml-2 text-xs font-mono select-all bg-slate-800 border border-slate-700 text-slate-300 px-2 py-0.5 rounded font-normal">
+                      {property.property_code}
+                    </span>
+                  )}
+                </span>
               </DialogTitle>
               <DialogDescription className="text-slate-400">
                 Configure listing specifications, location details, and matching preferences.
@@ -1130,6 +1137,17 @@ export function PropertyForm({
               <form onSubmit={handleSubmit} className="space-y-5">
                 {/* Main Info */}
                 <div className="grid grid-cols-2 gap-4">
+                  {isEdit && property?.property_code && (
+                    <div className="space-y-1.5 col-span-2 animate-fade-in">
+                      <Label className="text-slate-400">Property Code (Unique ID)</Label>
+                      <Input
+                        value={property.property_code}
+                        readOnly
+                        className="bg-slate-850 border-slate-800 text-slate-400 font-mono cursor-not-allowed select-all"
+                      />
+                    </div>
+                  )}
+
                   <div className="space-y-1.5 col-span-2">
                     <Label htmlFor="prop-title" className="text-slate-300">
                       Property Title <span className="text-red-400">*</span>
