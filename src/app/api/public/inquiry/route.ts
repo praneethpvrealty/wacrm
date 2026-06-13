@@ -5,7 +5,7 @@ import { normalizePhoneWithCountryCode } from "@/lib/whatsapp/phone-utils";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, phone, email, message, propertyId, propertyTitle, accountId, referrerContactId } = body;
+    const { name, phone, email, message, propertyId, propertyTitle, propertyCode, accountId, referrerContactId } = body;
 
     if (!accountId) {
       return NextResponse.json(
@@ -120,6 +120,9 @@ export async function POST(request: Request) {
     if (propertyTitle) {
       noteText += `• Interested in Property: ${propertyTitle}\n`;
     }
+    if (propertyCode) {
+      noteText += `• Property Code: ${propertyCode}\n`;
+    }
     if (propertyId) {
       noteText += `• Property ID: ${propertyId}\n`;
     }
@@ -153,7 +156,7 @@ export async function POST(request: Request) {
           account_id: accountId,
           user_id: systemUserId,
           title: `New Website Inquiry - ${name || phone}`,
-          description: `Visitor ${name || ""} (${phone}) inquired about property: "${propertyTitle || "Unknown"}". Review contact and follow up.`,
+          description: `Visitor ${name || ""} (${phone}) inquired about property: "${propertyTitle || "Unknown"}"${propertyCode ? ` (${propertyCode})` : ""}. Review contact and follow up.`,
           due_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // due in 1 day
           priority: "high",
           completed: false,

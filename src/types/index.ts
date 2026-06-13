@@ -576,6 +576,7 @@ export interface Property {
   features: string[];
   images: string[];
   google_map_link?: string | null;
+  property_code?: string;
   owner_contact_id?: string | null;
   owner?: Contact | null;
   created_at: string;

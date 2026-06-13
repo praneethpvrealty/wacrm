@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import {
   Search,
@@ -20,6 +20,8 @@ import {
   Calendar,
   Send,
   CheckCircle,
+  Share2,
+  Copy,
 } from 'lucide-react';
 import type { Property, ShowcaseSettings } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -31,9 +33,18 @@ interface ShowcaseViewProps {
   settings: ShowcaseSettings | null;
   accountId: string;
   referrerContactId?: string;
+  referrerPhone?: string;
+  initialPropertyId?: string;
 }
 
-export function ShowcaseView({ properties, settings, accountId, referrerContactId }: ShowcaseViewProps) {
+export function ShowcaseView({ 
+  properties, 
+  settings, 
+  accountId, 
+  referrerContactId,
+  referrerPhone,
+  initialPropertyId 
+}: ShowcaseViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState('All');
   const [minBeds, setMinBeds] = useState('All');
@@ -51,17 +62,29 @@ export function ShowcaseView({ properties, settings, accountId, referrerContactI
 
   // Fallback defaults if settings don't exist yet
   const siteName = settings?.website_name || 'Aryavarta Ventures';
-  const displayPhone = settings?.contact_phone || '';
+  const displayPhone = referrerPhone || settings?.contact_phone || '';
   
-  // Format WhatsApp Link
-  const rawPhone = displayPhone.replace(/\D/g, ''); // digits only
+  // Format WhatsApp Link targeting the referrer agent phone or settings default
+  const targetPhone = displayPhone.replace(/\D/g, '') || '919876543210';
 
   const getWhatsAppLink = (property: Property) => {
     const defaultTemplate = settings?.whatsapp_message_template || 'Hi! I am interested in your property "{title}" in {location}. Please share details.';
-    const message = defaultTemplate
+    
+    let message = defaultTemplate
       .replace('{title}', property.title)
       .replace('{location}', property.location);
-    return `https://wa.me/${rawPhone || '919876543210'}?text=${encodeURIComponent(message)}`;
+
+    if (property.property_code) {
+      if (message.includes('{property_code}')) {
+        message = message.replace('{property_code}', property.property_code);
+      } else {
+        message += ` (Property ID: ${property.property_code})`;
+      }
+    } else {
+      message = message.replace('({property_code})', '').replace('{property_code}', '');
+    }
+
+    return `https://wa.me/${targetPhone}?text=${encodeURIComponent(message)}`;
   };
 
   // Get distinct property types
@@ -147,6 +170,7 @@ export function ShowcaseView({ properties, settings, accountId, referrerContactI
           message: inquiryMessage.trim() || undefined,
           propertyId: selectedProperty.id,
           propertyTitle: selectedProperty.title,
+          propertyCode: selectedProperty.property_code,
           accountId,
           referrerContactId,
         }),
@@ -172,14 +196,85 @@ export function ShowcaseView({ properties, settings, accountId, referrerContactI
     }
   };
 
+  // Deep-linking mount logic
+  useEffect(() => {
+    if (initialPropertyId) {
+      const match = properties.find(
+        (p) => p.id === initialPropertyId || (p.property_code && p.property_code.toLowerCase() === initialPropertyId.toLowerCase())
+      );
+      if (match) {
+        setSelectedProperty(match);
+        setActiveImageIdx(0);
+        setSubmitSuccess(false);
+      }
+    }
+  }, [initialPropertyId, properties]);
+
   const openPropertyModal = (property: Property) => {
     setSelectedProperty(property);
     setActiveImageIdx(0);
     setSubmitSuccess(false);
+
+    // Sync URL property_id parameter
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('property_id', property.property_code || property.id);
+      window.history.pushState({}, '', url.toString());
+    }
   };
 
   const closePropertyModal = () => {
     setSelectedProperty(null);
+
+    // Sync URL property_id parameter (remove it)
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('property_id');
+      window.history.pushState({}, '', url.toString());
+    }
+  };
+
+  const getPropertyShareUrl = (property: Property) => {
+    if (typeof window === 'undefined') return '';
+    const url = new URL(window.location.origin + window.location.pathname);
+    url.searchParams.set('property_id', property.property_code || property.id);
+    
+    // Preserve ref/agent_id parameter if active
+    const currentUrl = new URL(window.location.href);
+    const refParam = currentUrl.searchParams.get('ref') || currentUrl.searchParams.get('account_id') || currentUrl.searchParams.get('agent_id');
+    if (refParam) {
+      url.searchParams.set('ref', refParam);
+    }
+    return url.toString();
+  };
+
+  const handleCopyShareLink = (property: Property) => {
+    const url = getPropertyShareUrl(property);
+    if (!url) return;
+    navigator.clipboard.writeText(url);
+    toast.success('Property link copied to clipboard!');
+  };
+
+  const getWhatsAppShareLink = (property: Property) => {
+    const url = getPropertyShareUrl(property);
+    const text = `Check out this property: "${property.title}"${property.property_code ? ` (ID: ${property.property_code})` : ''} on Aryavarta Ventures:\n\n${url}`;
+    return `https://wa.me/?text=${encodeURIComponent(text)}`;
+  };
+
+  const handleNativeShare = async (property: Property) => {
+    const url = getPropertyShareUrl(property);
+    if (!url) return;
+    try {
+      await navigator.share({
+        title: property.title,
+        text: `Check out this property: ${property.title}${property.property_code ? ` (ID: ${property.property_code})` : ''}`,
+        url: url,
+      });
+    } catch (err) {
+      if (err instanceof Error && err.name !== 'AbortError') {
+        console.error('Share failed:', err);
+      }
+    }
   };
 
   return (
@@ -359,11 +454,16 @@ export function ShowcaseView({ properties, settings, accountId, referrerContactI
                   {/* Body Content */}
                   <div className="flex-1 p-5 flex flex-col justify-between">
                     <div>
-                      {property.project && (
-                        <span className="text-[10px] text-slate-550 font-bold block uppercase tracking-widest truncate mb-0.5">
-                          🏢 {property.project}
+                      <div className="flex items-center justify-between mb-1 gap-2">
+                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest truncate">
+                          {property.project ? `🏢 ${property.project}` : ''}
                         </span>
-                      )}
+                        {property.property_code && (
+                          <span className="text-[9px] font-mono font-bold text-slate-400 bg-slate-950/40 px-1.5 py-0.5 rounded shrink-0">
+                            {property.property_code}
+                          </span>
+                        )}
+                      </div>
                       <h3
                         onClick={() => openPropertyModal(property)}
                         className="text-base font-bold text-white line-clamp-1 group-hover:text-primary transition-colors cursor-pointer"
@@ -549,9 +649,16 @@ export function ShowcaseView({ properties, settings, accountId, referrerContactI
               {/* Header Info */}
               <div className="space-y-4">
                 <div>
-                  <div className="flex items-center gap-1.5 text-xs text-primary font-extrabold uppercase tracking-widest mb-1">
-                    <Building className="size-3.5" />
-                    {selectedProperty.type}
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <div className="flex items-center gap-1.5 text-xs text-primary font-extrabold uppercase tracking-widest">
+                      <Building className="size-3.5" />
+                      {selectedProperty.type}
+                    </div>
+                    {selectedProperty.property_code && (
+                      <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded select-all">
+                        {selectedProperty.property_code}
+                      </span>
+                    )}
                   </div>
                   <h2 className="text-xl font-bold text-white leading-tight">
                     {selectedProperty.title}
@@ -586,6 +693,40 @@ export function ShowcaseView({ properties, settings, accountId, referrerContactI
                       WhatsApp Chat
                     </a>
                   )}
+                </div>
+
+                {/* Share Options */}
+                <div className="bg-slate-900/30 border border-slate-850/80 p-4 rounded-xl space-y-2.5">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Share Property</span>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => handleCopyShareLink(selectedProperty)}
+                      className="bg-slate-950/60 hover:bg-slate-900 border border-slate-800 text-slate-300 hover:text-white text-xs font-semibold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                    >
+                      <Copy className="size-3.5 text-slate-400" />
+                      Copy Link
+                    </Button>
+                    <a
+                      href={getWhatsAppShareLink(selectedProperty)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="bg-slate-950/60 hover:bg-slate-900 border border-slate-800 text-slate-350 hover:text-white text-xs font-semibold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-all shadow-sm"
+                    >
+                      <MessageCircle className="size-3.5 text-green-500 fill-green-500/10" />
+                      WhatsApp
+                    </a>
+                    {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
+                      <Button
+                        size="sm"
+                        onClick={() => handleNativeShare(selectedProperty)}
+                        className="bg-slate-950/60 hover:bg-slate-900 border border-slate-800 text-slate-300 hover:text-white text-xs font-semibold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                      >
+                        <Share2 className="size-3.5 text-slate-400" />
+                        More
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Masked Exact Location Block */}

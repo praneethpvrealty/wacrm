@@ -193,9 +193,16 @@ export function PropertyList({
             {/* Content Body */}
             <div className="flex-1 p-5 flex flex-col justify-between">
               <div>
-                <div className="flex items-center gap-1.5 text-xs text-primary font-semibold mb-1 uppercase tracking-wider">
-                  <TypeIcon className="size-3.5" />
-                  {property.type}
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <div className="flex items-center gap-1.5 text-xs text-primary font-semibold uppercase tracking-wider">
+                    <TypeIcon className="size-3.5" />
+                    {property.type}
+                  </div>
+                  {property.property_code && (
+                    <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-950/40 px-1.5 py-0.5 rounded select-all" title="Copy Property Code">
+                      {property.property_code}
+                    </span>
+                  )}
                 </div>
                 {property.project && (
                   <div className="text-xs text-slate-300 font-semibold mb-1 truncate flex items-center gap-1" title={property.project}>
