@@ -93,6 +93,7 @@ export function FlyerCreatorDialog({
         body: JSON.stringify({
           prompt: aiPrompt.trim(),
           aspectRatio: '1:1',
+          image: (property && property.images && property.images.length > 0) ? property.images[0] : null,
         }),
       });
 
