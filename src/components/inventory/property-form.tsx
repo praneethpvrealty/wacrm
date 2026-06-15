@@ -168,6 +168,36 @@ export function PropertyForm({
   const [ownerContactId, setOwnerContactId] = useState<string | null>(null);
   const [interestedContactIds, setInterestedContactIds] = useState<string[]>([]);
 
+  // Helper classifications based on selected type
+  const hasBedsBaths = [
+    'Flat/ Apartment',
+    'Residential House',
+    'Villa',
+    'Builder Floor Apartment',
+    'Penthouse',
+    'Studio Apartment',
+    'Farm House'
+  ].includes(type);
+
+  const hasCommercialFields = [
+    'Commercial Office Space',
+    'Office in IT Park/ SEZ',
+    'Commercial Shop',
+    'Commercial Showroom',
+    'Commercial Land',
+    'Warehouse/ Godown',
+    'Industrial Land',
+    'Industrial Building',
+    'Industrial Shed'
+  ].includes(type);
+
+  const isLand = [
+    'Residential Land/ Plot',
+    'Commercial Land',
+    'Industrial Land',
+    'Agricultural Land'
+  ].includes(type);
+
   async function ensureLocalitiesLoaded() {
     if (!localitiesDb) {
       const db = await import('@/lib/data/bengaluru-localities');
@@ -353,6 +383,10 @@ export function PropertyForm({
             guessedType = 'field';
             guessedValue = 'name';
             resolved = true;
+          } else if (lowerLine.includes('map') || lowerLine.includes('google') || lowerLine.includes('gps') || lowerLine.includes('navigation') || lowerLine.includes('direction')) {
+            guessedType = 'static';
+            guessedValue = 'map';
+            resolved = true;
           } else if (lowerLine.includes('location') || lowerLine.includes('address') || lowerLine.includes('📍')) {
             guessedType = 'static';
             guessedValue = 'location';
@@ -466,10 +500,11 @@ export function PropertyForm({
               else if (mapping.value === 'price') val = formattedPrice || '';
               else if (mapping.value === 'location') val = sublocality || fullLoc || '';
               else if (mapping.value === 'area') {
-                const isLand = type === 'Land / Plot';
                 const areaVal = isLand ? landArea : areaSqft;
                 const unitVal = isLand ? landAreaUnit : areaUnit;
                 val = areaVal ? `${areaVal} ${unitVal}` : '';
+              } else if (mapping.value === 'map') {
+                val = googleMapLink || '';
               } else if (mapping.value === 'highlights') {
                 const parsedHighlights = nearbyHighlights.filter(Boolean);
                 if (parsedHighlights.length > 0) {
@@ -799,35 +834,7 @@ export function PropertyForm({
     }
   }
 
-  // Helper classifications based on selected type
-  const hasBedsBaths = [
-    'Flat/ Apartment',
-    'Residential House',
-    'Villa',
-    'Builder Floor Apartment',
-    'Penthouse',
-    'Studio Apartment',
-    'Farm House'
-  ].includes(type);
 
-  const hasCommercialFields = [
-    'Commercial Office Space',
-    'Office in IT Park/ SEZ',
-    'Commercial Shop',
-    'Commercial Showroom',
-    'Commercial Land',
-    'Warehouse/ Godown',
-    'Industrial Land',
-    'Industrial Building',
-    'Industrial Shed'
-  ].includes(type);
-
-  const isLand = [
-    'Residential Land/ Plot',
-    'Commercial Land',
-    'Industrial Land',
-    'Agricultural Land'
-  ].includes(type);
 
   // Update land area and dimensions automatically for land types
   useEffect(() => {
@@ -2356,6 +2363,7 @@ export function PropertyForm({
                                         <option value="static-price">Price (Formatted)</option>
                                         <option value="static-location">Location / Area</option>
                                         <option value="static-area">Property Area / Size</option>
+                                        <option value="static-map">Google Map Link</option>
                                         <option value="static-highlights">Nearby Highlights / Amenities</option>
                                         <option value="static-agent">Agent Name</option>
                                       </optgroup>
@@ -2408,10 +2416,11 @@ export function PropertyForm({
                                         else if (mapping.value === 'price') val = formattedPrice || `[Formatted Price]`;
                                         else if (mapping.value === 'location') val = sublocality || fullLoc || `[Location]`;
                                         else if (mapping.value === 'area') {
-                                          const isLand = type === 'Land / Plot';
                                           const areaVal = isLand ? landArea : areaSqft;
                                           const unitVal = isLand ? landAreaUnit : areaUnit;
                                           val = areaVal ? `${areaVal} ${unitVal}` : `[Property Area]`;
+                                        } else if (mapping.value === 'map') {
+                                          val = googleMapLink || `[Google Map Link]`;
                                         } else if (mapping.value === 'highlights') {
                                           const parsedHighlights = nearbyHighlights.filter(Boolean);
                                           if (parsedHighlights.length > 0) {
