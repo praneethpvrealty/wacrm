@@ -438,7 +438,7 @@ export function PropertyShareDialog({
               else if (mapping.value === 'price') val = formattedPrice || '';
               else if (mapping.value === 'location') val = property.sublocality || fullLoc || '';
               else if (mapping.value === 'area') {
-                const isLand = property.type === 'Land / Plot';
+                const isLand = property.type.includes('Land') || property.type.includes('Plot');
                 const areaVal = isLand ? property.land_area : property.area_sqft;
                 const unitVal = isLand ? property.land_area_unit : property.area_unit;
                 val = areaVal ? `${areaVal} ${unitVal}` : '';
@@ -1099,7 +1099,7 @@ export function PropertyShareDialog({
                               else if (mapping.value === 'price') val = formattedPrice || `[Price]`;
                               else if (mapping.value === 'location') val = property.sublocality || property.location || `[Location]`;
                               else if (mapping.value === 'area') {
-                                const isLand = property.type === 'Land / Plot';
+                                const isLand = property.type.includes('Land') || property.type.includes('Plot');
                                 const areaVal = isLand ? property.land_area : property.area_sqft;
                                 const unitVal = isLand ? property.land_area_unit : property.area_unit;
                                 val = areaVal ? `${areaVal} ${unitVal}` : `[Area]`;
