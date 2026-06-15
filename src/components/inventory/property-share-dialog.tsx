@@ -28,6 +28,10 @@ import {
   UserPlus,
   Share2,
   X,
+  Copy,
+  Check,
+  ExternalLink,
+  Search,
 } from 'lucide-react';
 import { getMatchingContacts } from '@/lib/matching';
 import { normalizePhoneWithCountryCode } from '@/lib/whatsapp/phone-utils';
@@ -48,8 +52,10 @@ export function PropertyShareDialog({
   const supabase = createClient();
   const { user, accountId, profile } = useAuth();
 
-  // Dialog flow steps: 'matches' | 'configure' | 'sending' | 'results'
-  const [broadcastStep, setBroadcastStep] = useState<'matches' | 'configure' | 'sending' | 'results'>('matches');
+  // Dialog flow steps: 'link' | 'matches' | 'configure' | 'sending' | 'results'
+  const [broadcastStep, setBroadcastStep] = useState<'link' | 'matches' | 'configure' | 'sending' | 'results'>('link');
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Contact list and selections
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -160,7 +166,9 @@ export function PropertyShareDialog({
             }
           });
       }
-      setBroadcastStep('matches');
+      setBroadcastStep('link');
+      setSearchQuery('');
+      setCopiedLink(false);
       setSelectedContactIds([]);
       setSelectedTemplate(null);
       setVariableMappings({});
@@ -181,14 +189,36 @@ export function PropertyShareDialog({
     return getMatchingContacts(property, targetContacts);
   }, [contacts, property]);
 
-  // Filter showing based on Show Agents toggle
-  const displayedMatches = useMemo(() => {
-    return matchedContacts.filter(({ contact: c }) => {
-      if (c.classification === 'Buyer') return true;
-      if (c.classification === 'Agent' && showAgentsInMatches) return true;
-      return false;
+  // Combine search query and matching contacts logic
+  const displayedContacts = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return matchedContacts.filter(({ contact: c }) => {
+        if (c.classification === 'Buyer') return true;
+        if (c.classification === 'Agent' && showAgentsInMatches) return true;
+        return false;
+      });
+    }
+
+    const q = searchQuery.toLowerCase().trim();
+    const filtered = contacts.filter((c) => {
+      if (c.classification !== 'Buyer' && c.classification !== 'Agent') return false;
+      if (c.classification === 'Agent' && !showAgentsInMatches) return false;
+      return (
+        (c.name && c.name.toLowerCase().includes(q)) ||
+        (c.phone && c.phone.includes(q))
+      );
     });
-  }, [matchedContacts, showAgentsInMatches]);
+
+    return filtered.map((c) => {
+      const match = matchedContacts.find((m) => m.contact.id === c.id);
+      if (match) return match;
+      return {
+        contact: c,
+        score: 0,
+        matchedFields: { budget: false, area: false, interest: false },
+      };
+    });
+  }, [searchQuery, contacts, matchedContacts, showAgentsInMatches]);
 
   // Toggle single selection
   function toggleContactSelection(id: string) {
@@ -199,8 +229,8 @@ export function PropertyShareDialog({
 
   // Toggle select-all control
   function toggleSelectAllContacts() {
-    const allIds = displayedMatches.map((m) => m.contact.id);
-    const allSelected = displayedMatches.every((m) => selectedContactIds.includes(m.contact.id));
+    const allIds = displayedContacts.map((m) => m.contact.id);
+    const allSelected = displayedContacts.every((m) => selectedContactIds.includes(m.contact.id));
     if (allSelected) {
       // Remove all displayed matches from selected ids
       setSelectedContactIds((prev) => prev.filter((id) => !allIds.includes(id)));
@@ -507,23 +537,132 @@ export function PropertyShareDialog({
             Share Property Details
           </DialogTitle>
           <DialogDescription className="text-slate-400 text-xs">
-            Send WhatsApp details of &quot;<span className="text-white font-semibold">{property.title}</span>&quot; using verified message templates.
+            {broadcastStep === 'link'
+              ? `Share public showcasing details of "${property.title}" directly.`
+              : `Send WhatsApp details of "${property.title}" using verified message templates.`
+            }
           </DialogDescription>
         </DialogHeader>
 
+        {/* STEP 0: Public Showcase Link (default first step) */}
+        {broadcastStep === 'link' && (
+          <div className="space-y-4 flex flex-col flex-1 min-h-0">
+            <div className="bg-slate-950/20 border border-slate-850 p-4 rounded-xl space-y-3">
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                🔗 Public Showcase Link
+              </h3>
+              <p className="text-xs text-slate-400">
+                This public page showcases full details, images, and maps. Copy the link below to share directly with anyone, or open the link to view the showcase page.
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  readOnly
+                  value={typeof window !== 'undefined' ? `${window.location.origin}/?property_id=${property.id}` : `/?property_id=${property.id}`}
+                  className="bg-slate-900 border-slate-800 text-xs h-9 text-slate-200 select-all font-mono"
+                />
+                <Button
+                  onClick={async () => {
+                    const showcaseUrl = `${window.location.origin}/?property_id=${property.id}`;
+                    await navigator.clipboard.writeText(showcaseUrl);
+                    setCopiedLink(true);
+                    toast.success('Public showcase link copied to clipboard!');
+                    setTimeout(() => setCopiedLink(false), 2000);
+                  }}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs h-9 px-3 shrink-0 flex items-center gap-1"
+                >
+                  {copiedLink ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                  {copiedLink ? 'Copied' : 'Copy'}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const showcaseUrl = `${window.location.origin}/?property_id=${property.id}`;
+                    window.open(showcaseUrl, '_blank');
+                  }}
+                  className="border-slate-800 hover:bg-slate-800 text-slate-350 text-xs h-9 px-3 shrink-0 flex items-center gap-1"
+                >
+                  <ExternalLink className="size-3.5" />
+                  View
+                </Button>
+              </div>
+
+              {!property.is_published && (
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-[11px] text-amber-400 mt-2 flex items-start gap-2">
+                  <span className="text-xs">⚠️</span>
+                  <div>
+                    <span className="font-bold block">Listing is Private / Unpublished</span>
+                    To allow public visitors to view this showcase page, make sure the property is set to <strong>Published</strong> on the inventory page.
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl space-y-3">
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                💬 Share via WhatsApp Templates
+              </h3>
+              <p className="text-xs text-slate-400">
+                Want to send structured, approved WhatsApp messages to matching leads and contacts? Proceed to our WhatsApp template sharing flow.
+              </p>
+              <div className="flex justify-end">
+                <Button
+                  onClick={() => setBroadcastStep('matches')}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Users className="size-3.5" />
+                  Select Contacts & Share on WhatsApp
+                </Button>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-800 pt-3.5 flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                className="border-slate-800 hover:bg-slate-850 text-xs text-slate-300 h-9"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* STEP 1: Audience & Matches */}
         {broadcastStep === 'matches' && (
-          <div className="space-y-4 flex flex-col flex-1 min-h-0">
+          <div className="space-y-4 flex flex-col flex-1 min-h-0 animate-fade-in">
+            {/* Search Input */}
+            <div className="relative">
+              <Input
+                placeholder="Search contacts by name or phone number..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="bg-slate-900 border-slate-800 text-xs h-9 placeholder:text-slate-500 pl-9 pr-8 text-slate-200"
+              />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
+            </div>
+
             {/* Action Bar / Matching Status */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950/20 border border-slate-850 p-3.5 rounded-xl">
               <div className="flex flex-wrap items-center gap-3">
                 <div className="text-xs font-semibold text-slate-400">
                   {loadingContacts ? (
                     'Searching matching contacts...'
-                  ) : displayedMatches.length === 0 ? (
+                  ) : searchQuery.trim() ? (
+                    `Found ${displayedContacts.length} search result${displayedContacts.length === 1 ? '' : 's'}`
+                  ) : displayedContacts.length === 0 ? (
                     '0 matching contacts found'
                   ) : (
-                    `Found ${displayedMatches.length} matching contact${displayedMatches.length === 1 ? '' : 's'}`
+                    `Found ${displayedContacts.length} matching contact${displayedContacts.length === 1 ? '' : 's'}`
                   )}
                 </div>
                 {!loadingContacts && (
@@ -549,19 +688,19 @@ export function PropertyShareDialog({
               </div>
 
               <div className="flex items-center gap-3">
-                {displayedMatches.length > 0 && (
+                {displayedContacts.length > 0 && (
                   <button
                     type="button"
                     onClick={toggleSelectAllContacts}
                     className="text-xs font-bold text-primary hover:text-primary/80 flex items-center gap-1 cursor-pointer"
                   >
-                    {displayedMatches.every((m) => selectedContactIds.includes(m.contact.id)) ? (
+                    {displayedContacts.every((m) => selectedContactIds.includes(m.contact.id)) ? (
                       <>
                         <CheckSquare className="size-3.5" /> Deselect All
                       </>
                     ) : (
                       <>
-                        <Square className="size-3.5" /> Select All ({displayedMatches.length})
+                        <Square className="size-3.5" /> Select All ({displayedContacts.length})
                       </>
                     )}
                   </button>
@@ -571,7 +710,7 @@ export function PropertyShareDialog({
                   variant="outline"
                   size="xs"
                   onClick={() => setShowAddFresh(!showAddFresh)}
-                  className="h-7 border-slate-800 hover:bg-slate-800 text-slate-300 text-xs px-2.5 rounded flex items-center gap-1"
+                  className="h-7 border-slate-800 hover:bg-slate-850 text-slate-300 text-xs px-2.5 rounded flex items-center gap-1"
                 >
                   {showAddFresh ? <X className="size-3" /> : <UserPlus className="size-3 text-primary" />}
                   {showAddFresh ? 'Cancel' : 'Add Fresh Contact'}
@@ -598,7 +737,7 @@ export function PropertyShareDialog({
                       placeholder="e.g. John Doe"
                       value={freshName}
                       onChange={(e) => setFreshName(e.target.value)}
-                      className="bg-slate-900 border-slate-800 text-slate-200 placeholder:text-slate-600 h-8.5 text-xs"
+                      className="bg-slate-900 border-slate-800 text-slate-200 placeholder:text-slate-650 h-8.5 text-xs"
                     />
                   </div>
                   <div className="space-y-1">
@@ -611,7 +750,7 @@ export function PropertyShareDialog({
                       value={freshPhone}
                       onChange={(e) => setFreshPhone(e.target.value)}
                       required
-                      className="bg-slate-900 border-slate-800 text-slate-200 placeholder:text-slate-600 h-8.5 text-xs"
+                      className="bg-slate-900 border-slate-800 text-slate-200 placeholder:text-slate-650 h-8.5 text-xs"
                     />
                   </div>
                   <div className="space-y-1">
@@ -656,7 +795,7 @@ export function PropertyShareDialog({
                   <Loader2 className="size-6 animate-spin text-primary mr-2" />
                   Scanning database & applying matching logic...
                 </div>
-              ) : displayedMatches.length === 0 ? (
+              ) : displayedContacts.length === 0 ? (
                 <div className="text-center py-16 border border-dashed border-slate-800 rounded-xl bg-slate-900/30">
                   <Users className="size-8 mx-auto text-slate-600 mb-2" />
                   <p className="text-sm text-slate-400 font-semibold">No matching profiles found</p>
@@ -665,7 +804,7 @@ export function PropertyShareDialog({
                   </p>
                 </div>
               ) : (
-                displayedMatches.map(({ contact: c, score, matchedFields }) => {
+                displayedContacts.map(({ contact: c, score, matchedFields }) => {
                   const isSelected = selectedContactIds.includes(c.id);
                   return (
                     <div
@@ -740,16 +879,16 @@ export function PropertyShareDialog({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => onOpenChange(false)}
-                className="border-slate-800 hover:bg-slate-850 text-xs text-slate-300 h-9"
+                onClick={() => setBroadcastStep('link')}
+                className="border-slate-800 hover:bg-slate-850 text-xs text-slate-300 h-9 flex items-center gap-1"
               >
-                Close
+                <ArrowLeft className="size-3.5" /> Back
               </Button>
               <Button
                 type="button"
                 disabled={selectedContactIds.length === 0}
                 onClick={() => setBroadcastStep('configure')}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs h-9 flex items-center gap-1.5"
+                className="bg-primary hover:bg-primary/95 text-primary-foreground font-semibold text-xs h-9 flex items-center gap-1.5"
               >
                 <Send className="size-3.5" />
                 Configure Sharing ({selectedContactIds.length})
