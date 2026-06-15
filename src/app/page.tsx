@@ -164,6 +164,25 @@ export default async function RootPage({ searchParams }: PageProps) {
         filterContactId = contact.id;
       }
     }
+  } else if (targetProperty?.user_id) {
+    // If no referrer is specified, default to the agent who created/owns this property listing
+    const { data: profile } = await admin
+      .from('profiles')
+      .select('email')
+      .eq('user_id', targetProperty.user_id)
+      .maybeSingle();
+    if (profile?.email) {
+      const { data: contact } = await admin
+        .from('contacts')
+        .select('phone, id')
+        .eq('account_id', accountId)
+        .eq('email', profile.email)
+        .maybeSingle();
+      if (contact) {
+        referrerPhone = contact.phone;
+        filterContactId = contact.id;
+      }
+    }
   }
 
   // 4. Fetch Published & Available Properties

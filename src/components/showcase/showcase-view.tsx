@@ -625,12 +625,12 @@ export function ShowcaseView({
               {selectedProperty.images && selectedProperty.images.length > 0 ? (
                 <>
                   {/* Main Viewer */}
-                  <div className="flex-1 w-full h-full relative">
+                  <div className="flex-1 w-full h-full relative bg-slate-950 flex items-center justify-center">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={selectedProperty.images[activeImageIdx]}
                       alt={selectedProperty.title}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain"
                     />
                     
                     {/* Slider Navigation */}
@@ -709,13 +709,24 @@ export function ShowcaseView({
                 </div>
 
                 {/* Price Box */}
-                <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-xl flex items-center justify-between">
+                <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-xl flex items-center justify-between gap-4">
                   <div className="flex flex-col">
                     <span className="text-[10px] text-slate-550 font-bold uppercase tracking-wider">Price</span>
                     <span className="text-2xl font-black text-white leading-tight">
                       {formatPrice(selectedProperty.price)}
                     </span>
                   </div>
+                  {displayPhone && (
+                    <a
+                      href={getWhatsAppLink(selectedProperty)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2.5 rounded-lg flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-emerald-950/20 hover:scale-[1.02] transition-all shrink-0"
+                    >
+                      <MessageCircle className="size-4 fill-white text-emerald-600" />
+                      WhatsApp Inquiry
+                    </a>
+                  )}
                 </div>
 
                 {/* Masked Exact Location Block */}
@@ -894,18 +905,31 @@ export function ShowcaseView({
                       className="bg-slate-950 border-slate-850 text-white placeholder:text-slate-650 focus:border-primary text-xs w-full min-h-[50px]"
                     />
 
-                    <Button
-                      type="submit"
-                      disabled={submitting}
-                      className="w-full bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-bold py-2 rounded-lg flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-primary/20"
-                    >
-                      {submitting ? (
-                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-                      ) : (
-                        <Send className="size-3.5" />
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      {displayPhone && (
+                        <a
+                          href={getWhatsAppLink(selectedProperty)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-2 rounded-lg flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-emerald-950/20 hover:scale-[1.01] transition-all text-center"
+                        >
+                          <MessageCircle className="size-4 fill-white text-emerald-600" />
+                          WhatsApp Inquiry
+                        </a>
                       )}
-                      Submit Lead Form
-                    </Button>
+                      <Button
+                        type="submit"
+                        disabled={submitting}
+                        className="flex-1 bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-bold py-2 rounded-lg flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-primary/20"
+                      >
+                        {submitting ? (
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                        ) : (
+                          <Send className="size-3.5" />
+                        )}
+                        Submit Lead Form
+                      </Button>
+                    </div>
                   </form>
                 )}
               </div>
