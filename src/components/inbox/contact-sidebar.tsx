@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, createElement } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { Contact, Deal, ContactNote, Tag } from "@/types";
@@ -10,10 +10,10 @@ import {
   Copy,
   Check,
   Tag as TagIcon,
-  DollarSign,
   StickyNote,
   Plus,
 } from "lucide-react";
+import { getCurrencyIcon } from "@/lib/currency-utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
@@ -25,7 +25,23 @@ interface ContactSidebarProps {
 export function ContactSidebar({ contact }: ContactSidebarProps) {
   const { user, accountId } = useAuth();
   const [copied, setCopied] = useState(false);
+  const [currency, setCurrency] = useState("INR");
   const [deals, setDeals] = useState<Deal[]>([]);
+
+  const fetchCurrency = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("showcase_settings")
+        .select("currency")
+        .single();
+      if (data?.currency) {
+        setCurrency(data.currency);
+      }
+    } catch (err) {
+      console.error("Failed to load showcase settings currency:", err);
+    }
+  }, []);
   const [notes, setNotes] = useState<ContactNote[]>([]);
   const [tags, setTags] = useState<(Tag & { contact_tag_id: string })[]>([]);
   const [newNote, setNewNote] = useState("");
@@ -71,8 +87,9 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
   // Supabase callbacks, not synchronously in the effect body.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchCurrency();
     fetchContactData();
-  }, [fetchContactData]);
+  }, [fetchCurrency, fetchContactData]);
 
   const handleCopyPhone = useCallback(async () => {
     if (!contact?.phone) return;
@@ -208,7 +225,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
           {/* Active Deals */}
           <div>
             <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-slate-500">
-              <DollarSign className="h-3 w-3" />
+              {createElement(getCurrencyIcon(currency), { className: "h-3 w-3" })}
               Active Deals
             </div>
             <div className="mt-2 space-y-2">
@@ -225,8 +242,27 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                     </p>
                     <div className="mt-1 flex items-center justify-between text-xs text-slate-400">
                       <span>
-                        {deal.currency ?? "$"}
-                        {deal.value.toLocaleString()}
+                        {(() => {
+                          const activeCurrency = deal.currency || currency;
+                          if (activeCurrency === "INR") {
+                            const val = Number(deal.value || 0);
+                            if (val >= 10000000) {
+                              return `₹${(val / 10000000).toFixed(2).replace(/\.00$/, '')} Cr`;
+                            } else if (val >= 100000) {
+                              return `₹${(val / 100000).toFixed(2).replace(/\.00$/, '')} Lakhs`;
+                            }
+                            return new Intl.NumberFormat("en-IN", {
+                              style: "currency",
+                              currency: "INR",
+                              maximumFractionDigits: 0,
+                            }).format(val);
+                          }
+                          return new Intl.NumberFormat("en-US", {
+                            style: "currency",
+                            currency: activeCurrency,
+                            maximumFractionDigits: 0,
+                          }).format(Number(deal.value || 0));
+                        })()}
                       </span>
                       {deal.stage && (
                         <span

@@ -61,7 +61,7 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
       .select('id', { count: 'exact', head: true })
       .gte('created_at', yesterdayStart)
       .lt('created_at', todayStart),
-    db.from('deals').select('value, status').eq('status', 'open'),
+    db.from('deals').select('value, brokerage_amount, status').eq('status', 'open'),
     db
       .from('messages')
       .select('id', { count: 'exact', head: true })
@@ -75,8 +75,13 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
       .lt('created_at', todayStart),
   ])
 
-  const openDealsRows = (openDeals.data ?? []) as { value: number | null }[]
-  const openDealsValue = openDealsRows.reduce((sum, d) => sum + (d.value ?? 0), 0)
+  const openDealsRows = (openDeals.data ?? []) as { value: number | null; brokerage_amount: number | null }[]
+  const openDealsValue = openDealsRows.reduce((sum, d) => {
+    if (d.brokerage_amount !== null && d.brokerage_amount !== undefined) {
+      return sum + Number(d.brokerage_amount);
+    }
+    return sum + (Number(d.value || 0) * 0.02); // 2% fallback
+  }, 0)
 
   return {
     activeConversations: {
@@ -133,18 +138,21 @@ export async function loadConversationsSeries(
 export async function loadPipelineDonut(db: DB): Promise<PipelineDonutData> {
   const [stagesRes, dealsRes] = await Promise.all([
     db.from('pipeline_stages').select('id, name, color, pipeline_id, position').order('position'),
-    db.from('deals').select('stage_id, value, status').eq('status', 'open'),
+    db.from('deals').select('stage_id, value, brokerage_amount, status').eq('status', 'open'),
   ])
 
   const stages =
     (stagesRes.data ?? []) as { id: string; name: string; color: string }[]
-  const deals = (dealsRes.data ?? []) as { stage_id: string; value: number | null }[]
+  const deals = (dealsRes.data ?? []) as { stage_id: string; value: number | null; brokerage_amount: number | null }[]
 
   const byStage = new Map<string, { count: number; total: number }>()
   for (const d of deals) {
     const row = byStage.get(d.stage_id) ?? { count: 0, total: 0 }
     row.count += 1
-    row.total += d.value ?? 0
+    const brokAmt = d.brokerage_amount !== null && d.brokerage_amount !== undefined
+      ? Number(d.brokerage_amount)
+      : (Number(d.value || 0) * 0.02);
+    row.total += brokAmt
     byStage.set(d.stage_id, row)
   }
 

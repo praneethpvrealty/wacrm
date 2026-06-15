@@ -126,10 +126,12 @@ export function PipelineBoard({
       <div className="pipeline-scroll flex snap-x snap-mandatory gap-3 overflow-x-auto pb-4 lg:snap-none">
         {sortedStages.map((stage) => {
           const stageDeals = dealsByStage.get(stage.id) ?? [];
-          const totalValue = stageDeals.reduce(
-            (s, d) => s + Number(d.value || 0),
-            0,
-          );
+          const totalValue = stageDeals.reduce((sum, d) => {
+            if (d.brokerage_amount !== null && d.brokerage_amount !== undefined) {
+              return sum + Number(d.brokerage_amount);
+            }
+            return sum + (Number(d.value || 0) * 0.02); // 2% fallback
+          }, 0);
           return (
             <StageColumn
               key={stage.id}

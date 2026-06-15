@@ -114,9 +114,19 @@ export function DealCard({ deal, stage, onEdit, isOverlay, currency }: DealCardP
       )}
 
       <div className="mt-2 flex items-center justify-between">
-        <span className="text-sm font-bold text-primary">
-          {formatCurrency(deal.value, deal.currency || currency)}
-        </span>
+        <div className="flex flex-col">
+          <span className="text-sm font-bold text-primary">
+            {formatCurrency(deal.value, deal.currency || currency)}
+          </span>
+          <span className="text-[10px] font-medium text-slate-400">
+            Fee: {formatCurrency(
+              deal.brokerage_amount !== null && deal.brokerage_amount !== undefined
+                ? Number(deal.brokerage_amount)
+                : Number(deal.value || 0) * 0.02,
+              deal.currency || currency
+            )}
+          </span>
+        </div>
         {deal.expected_close_date && (
           <span className="flex items-center gap-1 text-[11px] text-slate-500">
             <Calendar className="h-3 w-3" />

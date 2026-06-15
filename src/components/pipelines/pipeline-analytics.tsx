@@ -1,11 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, createElement } from "react";
 import type { Deal, PipelineStage } from "@/types";
 import {
-  DollarSign,
-  TrendingUp,
-  Target,
   BarChart3,
   Trophy,
   XCircle,
@@ -17,6 +14,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { getCurrencyIcon } from "@/lib/currency-utils";
 
 interface PipelineAnalyticsProps {
   stages: PipelineStage[];
@@ -79,7 +77,12 @@ export function PipelineAnalytics({ stages, deals, currency = "INR" }: PipelineA
     const openDeals = active.filter((d) => d.status !== "won");
 
     const totalCount = active.length;
-    const totalValue = active.reduce((sum, d) => sum + Number(d.value || 0), 0);
+    const totalValue = active.reduce((sum, d) => {
+      const brokAmt = d.brokerage_amount !== null && d.brokerage_amount !== undefined
+        ? Number(d.brokerage_amount)
+        : (Number(d.value || 0) * 0.02);
+      return sum + brokAmt;
+    }, 0);
     const avgValue = totalCount > 0 ? totalValue / totalCount : 0;
 
     const stageById = new Map(sortedStages.map((s) => [s.id, s]));
@@ -87,7 +90,10 @@ export function PipelineAnalytics({ stages, deals, currency = "INR" }: PipelineA
       const stage = stageById.get(d.stage_id);
       if (!stage) return sum;
       const prob = computeStageProbability(stage, sortedStages);
-      return sum + Number(d.value || 0) * prob;
+      const brokAmt = d.brokerage_amount !== null && d.brokerage_amount !== undefined
+        ? Number(d.brokerage_amount)
+        : (Number(d.value || 0) * 0.02);
+      return sum + brokAmt * prob;
     }, 0);
 
     const now = new Date();
@@ -123,22 +129,22 @@ export function PipelineAnalytics({ stages, deals, currency = "INR" }: PipelineA
           tooltip="Count of every deal in this pipeline that isn't marked as Lost. Won deals are still included."
         />
         <Metric
-          icon={<DollarSign className="h-4 w-4 text-primary" />}
-          label="Pipeline Value"
+          icon={createElement(getCurrencyIcon(currency), { className: "h-4 w-4 text-primary" })}
+          label="Expected Revenue"
           value={formatCurrency(stats.totalValue, currency)}
-          tooltip="Sum of the values of all deals in this pipeline, excluding deals marked as Lost."
+          tooltip="Sum of expected brokerage commission across all active deals in this pipeline (actual brokerage configured or 2% fallback)."
         />
         <Metric
-          icon={<Target className="h-4 w-4 text-blue-400" />}
-          label="Avg Deal Size"
+          icon={createElement(getCurrencyIcon(currency), { className: "h-4 w-4 text-blue-400" })}
+          label="Avg Brokerage"
           value={formatCurrency(stats.avgValue, currency)}
-          tooltip="Pipeline Value divided by Total Deals — the average value of a single non-lost deal."
+          tooltip="Expected revenue divided by Total Deals — the average brokerage value of a single non-lost deal."
         />
         <Metric
-          icon={<TrendingUp className="h-4 w-4 text-purple-400" />}
-          label="Weighted Value"
+          icon={createElement(getCurrencyIcon(currency), { className: "h-4 w-4 text-purple-400" })}
+          label="Weighted Revenue"
           value={formatCurrency(stats.weightedValue, currency)}
-          tooltip="Expected revenue: each open deal's value × its stage probability. First stage ≈ 10%, stages progress up to 90%, Won = 100%. Lost deals are excluded."
+          tooltip="Expected brokerage revenue: each open deal's brokerage value × its stage probability. First stage ≈ 10%, stages progress up to 90%, Won = 100%. Lost deals are excluded."
         />
         <Metric
           icon={<Trophy className="h-4 w-4 text-primary" />}

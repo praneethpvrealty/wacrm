@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, createElement } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -28,10 +28,10 @@ import {
   X,
   Trash2,
   MessageSquare,
-  DollarSign,
   Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { getCurrencyIcon } from "@/lib/currency-utils";
 
 interface DealFormProps {
   open: boolean;
@@ -441,7 +441,9 @@ export function DealForm({
               <div className="grid gap-2">
                 <Label className="text-slate-300">Value</Label>
                 <div className="relative">
-                  <DollarSign className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+                  {createElement(getCurrencyIcon(currency), {
+                    className: "absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500"
+                  })}
                   <Input
                     type="number"
                     value={value}

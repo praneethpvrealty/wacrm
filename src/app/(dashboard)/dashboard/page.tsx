@@ -5,7 +5,6 @@ import { createClient } from '@/lib/supabase/client'
 import {
   MessageSquare,
   UserPlus,
-  DollarSign,
   Send,
 } from 'lucide-react'
 
@@ -31,6 +30,7 @@ import { ConversationsChart } from '@/components/dashboard/conversations-chart'
 import { PipelineDonut } from '@/components/dashboard/pipeline-donut'
 import { ResponseTimeChart } from '@/components/dashboard/response-time-chart'
 import { ActivityFeed } from '@/components/dashboard/activity-feed'
+import { getCurrencyIcon } from '@/lib/currency-utils'
 
 type RangeDays = 7 | 30 | 90
 
@@ -189,9 +189,9 @@ export default function DashboardPage() {
               }}
             />
             <MetricCard
-              title="Open Deals Value"
+              title="Expected Revenue (Brokerage)"
               value={formatCurrency(metrics.openDealsValue)}
-              icon={DollarSign}
+              icon={getCurrencyIcon(currency)}
               subtitle={`${metrics.openDealsCount} open deal${metrics.openDealsCount === 1 ? '' : 's'}`}
             />
             <MetricCard

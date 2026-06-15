@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, createElement } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
@@ -31,13 +31,13 @@ import {
   Plus,
   Trash2,
   Save,
-  DollarSign,
   MessageSquare,
   Users,
   Building,
   Unlink,
   Edit,
 } from 'lucide-react';
+import { getCurrencyIcon } from '@/lib/currency-utils';
 
 const SUGGESTED_AREAS = ['Whitefield', 'Koramangala', 'Not specific', 'East Bangalore', 'Indiranagar', 'Jayanagar'];
 
@@ -82,6 +82,7 @@ export function ContactDetailView({
   const { user, accountId } = useAuth();
   const router = useRouter();
 
+  const [currency, setCurrency] = useState('INR');
   const [contact, setContact] = useState<Contact | null>(null);
   const [loading, setLoading] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState(false);
@@ -91,6 +92,20 @@ export function ContactDetailView({
   const [editPhone, setEditPhone] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editCompany, setEditCompany] = useState('');
+
+  const fetchCurrency = useCallback(async () => {
+    try {
+      const { data } = await supabase
+        .from('showcase_settings')
+        .select('currency')
+        .single();
+      if (data?.currency) {
+        setCurrency(data.currency);
+      }
+    } catch (err) {
+      console.error('Failed to load showcase settings currency:', err);
+    }
+  }, [supabase]);
   const [editClassification, setEditClassification] = useState<'Owner' | 'Seller' | 'Buyer' | 'Agent' | 'Others'>('Others');
   const [editLeadTemp, setEditLeadTemp] = useState<'HOT' | 'COLD' | 'Not Responding' | 'Dead' | ''>('');
   const [editLastInquiredPropertyId, setEditLastInquiredPropertyId] = useState<string | null>(null);
@@ -357,6 +372,7 @@ export function ContactDetailView({
 
   useEffect(() => {
     if (open && contactId) {
+      fetchCurrency();
       fetchContact();
       fetchTags();
       fetchNotes();
@@ -365,7 +381,7 @@ export function ContactDetailView({
       fetchAssociatedProperties();
       fetchAllProperties();
     }
-  }, [open, contactId, fetchContact, fetchTags, fetchNotes, fetchCustomFields, fetchDeals, fetchAssociatedProperties, fetchAllProperties]);
+  }, [open, contactId, fetchCurrency, fetchContact, fetchTags, fetchNotes, fetchCustomFields, fetchDeals, fetchAssociatedProperties, fetchAllProperties]);
 
   async function copyPhone() {
     if (!contact) return;
@@ -1675,12 +1691,28 @@ export function ContactDetailView({
                         </div>
                         <div className="mt-1.5 flex items-center justify-between text-xs text-slate-400">
                           <span className="flex items-center gap-1">
-                            <DollarSign className="size-3" />
-                            {new Intl.NumberFormat('en-US', {
-                              style: 'currency',
-                              currency: deal.currency || 'USD',
-                              maximumFractionDigits: 0,
-                            }).format(Number(deal.value || 0))}
+                            {createElement(getCurrencyIcon(deal.currency || currency), { className: "size-3" })}
+                            {(() => {
+                              const activeCurrency = deal.currency || currency;
+                              if (activeCurrency === 'INR') {
+                                const val = Number(deal.value || 0);
+                                if (val >= 10000000) {
+                                  return `₹${(val / 10000000).toFixed(2).replace(/\.00$/, '')} Cr`;
+                                } else if (val >= 100000) {
+                                  return `₹${(val / 100000).toFixed(2).replace(/\.00$/, '')} Lakhs`;
+                                }
+                                return new Intl.NumberFormat('en-IN', {
+                                  style: 'currency',
+                                  currency: 'INR',
+                                  maximumFractionDigits: 0,
+                                }).format(val);
+                              }
+                              return new Intl.NumberFormat('en-US', {
+                                style: 'currency',
+                                currency: activeCurrency,
+                                maximumFractionDigits: 0,
+                              }).format(Number(deal.value || 0));
+                            })()}
                           </span>
                           {deal.status && deal.status !== 'open' && (
                             <span
