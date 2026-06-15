@@ -37,6 +37,41 @@ type RangeDays = 7 | 30 | 90
 export default function DashboardPage() {
   const [metrics, setMetrics] = useState<MetricsBundle | null>(null)
   const [metricsLoading, setMetricsLoading] = useState(true)
+  const [currency, setCurrency] = useState('INR')
+
+  const formatCurrency = useCallback((v: number): string => {
+    if (currency === 'INR') {
+      if (v >= 10000000) {
+        const cr = v / 10000000;
+        return `₹${cr.toFixed(2).replace(/\.00$/, '')} Cr`;
+      } else if (v >= 100000) {
+        const lakhs = v / 100000;
+        return `₹${lakhs.toFixed(2).replace(/\.00$/, '')} Lakhs`;
+      }
+      return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        maximumFractionDigits: 0,
+      }).format(v);
+    }
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: currency,
+      maximumFractionDigits: 0,
+    }).format(v)
+  }, [currency]);
+
+  useEffect(() => {
+    const db = createClient()
+    db.from('showcase_settings')
+      .select('currency')
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.currency) {
+          setCurrency(data.currency)
+        }
+      })
+  }, [])
 
   const [range, setRange] = useState<RangeDays>(30)
   // Keep a cache per range so switching tabs doesn't re-fetch what we
@@ -196,7 +231,7 @@ export default function DashboardPage() {
           />
         </div>
         <div className="h-full lg:col-span-2">
-          <PipelineDonut data={pipeline} loading={pipelineLoading} />
+          <PipelineDonut data={pipeline} loading={pipelineLoading} currency={currency} />
         </div>
       </div>
 
@@ -211,14 +246,7 @@ export default function DashboardPage() {
 
 // ------------------------------------------------------------
 
-function formatCurrency(v: number): string {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(v)
-}
+
 
 function deltaLabel(delta: number, suffix: string): string {
   if (delta === 0) return `No change ${suffix}`

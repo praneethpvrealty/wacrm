@@ -159,6 +159,7 @@ export function PipelineBoard({
               }
               onEdit={() => {}}
               isOverlay
+              currency={currency}
             />
           </div>
         ) : null}
@@ -241,6 +242,7 @@ function StageColumn({
               deal={deal}
               stage={stage}
               onEdit={onEditDeal}
+              currency={currency}
             />
           ))
         )}
@@ -263,10 +265,12 @@ function DraggableDealCard({
   deal,
   stage,
   onEdit,
+  currency,
 }: {
   deal: Deal;
   stage: PipelineStage;
   onEdit: (deal: Deal) => void;
+  currency: string;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: deal.id,
@@ -279,7 +283,7 @@ function DraggableDealCard({
       {...attributes}
       style={{ opacity: isDragging ? 0.3 : 1, touchAction: "none" }}
     >
-      <DealCard deal={deal} stage={stage} onEdit={onEdit} />
+      <DealCard deal={deal} stage={stage} onEdit={onEdit} currency={currency} />
     </div>
   );
 }

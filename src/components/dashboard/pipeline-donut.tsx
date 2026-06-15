@@ -8,9 +8,10 @@ import { Skeleton } from './skeleton'
 interface PipelineDonutProps {
   data: PipelineDonutData | null
   loading: boolean
+  currency?: string
 }
 
-export function PipelineDonut({ data, loading }: PipelineDonutProps) {
+export function PipelineDonut({ data, loading, currency = 'INR' }: PipelineDonutProps) {
   return (
     <section className="flex h-full flex-col rounded-xl border border-slate-800 bg-slate-900">
       <header className="border-b border-slate-800 px-5 py-4">
@@ -31,7 +32,7 @@ export function PipelineDonut({ data, loading }: PipelineDonutProps) {
           />
         ) : (
           <>
-            <Donut data={data} />
+            <Donut data={data} currency={currency} />
             <ul className="mt-5 space-y-2">
               {data.stages.map((s) => (
                 <li key={s.id} className="flex items-center gap-3 text-xs">
@@ -44,8 +45,8 @@ export function PipelineDonut({ data, loading }: PipelineDonutProps) {
                   <span className="text-slate-500 tabular-nums">
                     {s.dealCount} deal{s.dealCount === 1 ? '' : 's'}
                   </span>
-                  <span className="w-20 text-right text-slate-300 tabular-nums">
-                    {formatCurrencyShort(s.totalValue)}
+                  <span className="w-24 text-right text-slate-300 tabular-nums">
+                    {formatCurrencyShort(s.totalValue, currency)}
                   </span>
                 </li>
               ))}
@@ -63,7 +64,7 @@ export function PipelineDonut({ data, loading }: PipelineDonutProps) {
 // between segments are implied by a thin slate-900 stroke between
 // them for a cleaner look.
 // ------------------------------------------------------------
-function Donut({ data }: { data: PipelineDonutData }) {
+function Donut({ data, currency }: { data: PipelineDonutData; currency: string }) {
   const size = 200
   const r = 80
   const ringWidth = 18
@@ -119,9 +120,9 @@ function Donut({ data }: { data: PipelineDonutData }) {
           x={cx}
           y={cy + 14}
           textAnchor="middle"
-          className="fill-white text-[18px] font-semibold tabular-nums"
+          className="fill-white text-[16px] font-semibold tabular-nums"
         >
-          {formatCurrencyShort(data.totalValue)}
+          {formatCurrencyShort(data.totalValue, currency)}
         </text>
       </svg>
     </div>
@@ -137,8 +138,28 @@ function arcPath(cx: number, cy: number, r: number, startRad: number, endRad: nu
   return `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}`
 }
 
-function formatCurrencyShort(v: number): string {
-  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`
-  if (v >= 1_000) return `$${(v / 1_000).toFixed(1)}k`
-  return `$${v.toFixed(0)}`
+function formatCurrencyShort(v: number, currency: string = 'INR'): string {
+  if (currency === 'INR') {
+    if (v >= 10000000) {
+      const cr = v / 10000000;
+      return `₹${cr.toFixed(1).replace(/\.0$/, '')} Cr`;
+    }
+    if (v >= 100000) {
+      const lakhs = v / 100000;
+      return `₹${lakhs.toFixed(1).replace(/\.0$/, '')} L`;
+    }
+    return `₹${v.toLocaleString('en-IN')}`;
+  }
+
+  const symbols: Record<string, string> = {
+    USD: '$',
+    EUR: '€',
+    GBP: '£',
+    AED: 'د.إ',
+  };
+  const sym = symbols[currency] || '';
+
+  if (v >= 1_000_000) return `${sym}${(v / 1_000_000).toFixed(1)}M`
+  if (v >= 1_000) return `${sym}${(v / 1_000).toFixed(1)}k`
+  return `${sym}${v.toFixed(0)}`
 }

@@ -11,6 +11,7 @@ import {
   UsersRound,
   Globe,
   Sparkles,
+  Sliders,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { WhatsAppConfig } from '@/components/settings/whatsapp-config';
@@ -23,6 +24,7 @@ import { AppearancePanel } from '@/components/settings/appearance-panel';
 import { MembersTab } from '@/components/settings/members-tab';
 import { ShowcaseSettingsPanel } from '@/components/settings/showcase-settings';
 import { AiSettingsPanel } from '@/components/settings/ai-settings';
+import { OtherSettingsPanel } from '@/components/settings/other-settings';
 import { useAuth } from '@/hooks/use-auth';
 
 const BASE_TAB_VALUES = [
@@ -33,6 +35,7 @@ const BASE_TAB_VALUES = [
   'appearance',
   'showcase',
   'ai',
+  'other',
 ] as const;
 const FLAGGED_TAB_VALUES = ['members'] as const;
 const TAB_VALUES = [...BASE_TAB_VALUES, ...FLAGGED_TAB_VALUES] as const;
@@ -148,6 +151,13 @@ export default function SettingsPage() {
             <Sparkles className="size-4" />
             AI Config
           </TabsTrigger>
+          <TabsTrigger
+            value="other"
+            className="data-active:bg-slate-800 data-active:text-primary text-slate-400"
+          >
+            <Sliders className="size-4" />
+            Other
+          </TabsTrigger>
           {/* Members tab is feature-flagged. We render the trigger
               only when the flag is enabled, so users without the
               flag see the original 5-tab layout. */}
@@ -190,6 +200,10 @@ export default function SettingsPage() {
 
         <TabsContent value="ai">
           <AiSettingsPanel />
+        </TabsContent>
+
+        <TabsContent value="other">
+          <OtherSettingsPanel />
         </TabsContent>
 
         {accountSharingEnabled && (
