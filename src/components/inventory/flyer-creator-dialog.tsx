@@ -591,10 +591,11 @@ export function FlyerCreatorDialog({
       if (onSaved) {
         onSaved();
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('[FlyerCreatorDialog] Error saving flyer to property:', err);
       if (!silent) {
-        toast.error(err.message || 'Failed to save flyer to property.');
+        const message = err instanceof Error ? err.message : 'Failed to save flyer to property.';
+        toast.error(message);
       }
     } finally {
       if (!silent) setSavingToProperty(false);

@@ -1959,6 +1959,7 @@ export function PropertyForm({
                         {images.map((imgUrl, idx) => (
                           <div key={idx} className="flex gap-2 items-center">
                             {imgUrl.trim().length > 0 && (
+                              /* eslint-disable-next-line @next/next/no-img-element */
                               <img
                                 src={imgUrl}
                                 alt={`Property ${idx + 1}`}
@@ -2273,6 +2274,7 @@ export function PropertyForm({
                                       : 'border-slate-800 hover:border-slate-700'
                                   }`}
                                 >
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
                                   <img
                                     src={imgUrl}
                                     alt={`Option ${idx + 1}`}

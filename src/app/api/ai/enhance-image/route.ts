@@ -90,8 +90,8 @@ export async function POST(request: Request) {
       console.log(`[HuggingFace AI] Requesting generation with prompt: "${prompt}"`);
 
       // Use FLUX.1-schnell as it is fully supported by Hugging Face's serverless Inference API (hf-inference)
-      let url = 'https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell';
-      let payload: Record<string, unknown> = { inputs: prompt };
+      const url = 'https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell';
+      const payload: Record<string, unknown> = { inputs: prompt };
 
       if (image) {
         console.log('[HuggingFace AI] Note: Image-to-image refinement is not supported by free serverless provider. Falling back to text-to-image using FLUX.1-schnell.');

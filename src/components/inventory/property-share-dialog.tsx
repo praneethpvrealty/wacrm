@@ -385,7 +385,7 @@ export function PropertyShareDialog({
             } else {
               if (mapping.value === 'title') val = property.title || '';
               else if (mapping.value === 'price') val = formattedPrice || '';
-              else if (mapping.value === 'location') val = property.sublocality || property.location || '';
+              else if (mapping.value === 'location') val = property.sublocality || fullLoc || '';
               else if (mapping.value === 'area') {
                 const isLand = property.type === 'Land / Plot';
                 const areaVal = isLand ? property.land_area : property.area_sqft;
@@ -801,6 +801,7 @@ export function PropertyShareDialog({
                             : 'border-slate-800 hover:border-slate-700'
                         }`}
                       >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={imgUrl}
                           alt={`Option ${idx + 1}`}
