@@ -760,7 +760,7 @@ async function processMessage(
     console.log(`[webhook] Shared contacts message detected from: ${senderPhone}`)
     
     // Resolve dynamic BASE_URL for deep link
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
     const importedNames: string[] = []
 
     for (const c of message.contacts) {

@@ -284,7 +284,7 @@ export function PropertyList({
                 </div>
 
                 {/* Extended Specs & Commercial Details */}
-                {(property.super_built_area || (!isLand && property.land_area) || (isLand && property.area_sqft) || property.land_zone || property.ideal_for || property.dimensions || property.road_width || property.facing_direction) ? (
+                {(property.super_built_area || (!isLand && property.land_area) || (isLand && property.area_sqft) || property.land_zone || property.ideal_for || property.dimensions || property.road_width || property.facing_direction || property.rental_income) ? (
                   <div className="flex flex-col gap-1.5 text-[11px] text-slate-400 font-medium px-1 mb-4">
                     {/* Areas */}
                     {(property.super_built_area || (!isLand && property.land_area) || (isLand && property.area_sqft)) && (
@@ -348,6 +348,19 @@ export function PropertyList({
                         ) : null}
                       </div>
                     )}
+                    {/* Rental Income & ROI details */}
+                    {property.rental_income ? (
+                      <div className="flex justify-between flex-wrap gap-y-2 border-t border-slate-800/45 pt-1.5">
+                        <div>
+                          Monthly Rent: <span className="text-slate-200">{formatPrice(property.rental_income)}/month</span>
+                        </div>
+                        {property.roi ? (
+                          <div>
+                            ROI (Yield): <span className="text-primary font-semibold">{property.roi}%</span>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
 

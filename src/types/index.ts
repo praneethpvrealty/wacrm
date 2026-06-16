@@ -589,6 +589,8 @@ export interface Property {
   owner_contact_id?: string | null;
   owner?: Contact | null;
   interested_contacts?: Contact[];
+  rental_income?: number | null;
+  roi?: number | null;
   created_at: string;
   updated_at: string;
 }

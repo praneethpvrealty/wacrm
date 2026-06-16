@@ -166,6 +166,13 @@ export function PropertyForm({
   const [images, setImages] = useState<string[]>(['']);
   const [googleMapLink, setGoogleMapLink] = useState('');
   const [localitiesDb, setLocalitiesDb] = useState<{ detailed: string[] } | null>(null);
+  const [rentalIncome, setRentalIncome] = useState('');
+  const roiValue = useMemo(() => {
+    const p = Number(price);
+    const r = Number(rentalIncome);
+    if (!p || !r || isNaN(p) || isNaN(r) || p <= 0) return null;
+    return Number(((r * 12) / p * 100).toFixed(2));
+  }, [price, rentalIncome]);
 
   interface AutoCompleteProject {
     name: string;
@@ -852,6 +859,7 @@ export function PropertyForm({
         setTitle(property.title);
         setDescription(property.description ?? '');
         setPrice(property.price !== null && property.price !== undefined ? String(property.price) : '');
+        setRentalIncome(property.rental_income !== null && property.rental_income !== undefined ? String(property.rental_income) : '');
         setType(property.type);
         setStatus(property.status);
         setBedrooms(property.bedrooms !== null && property.bedrooms !== undefined ? String(property.bedrooms) : '');
@@ -931,6 +939,7 @@ export function PropertyForm({
         setTitle('');
         setDescription('');
         setPrice('');
+        setRentalIncome('');
         setType('Flat/ Apartment');
         setStatus('Available');
         setBedrooms('');
@@ -1324,6 +1333,8 @@ export function PropertyForm({
         images: parsedImages,
         owner_contact_id: ownerContactId,
         google_map_link: googleMapLink.trim() || null,
+        rental_income: hasCommercialFields && rentalIncome.trim() !== '' ? Number(rentalIncome) : null,
+        roi: hasCommercialFields && roiValue !== null ? roiValue : null,
         updated_at: new Date().toISOString(),
       };
 
@@ -1769,6 +1780,33 @@ export function PropertyForm({
                             onChange={(e) => setIdealFor(e.target.value)}
                             placeholder="e.g. Software, Bank, Clinic"
                             className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 h-9"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label htmlFor="prop-rental-income" className="text-slate-300">
+                            Monthly Rental Income (INR)
+                          </Label>
+                          <Input
+                            id="prop-rental-income"
+                            type="number"
+                            value={rentalIncome}
+                            onChange={(e) => setRentalIncome(e.target.value)}
+                            placeholder="e.g. 250000"
+                            className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 h-9"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label htmlFor="prop-roi" className="text-slate-300">
+                            ROI (Return on Investment)
+                          </Label>
+                          <Input
+                            id="prop-roi"
+                            type="text"
+                            value={roiValue !== null ? `${roiValue}%` : 'calculated automatically'}
+                            readOnly
+                            className="bg-slate-850 border-slate-800 text-primary font-medium h-9 cursor-not-allowed"
                           />
                         </div>
                       </>

@@ -78,6 +78,8 @@ export async function POST(request: Request) {
       nearby_highlights,
       owner_contact_id,
       google_map_link,
+      rental_income,
+      roi,
     } = body;
 
     // Validation
@@ -143,6 +145,8 @@ export async function POST(request: Request) {
       features: Array.isArray(features) ? features.filter(f => typeof f === "string") : [],
       images: Array.isArray(images) ? images.filter(img => typeof img === "string") : [],
       google_map_link: typeof google_map_link === "string" ? google_map_link.trim() : null,
+      rental_income: typeof rental_income === "number" ? rental_income : null,
+      roi: typeof roi === "number" ? roi : null,
     };
 
     const { data, error } = await ctx.supabase

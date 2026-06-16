@@ -64,6 +64,8 @@ export async function PUT(
       nearby_highlights,
       owner_contact_id,
       google_map_link,
+      rental_income,
+      roi,
     } = body;
 
     // Validate only if passed
@@ -213,6 +215,14 @@ export async function PUT(
 
     if (google_map_link !== undefined) {
       updateData.google_map_link = typeof google_map_link === "string" ? google_map_link.trim() : null;
+    }
+
+    if (rental_income !== undefined) {
+      updateData.rental_income = typeof rental_income === "number" ? rental_income : null;
+    }
+
+    if (roi !== undefined) {
+      updateData.roi = typeof roi === "number" ? roi : null;
     }
 
     // Verify it exists in this account before updating (defensive check)

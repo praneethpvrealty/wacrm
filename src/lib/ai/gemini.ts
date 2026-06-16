@@ -160,6 +160,8 @@ export interface ParsedPropertyDraft {
   features: string[] | null;
   dimensions: string | null;
   facing_direction: string | null;
+  rental_income: number | null;
+  roi: number | null;
   images: string[];
 }
 
@@ -188,10 +190,11 @@ export async function parseListingFromImageOrText(
     "  \"description\": \"A professional description summarizing the listing or null\",\n" +
     "  \"features\": Array of string features/amenities (e.g., ['Fenced Boundary', 'Access Road']) or empty array,\n" +
     "  \"dimensions\": \"Dimensions if land/plot (e.g., '30x40') or null\",\n" +
-    "  \"facing_direction\": \"E.g. 'North', 'East', 'West', 'South' or null\"\n" +
+    "  \"facing_direction\": \"E.g. 'North', 'East', 'West', 'South' or null\",\n" +
+    "  \"rental_income\": \"Numeric monthly rental income in INR if specified (e.g., if text says 'rent 2.5 Lakhs/month' or '2.5 L rent', rental_income is 250000) or null\"\n" +
     "}\n\n" +
     "Important parsing rules:\n" +
-    "1. For Price: Convert terms like 'Crore', 'Cr', 'Lakhs', 'L' to standard numeric integer values (e.g., '80 Lakhs' -> 8000000, '1.5 Cr' -> 15000000).\n" +
+    "1. For Price and Rental Income: Convert terms like 'Crore', 'Cr', 'Lakhs', 'L' to standard numeric integer values (e.g., '80 Lakhs' -> 8000000, '1.5 Cr' -> 15000000, '2.5 L' -> 250000).\n" +
     "2. For Location/Sublocality: Infer the sublocality / layout name (e.g. HSR Layout, Koramangala) if mentioned.\n" +
     "3. Set any fields that cannot be found or reasonably inferred to null.\n" +
     "4. Output MUST be valid JSON.";
@@ -218,6 +221,13 @@ export async function parseListingFromImageOrText(
   try {
     const rawResult = await generateContentRaw(contents, systemInstruction, true);
     const parsed = JSON.parse(rawResult);
+    
+    const rental_income = parsed.rental_income || null;
+    let roi = null;
+    if (rental_income && parsed.price) {
+      roi = Number(((rental_income * 12) / parsed.price * 100).toFixed(2));
+    }
+
     return {
       title: parsed.title || null,
       price: parsed.price || null,
@@ -233,6 +243,8 @@ export async function parseListingFromImageOrText(
       features: parsed.features || [],
       dimensions: parsed.dimensions || null,
       facing_direction: parsed.facing_direction || null,
+      rental_income,
+      roi,
       images: []
     };
   } catch (err) {
@@ -252,7 +264,7 @@ export async function updateListingDraft(
     "You are an expert real estate data updater. You are given a current property draft JSON object and a natural language instruction from the user.\n" +
     "Your job is to apply the updates requested by the user and return the complete updated JSON object matching the exact structure.\n" +
     "Do not change any other fields unless requested by the user.\n" +
-    "Convert terms like 'Crore', 'Cr', 'Lakhs', 'L' to standard numeric integer values for the price field.\n" +
+    "Convert terms like 'Crore', 'Cr', 'Lakhs', 'L' to standard numeric integer values for the price and rental_income fields.\n" +
     "Output MUST be valid JSON.";
 
   const prompt = `Current Draft:\n${JSON.stringify(currentDraft, null, 2)}\n\nUser Update Request:\n"${updateRequest}"\n\nApply these updates and return the updated JSON.`;
@@ -261,12 +273,21 @@ export async function updateListingDraft(
   try {
     const rawResult = await generateContentRaw(contents, systemInstruction, true);
     const parsed = JSON.parse(rawResult);
-    return {
+    
+    const updatedDraft = {
       ...currentDraft,
       ...parsed,
       // Retain images and other fields if they were omitted in the response
       images: currentDraft.images || []
     };
+
+    if (updatedDraft.rental_income && updatedDraft.price) {
+      updatedDraft.roi = Number(((updatedDraft.rental_income * 12) / updatedDraft.price * 100).toFixed(2));
+    } else {
+      updatedDraft.roi = null;
+    }
+
+    return updatedDraft;
   } catch (err) {
     console.error("[Gemini AI] Error updating draft:", err);
     return currentDraft; // Return unchanged on error

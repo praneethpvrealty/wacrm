@@ -128,6 +128,35 @@ function validateDraft(draft: ParsedPropertyDraft): {
   };
 }
 
+function formatDraftPreviewMessage(
+  header: string,
+  draft: ParsedPropertyDraft,
+  nextStatus: string,
+  missingFields: string[]
+): string {
+  let reply = `${header}\n\n` +
+    `*Title:* ${draft.title || '❓ _Missing_'}\n` +
+    `*Price:* ${draft.price ? '₹' + draft.price.toLocaleString('en-IN') : '❓ _Missing_'}\n` +
+    `*Location:* ${draft.location || '❓ _Missing_'}\n` +
+    `*Type:* ${draft.type || '❓ _Missing_'}\n` +
+    `*Area:* ${draft.area_sqft ? draft.area_sqft + ' Sq.Ft.' : '_Not specified_'}\n` +
+    `*Beds/Baths:* ${draft.bedrooms ? draft.bedrooms + ' BHK' : '_Not specified_'} / ${draft.bathrooms ? draft.bathrooms + ' Bath' : '_Not specified_'}\n`;
+
+  if (draft.rental_income) {
+    reply += `*Rent:* ₹${draft.rental_income.toLocaleString('en-IN')}/month\n`;
+  }
+  if (draft.roi) {
+    reply += `*ROI (Yield):* ${draft.roi}%\n`;
+  }
+
+  reply += `*Images:* ${draft.images.length} attached\n\n` +
+    (nextStatus === 'awaiting_confirmation'
+      ? "✅ All mandatory fields populated!\n• Reply *confirm* to save.\n• Reply *cancel* to discard.\n• Send more updates to correct details."
+      : `⚠️ *Still missing:* ${missingFields.join(', ')}.\nReply with details.`);
+
+  return reply;
+}
+
 /**
  * Core processor for owner chatbot messages.
  * Returns true if the message was handled/consumed by the chatbot engine, false otherwise.
@@ -207,7 +236,9 @@ export async function processOwnerChatbotMessage(
           facing_direction: draft.facing_direction,
           is_published: true,
           features: draft.features || [],
-          images: draft.images || []
+          images: draft.images || [],
+          rental_income: draft.rental_income,
+          roi: draft.roi
         })
         .select()
         .single();
@@ -226,12 +257,20 @@ export async function processOwnerChatbotMessage(
         .delete()
         .eq('id', session.id);
 
-      const reply = `✅ *Property listing created successfully!*\n\n` +
+      let reply = `✅ *Property listing created successfully!*\n\n` +
         `*Code:* ${prop.property_code}\n` +
         `*Title:* ${prop.title}\n` +
         `*Price:* ₹${prop.price.toLocaleString('en-IN')}\n` +
-        `*Location:* ${prop.location}\n\n` +
-        `View it in your dashboard: ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/inventory`;
+        `*Location:* ${prop.location}\n`;
+
+      if (prop.rental_income) {
+        reply += `*Rent:* ₹${prop.rental_income.toLocaleString('en-IN')}/month\n`;
+      }
+      if (prop.roi) {
+        reply += `*ROI (Yield):* ${prop.roi}%\n`;
+      }
+
+      reply += `\nView it in your dashboard: ${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/inventory`;
         
       await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
       await saveBotMessage(conversation.id, reply);
@@ -303,17 +342,7 @@ export async function processOwnerChatbotMessage(
         })
         .eq('id', session.id);
 
-      const reply = `📝 *Draft Listing Updated:*\n\n` +
-        `*Title:* ${updatedDraft.title || '❓ _Missing_'}\n` +
-        `*Price:* ${updatedDraft.price ? '₹' + updatedDraft.price.toLocaleString('en-IN') : '❓ _Missing_'}\n` +
-        `*Location:* ${updatedDraft.location || '❓ _Missing_'}\n` +
-        `*Type:* ${updatedDraft.type || '❓ _Missing_'}\n` +
-        `*Area:* ${updatedDraft.area_sqft ? updatedDraft.area_sqft + ' Sq.Ft.' : '_Not specified_'}\n` +
-        `*Beds/Baths:* ${updatedDraft.bedrooms ? updatedDraft.bedrooms + ' BHK' : '_Not specified_'} / ${updatedDraft.bathrooms ? updatedDraft.bathrooms + ' Bath' : '_Not specified_'}\n` +
-        `*Images:* ${updatedDraft.images.length} attached\n\n` +
-        (nextStatus === 'awaiting_confirmation'
-          ? "✅ All mandatory fields populated!\n• Reply *confirm* to save.\n• Reply *cancel* to discard.\n• Send more updates to correct details."
-          : `⚠️ *Still missing:* ${missingFields.join(', ')}.\nReply with details.`);
+      const reply = formatDraftPreviewMessage(`📝 *Draft Listing Updated:*`, updatedDraft, nextStatus, missingFields);
 
       await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
       await saveBotMessage(conversation.id, reply);
@@ -372,17 +401,7 @@ export async function processOwnerChatbotMessage(
           status: initialStatus
         });
 
-      const reply = `📝 *Draft Property Listing Created!*\n\n` +
-        `*Title:* ${parsedDraft.title || '❓ _Missing_'}\n` +
-        `*Price:* ${parsedDraft.price ? '₹' + parsedDraft.price.toLocaleString('en-IN') : '❓ _Missing_'}\n` +
-        `*Location:* ${parsedDraft.location || '❓ _Missing_'}\n` +
-        `*Type:* ${parsedDraft.type || '❓ _Missing_'}\n` +
-        `*Area:* ${parsedDraft.area_sqft ? parsedDraft.area_sqft + ' Sq.Ft.' : '_Not specified_'}\n` +
-        `*Beds/Baths:* ${parsedDraft.bedrooms ? parsedDraft.bedrooms + ' BHK' : '_Not specified_'} / ${parsedDraft.bathrooms ? parsedDraft.bathrooms + ' Bath' : '_Not specified_'}\n` +
-        `*Images:* ${parsedDraft.images.length} attached\n\n` +
-        (initialStatus === 'awaiting_confirmation'
-          ? "✅ All mandatory fields populated!\n• Reply *confirm* to save to inventory.\n• Send property photos to add them.\n• Reply naturally to correct fields."
-          : `⚠️ *Missing mandatory fields:* ${missingFields.join(', ')}.\nReply with details (e.g. 'price is 1.5 Cr', 'title is HSR 3BHK').`);
+      const reply = formatDraftPreviewMessage(`📝 *Draft Property Listing Created!*`, parsedDraft, initialStatus, missingFields);
 
       await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
       await saveBotMessage(conversation.id, reply);

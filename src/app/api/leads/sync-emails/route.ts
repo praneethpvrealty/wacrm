@@ -73,7 +73,7 @@ export async function GET() {
         const isLead = /magicbricks|housing|99acres/i.test(subject) || /magicbricks|housing|99acres/i.test(bodyText);
         if (isLead) {
           // Send to our parser webhook API internally
-          const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+          const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
           const token = process.env.LEADS_WEBHOOK_TOKEN || '';
           
           const response = await fetch(`${baseUrl}/api/leads/email-webhook?token=${token}`, {

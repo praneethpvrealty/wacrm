@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
 import { resumePendingExecution } from '@/lib/automations/engine'
 import type { AutomationContext } from '@/lib/automations/engine'
+import { checkAndSendAppointmentReminders } from '@/lib/appointments/reminder'
 
 /**
  * Drain due `automation_pending_executions` rows. Meant to be hit
@@ -22,6 +23,13 @@ export async function GET(request: Request) {
   const supplied = request.headers.get('x-cron-secret')
   if (supplied !== expected) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Trigger appointment/property visit reminders 24h & 2h before events
+  try {
+    await checkAndSendAppointmentReminders()
+  } catch (reminderErr) {
+    console.error('[Automation Cron] Appointment reminders check failed:', reminderErr)
   }
 
   const admin = supabaseAdmin()
