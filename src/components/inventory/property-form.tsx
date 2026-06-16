@@ -166,6 +166,17 @@ export function PropertyForm({
   const [images, setImages] = useState<string[]>(['']);
   const [googleMapLink, setGoogleMapLink] = useState('');
   const [localitiesDb, setLocalitiesDb] = useState<{ detailed: string[] } | null>(null);
+
+  interface AutoCompleteProject {
+    name: string;
+    sublocality: string;
+    city: string;
+    state: string;
+    address: string;
+  }
+
+  const [fetchedProjects, setFetchedProjects] = useState<AutoCompleteProject[]>([]);
+  const [searchingProjects, setSearchingProjects] = useState(false);
   
   const [saving, setSaving] = useState(false);
   const [ownerContactId, setOwnerContactId] = useState<string | null>(null);
@@ -953,16 +964,43 @@ export function PropertyForm({
     }
   }, [open, property, defaultOwnerId, contacts]);
 
-  const isProjectMatched = !!project && POPULAR_PROJECTS.some(
-    (p) => p.name.toLowerCase() === project.trim().toLowerCase()
+  useEffect(() => {
+    if (!open) return;
+    const term = searchQuery.trim();
+    if (!term) {
+      setFetchedProjects([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setSearchingProjects(true);
+      try {
+        const response = await fetch(`/api/projects?search=${encodeURIComponent(term)}`);
+        if (response.ok) {
+          const data = await response.json();
+          setFetchedProjects(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch projects:', err);
+      } finally {
+        setSearchingProjects(false);
+      }
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, open]);
+
+  const isProjectMatched = !!project && (
+    POPULAR_PROJECTS.some((p) => p.name.toLowerCase() === project.trim().toLowerCase()) ||
+    fetchedProjects.some((p) => p.name.toLowerCase() === project.trim().toLowerCase())
   );
 
   function handleSearchQueryChange(val: string) {
     setSearchQuery(val);
     setShowSuggestions(true);
     
-    // Check if the query matches a popular project exactly (case-insensitive)
-    const exactProj = POPULAR_PROJECTS.find(
+    // Check if the query matches a project exactly (case-insensitive)
+    const exactProj = [...POPULAR_PROJECTS, ...fetchedProjects].find(
       (p) => p.name.toLowerCase() === val.trim().toLowerCase()
     );
     if (exactProj) {
@@ -1368,9 +1406,18 @@ export function PropertyForm({
   // Filter project & area lists based on search query
   const query = searchQuery.trim().toLowerCase();
   
-  const filteredProjects = query
-    ? POPULAR_PROJECTS.filter((p) => p.name.toLowerCase().includes(query)).slice(0, 5)
-    : POPULAR_PROJECTS.slice(0, 5);
+  const filteredProjects = useMemo(() => {
+    if (!query) {
+      return POPULAR_PROJECTS.slice(0, 5).map(p => ({
+        name: p.name,
+        sublocality: p.sublocality,
+        city: p.city,
+        state: p.state,
+        address: p.address
+      }));
+    }
+    return fetchedProjects;
+  }, [query, fetchedProjects]);
 
   const filteredSublocalities = useMemo(() => {
     const dataset = localitiesDb?.detailed || POPULAR_SUBLOCALITIES;
@@ -1771,7 +1818,12 @@ export function PropertyForm({
                     
                     {showSuggestions && (
                       <div className="absolute z-10 w-full mt-1 max-h-60 overflow-y-auto rounded-md border border-slate-700 bg-slate-800 shadow-xl text-slate-200">
-                        {filteredProjects.length === 0 && filteredSublocalities.length === 0 ? (
+                        {searchingProjects ? (
+                          <div className="p-3 text-xs text-slate-500 text-center flex items-center justify-center gap-2">
+                            <Loader2 className="size-3 animate-spin text-primary" />
+                            <span>Searching project registry...</span>
+                          </div>
+                        ) : filteredProjects.length === 0 && filteredSublocalities.length === 0 ? (
                           <div className="p-3 text-xs text-slate-500 text-center">
                             No matching projects or areas. Keep typing to enter a custom value.
                           </div>
