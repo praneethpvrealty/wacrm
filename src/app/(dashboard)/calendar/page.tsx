@@ -15,7 +15,9 @@ import {
   Circle,
   X,
   CalendarDays,
-  ListTodo
+  ListTodo,
+  MessageSquare,
+  Pencil
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -113,6 +115,15 @@ export default function CalendarPage() {
   // Mentions Form state
   const [mentionType, setMentionType] = useState<"contact" | "property" | null>(null);
   const [mentionSearch, setMentionSearch] = useState("");
+
+  // Todo Modal/Edit state
+  const [isTodoModalOpen, setIsTodoModalOpen] = useState(false);
+  const [selectedTodo, setSelectedTodo] = useState<Todo | null>(null);
+  const [editTodoTitle, setEditTodoTitle] = useState("");
+  const [editTodoDesc, setEditTodoDesc] = useState("");
+  const [editTodoDueDate, setEditTodoDueDate] = useState("");
+  const [editTodoPriority, setEditTodoPriority] = useState<"low" | "medium" | "high">("medium");
+  const [editTodoCompleted, setEditTodoCompleted] = useState(false);
 
   // Fetch appointments and todos
   const loadData = useCallback(async () => {
@@ -501,6 +512,49 @@ export default function CalendarPage() {
     return elements.length > 0 ? elements : title;
   };
 
+  // Helper to extract/resolve mentions
+  const resolveMentions = useCallback((title: string) => {
+    let finalContactId = null;
+    const sortedContacts = [...contacts].sort((a, b) => b.name.length - a.name.length);
+    for (const c of sortedContacts) {
+      if (title.toLowerCase().includes(`@${c.name.toLowerCase()}`)) {
+        finalContactId = c.id;
+        break;
+      }
+    }
+    if (!finalContactId) {
+      const contactMentionMatch = title.match(/@([A-Za-z0-9_]+)/);
+      if (contactMentionMatch) {
+        const query = contactMentionMatch[1].toLowerCase();
+        const matchedContact = contacts.find((c) => c.name.toLowerCase().includes(query));
+        if (matchedContact) {
+          finalContactId = matchedContact.id;
+        }
+      }
+    }
+
+    let finalPropertyId = null;
+    const sortedProps = [...properties].sort((a, b) => b.title.length - a.title.length);
+    for (const p of sortedProps) {
+      if (title.toLowerCase().includes(`#${p.title.toLowerCase()}`)) {
+        finalPropertyId = p.id;
+        break;
+      }
+    }
+    if (!finalPropertyId) {
+      const propertyMentionMatch = title.match(/#([A-Za-z0-9_]+)/);
+      if (propertyMentionMatch) {
+        const query = propertyMentionMatch[1].toLowerCase();
+        const matchedProp = properties.find((p) => p.title.toLowerCase().includes(query));
+        if (matchedProp) {
+          finalPropertyId = matchedProp.id;
+        }
+      }
+    }
+
+    return { contactId: finalContactId, propertyId: finalPropertyId };
+  }, [contacts, properties]);
+
   // Todo CRUD handlers
   const saveTodo = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -510,47 +564,7 @@ export default function CalendarPage() {
     }
 
     try {
-      let finalContactId = null;
-      // First try matching full contact names
-      const sortedContacts = [...contacts].sort((a, b) => b.name.length - a.name.length);
-      for (const c of sortedContacts) {
-        if (todoTitle.toLowerCase().includes(`@${c.name.toLowerCase()}`)) {
-          finalContactId = c.id;
-          break;
-        }
-      }
-      // Fallback: match by contact name word prefix
-      if (!finalContactId) {
-        const contactMentionMatch = todoTitle.match(/@([A-Za-z0-9_]+)/);
-        if (contactMentionMatch) {
-          const query = contactMentionMatch[1].toLowerCase();
-          const matchedContact = contacts.find((c) => c.name.toLowerCase().includes(query));
-          if (matchedContact) {
-            finalContactId = matchedContact.id;
-          }
-        }
-      }
-
-      let finalPropertyId = null;
-      // First try matching full property titles
-      const sortedProps = [...properties].sort((a, b) => b.title.length - a.title.length);
-      for (const p of sortedProps) {
-        if (todoTitle.toLowerCase().includes(`#${p.title.toLowerCase()}`)) {
-          finalPropertyId = p.id;
-          break;
-        }
-      }
-      // Fallback: match by property title word prefix
-      if (!finalPropertyId) {
-        const propertyMentionMatch = todoTitle.match(/#([A-Za-z0-9_]+)/);
-        if (propertyMentionMatch) {
-          const query = propertyMentionMatch[1].toLowerCase();
-          const matchedProp = properties.find((p) => p.title.toLowerCase().includes(query));
-          if (matchedProp) {
-            finalPropertyId = matchedProp.id;
-          }
-        }
-      }
+      const { contactId, propertyId } = resolveMentions(todoTitle);
 
       const { error } = await supabase.from("todos").insert({
         title: todoTitle,
@@ -560,8 +574,8 @@ export default function CalendarPage() {
         completed: false,
         account_id: accountId,
         user_id: (await supabase.auth.getUser()).data.user?.id,
-        contact_id: finalContactId,
-        property_id: finalPropertyId,
+        contact_id: contactId,
+        property_id: propertyId,
       });
 
       if (error) throw error;
@@ -576,6 +590,87 @@ export default function CalendarPage() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       toast.error(errorMessage || "Failed to add task");
+    }
+  };
+
+  const openEditTodoModal = (todo: Todo) => {
+    setSelectedTodo(todo);
+    setEditTodoTitle(todo.title);
+    setEditTodoDesc(todo.description || "");
+    setEditTodoDueDate(todo.due_date ? todo.due_date.substring(0, 10) : "");
+    setEditTodoPriority(todo.priority);
+    setEditTodoCompleted(todo.completed);
+    setIsTodoModalOpen(true);
+  };
+
+  const updateTodo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTodo) return;
+    if (!editTodoTitle.trim()) {
+      toast.error("Please enter a task name");
+      return;
+    }
+
+    try {
+      const { contactId, propertyId } = resolveMentions(editTodoTitle);
+
+      const { error } = await supabase
+        .from("todos")
+        .update({
+          title: editTodoTitle,
+          description: editTodoDesc || null,
+          due_date: editTodoDueDate ? new Date(editTodoDueDate).toISOString() : null,
+          priority: editTodoPriority,
+          completed: editTodoCompleted,
+          contact_id: contactId,
+          property_id: propertyId,
+        })
+        .eq("id", selectedTodo.id)
+        .eq("account_id", accountId);
+
+      if (error) throw error;
+      toast.success("Task updated successfully");
+      setIsTodoModalOpen(false);
+      setSelectedTodo(null);
+      loadData();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errorMessage || "Failed to update task");
+    }
+  };
+
+  const handleGoToChat = async (contactId: string) => {
+    try {
+      // Find existing conversation
+      const { data: existing, error } = await supabase
+        .from("conversations")
+        .select("id")
+        .eq("account_id", accountId)
+        .eq("contact_id", contactId)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (existing) {
+        window.location.href = `/inbox?c=${existing.id}`;
+      } else {
+        // Create conversation
+        const { data: newConv, error: createError } = await supabase
+          .from("conversations")
+          .insert({
+            account_id: accountId,
+            user_id: (await supabase.auth.getUser()).data.user?.id,
+            contact_id: contactId,
+          })
+          .select("id")
+          .single();
+
+        if (createError) throw createError;
+        window.location.href = `/inbox?c=${newConv.id}`;
+      }
+    } catch (err) {
+      console.error("Failed to open chat:", err);
+      toast.error("Failed to open conversation");
     }
   };
 
@@ -856,13 +951,34 @@ export default function CalendarPage() {
                     )}
                   </div>
 
-                  <button
-                    onClick={() => deleteTodo(todo.id)}
-                    className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-rose-400 transition-opacity p-0.5"
-                    aria-label="Delete task"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {todo.contact_id && (
+                      <button
+                        onClick={() => handleGoToChat(todo.contact_id!)}
+                        className="text-slate-500 hover:text-emerald-400 transition-colors p-0.5"
+                        title="Go to WhatsApp Chat Inbox"
+                        aria-label="Open Chat"
+                      >
+                        <MessageSquare className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => openEditTodoModal(todo)}
+                      className="text-slate-500 hover:text-white transition-colors p-0.5"
+                      title="Edit task"
+                      aria-label="Edit task"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => deleteTodo(todo.id)}
+                      className="text-slate-500 hover:text-rose-450 transition-colors p-0.5"
+                      title="Delete task"
+                      aria-label="Delete task"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))
             )}
@@ -1022,6 +1138,133 @@ export default function CalendarPage() {
                       <option value="cancelled">Cancelled</option>
                     </select>
                   )}
+                  <button
+                    type="submit"
+                    className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Todo Edit Dialog Modal Overlay ────────────────── */}
+      {isTodoModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+            {/* Modal Header */}
+            <div className="mb-4 flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <ListTodo className="h-5 w-5 text-primary" />
+                Edit Task
+              </h3>
+              <button
+                onClick={() => setIsTodoModalOpen(false)}
+                className="text-slate-400 hover:text-white"
+                aria-label="Close modal"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={updateTodo} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
+                  Task Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Call @Customer name"
+                  value={editTodoTitle}
+                  onChange={(e) => setEditTodoTitle(e.target.value)}
+                  className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
+                  Description / Notes
+                </label>
+                <textarea
+                  placeholder="Task details..."
+                  value={editTodoDesc}
+                  onChange={(e) => setEditTodoDesc(e.target.value)}
+                  rows={3}
+                  className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
+                    Due Date
+                  </label>
+                  <input
+                    type="date"
+                    value={editTodoDueDate}
+                    onChange={(e) => setEditTodoDueDate(e.target.value)}
+                    className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
+                    Priority
+                  </label>
+                  <select
+                    value={editTodoPriority}
+                    onChange={(e) => setEditTodoPriority(e.target.value as "low" | "medium" | "high")}
+                    className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
+                  >
+                    <option value="low">Low Priority</option>
+                    <option value="medium">Medium Priority</option>
+                    <option value="high">High Priority</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="edit-todo-completed"
+                  checked={editTodoCompleted}
+                  onChange={(e) => setEditTodoCompleted(e.target.checked)}
+                  className="rounded border-slate-700 bg-slate-950 text-primary focus:ring-0 focus:ring-offset-0 h-4 w-4 cursor-pointer"
+                />
+                <label htmlFor="edit-todo-completed" className="text-sm font-semibold text-slate-350 cursor-pointer select-none">
+                  Mark as Completed
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between border-t border-slate-800 pt-4 mt-2">
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm("Are you sure you want to delete this task?")) {
+                        deleteTodo(selectedTodo!.id);
+                        setIsTodoModalOpen(false);
+                      }
+                    }}
+                    className="flex items-center gap-1 text-xs text-rose-500 hover:text-rose-400"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete Task
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsTodoModalOpen(false)}
+                    className="rounded-lg border border-slate-800 bg-slate-950 px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-slate-850 hover:text-white"
+                  >
+                    Cancel
+                  </button>
                   <button
                     type="submit"
                     className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90"

@@ -155,11 +155,13 @@ export async function POST(request: Request) {
         {
           account_id: accountId,
           user_id: systemUserId,
-          title: `New Website Inquiry - ${name || phone}`,
+          title: `New Website Inquiry - @${name || phone}`,
           description: `Visitor ${name || ""} (${phone}) inquired about property: "${propertyTitle || "Unknown"}"${propertyCode ? ` (${propertyCode})` : ""}. Review contact and follow up.`,
           due_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // due in 1 day
           priority: "high",
           completed: false,
+          contact_id: contactId,
+          property_id: propertyId || null,
         },
       ]);
 
