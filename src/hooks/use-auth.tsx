@@ -23,6 +23,7 @@ interface Profile {
   id: string;
   full_name: string | null;
   email: string;
+  phone: string | null;
   avatar_url: string | null;
   role: string | null;
   /**
@@ -128,7 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // missing account collapses to null rather than a half-
           // populated row (shouldn't happen post-017 NOT NULL, but
           // belt-and-braces against forks running older schemas).
-          "id, full_name, email, avatar_url, role, beta_features, account_id, account_role, account:accounts!inner(id, name)",
+          "id, full_name, email, phone, avatar_url, role, beta_features, account_id, account_role, account:accounts!inner(id, name)",
         )
         .eq("user_id", userId)
         .maybeSingle();
@@ -142,7 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ) {
           const { data: legacyData, error: legacyError } = await supabase
             .from("profiles")
-            .select("id, full_name, email, avatar_url, role, beta_features")
+            .select("id, full_name, email, phone, avatar_url, role, beta_features")
             .eq("user_id", userId)
             .maybeSingle();
 
@@ -161,6 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               id: legacyData.id,
               full_name: legacyData.full_name,
               email: legacyData.email,
+              phone: legacyData.phone ?? null,
               avatar_url: legacyData.avatar_url,
               role: legacyData.role,
               beta_features: legacyData.beta_features ?? [],
@@ -203,6 +205,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           id: data.id,
           full_name: data.full_name,
           email: data.email,
+          phone: data.phone ?? null,
           avatar_url: data.avatar_url,
           role: data.role,
           // `beta_features` is `NOT NULL DEFAULT ARRAY[]` in the DB, but

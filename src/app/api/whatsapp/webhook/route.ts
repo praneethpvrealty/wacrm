@@ -10,6 +10,7 @@ import {
   handleTemplateWebhookChange,
   isTemplateWebhookField,
 } from '@/lib/whatsapp/template-webhook'
+import { checkIsAccountOwner, processOwnerChatbotMessage } from '@/lib/ai/chatbot-engine'
 
 // Lazy-initialized to avoid build-time crash when env vars are missing
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -729,6 +730,27 @@ async function processMessage(
   // so the broadcast's `replied_count` advances (via the aggregate
   // trigger installed in migration 003).
   await flagBroadcastReplyIfAny(accountId, contactRecord.id)
+
+  // ============================================================
+  // Automated AI Property Ingestion Chatbot for CRM Owner
+  // ============================================================
+  const ownerCheck = await checkIsAccountOwner(senderPhone)
+  if (ownerCheck.isOwner) {
+    console.log(`[webhook] Intercepted message from CRM owner: ${senderPhone}`)
+    const handled = await processOwnerChatbotMessage(
+      message,
+      contentText,
+      contactRecord,
+      conversation,
+      ownerCheck.accountId || accountId,
+      ownerCheck.userId || configOwnerUserId,
+      accessToken,
+      phoneNumberId
+    )
+    if (handled) {
+      return // Short-circuit to bypass contact parsers, calendar queries, and flows
+    }
+  }
 
   // ============================================================
   // Automated WhatsApp Contact Share Parser

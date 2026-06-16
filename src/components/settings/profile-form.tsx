@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { normalizePhoneWithCountryCode } from '@/lib/whatsapp/phone-utils';
 import {
   Avatar,
   AvatarFallback,
@@ -42,6 +43,7 @@ export function ProfileForm() {
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [pendingAvatar, setPendingAvatar] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [removeAvatar, setRemoveAvatar] = useState(false);
@@ -53,6 +55,7 @@ export function ProfileForm() {
     if (!profile) return;
     setFullName(profile.full_name ?? '');
     setEmail(profile.email ?? '');
+    setPhone(profile?.phone ?? '');
   }, [profile]);
 
   // Cleanup object URLs to avoid leaks.
@@ -115,6 +118,9 @@ export function ProfileForm() {
       return;
     }
 
+    const trimmedPhone = phone.trim();
+    const normalizedPhoneVal = trimmedPhone ? normalizePhoneWithCountryCode(trimmedPhone) : '';
+
     setSaving(true);
     try {
       let nextAvatarUrl: string | null = profile.avatar_url ?? null;
@@ -142,12 +148,13 @@ export function ProfileForm() {
         nextAvatarUrl = null;
       }
 
-      // Persist name + avatar to profiles.
+      // Persist name + avatar + phone to profiles.
       const { error: updateError } = await supabase
         .from('profiles')
         .update({
           full_name: trimmedName,
           avatar_url: nextAvatarUrl,
+          phone: normalizedPhoneVal,
         })
         .eq('user_id', user.id);
       if (updateError) {
@@ -198,6 +205,7 @@ export function ProfileForm() {
     !!profile &&
     (fullName.trim() !== (profile.full_name ?? '') ||
       email.trim().toLowerCase() !== (profile.email ?? '').toLowerCase() ||
+      phone.trim() !== (profile.phone ?? '') ||
       pendingAvatar !== null ||
       removeAvatar);
 
@@ -306,6 +314,24 @@ export function ProfileForm() {
                 </span>
               </p>
             )}
+          </div>
+
+          {/* Phone */}
+          <div className="space-y-2">
+            <Label htmlFor="profile-phone" className="text-slate-200">
+              Phone number
+            </Label>
+            <Input
+              id="profile-phone"
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+91 XXXXX XXXXX"
+              disabled={saving}
+            />
+            <p className="text-xs text-slate-500">
+              Used for matching your WhatsApp messages to sync property listings.
+            </p>
           </div>
 
           {/* Read-only block */}
