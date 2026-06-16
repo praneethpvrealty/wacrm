@@ -59,16 +59,31 @@ async function upsertTemplateRow(
   supabase: SupabaseClient,
   row: ReturnType<typeof buildUpsertRow>,
 ) {
-  // TODO(account-sharing): conflict target is still scoped to
-  // user_id. Once a follow-up migration drops the legacy unique
-  // index on (user_id, name, language) and adds (account_id,
-  // name, language), switch `onConflict` here so two teammates
-  // can't shadow each other's same-named template.
-  return supabase
+  // First, query if a template with the same (user_id, name, language) already exists.
+  // This manual lookup-then-update/insert logic is robust against missing database-level
+  // unique constraints/indexes, which can occur if there is duplicate legacy data.
+  const { data: existing } = await supabase
     .from('message_templates')
-    .upsert(row, { onConflict: 'user_id,name,language' })
-    .select()
-    .single()
+    .select('id')
+    .eq('user_id', row.user_id)
+    .eq('name', row.name)
+    .eq('language', row.language)
+    .maybeSingle()
+
+  if (existing?.id) {
+    return supabase
+      .from('message_templates')
+      .update(row)
+      .eq('id', existing.id)
+      .select()
+      .single()
+  } else {
+    return supabase
+      .from('message_templates')
+      .insert(row)
+      .select()
+      .single()
+  }
 }
 
 /**
