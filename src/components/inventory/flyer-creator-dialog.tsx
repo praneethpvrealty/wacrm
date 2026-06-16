@@ -839,15 +839,7 @@ export function FlyerCreatorDialog({
         </div>
 
         {/* Modal Footer Controls */}
-        <DialogFooter className="bg-slate-900 border-slate-700 pt-3 border-t shrink-0 flex items-center justify-between sm:justify-between w-full">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            className="border-slate-700 text-slate-300 hover:bg-slate-800"
-          >
-            Cancel
-          </Button>
+        <DialogFooter className="bg-slate-900 border-slate-700 pt-3 border-t shrink-0 flex items-center justify-end w-full">
           <div className="flex gap-2">
             <Button
               type="button"
