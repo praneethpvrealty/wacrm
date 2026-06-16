@@ -734,7 +734,7 @@ async function processMessage(
   // ============================================================
   // Automated AI Property Ingestion Chatbot for CRM Owner
   // ============================================================
-  const ownerCheck = await checkIsAccountOwner(senderPhone)
+  const ownerCheck = await checkIsAccountOwner(senderPhone, accountId)
   if (ownerCheck.isOwner) {
     console.log(`[webhook] Intercepted message from CRM owner: ${senderPhone}`)
     const handled = await processOwnerChatbotMessage(

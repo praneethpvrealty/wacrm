@@ -27,31 +27,28 @@ function supabaseAdmin() {
 }
 
 /**
- * Checks if the sender's phone number belongs to the account owner (profile.account_role = 'owner').
+ * Checks if the sender's phone number belongs to the account owner of the current account.
  */
 export async function checkIsAccountOwner(
-  senderPhone: string
+  senderPhone: string,
+  accountId: string
 ): Promise<{ isOwner: boolean; accountId?: string; userId?: string }> {
-  const normalizedSender = senderPhone.replace(/\D/g, '');
-  const phoneSuffix = normalizedSender.length >= 8 ? normalizedSender.slice(-8) : normalizedSender;
-
   try {
     const { data: ownerProfiles, error } = await supabaseAdmin()
       .from('profiles')
       .select('user_id, account_id, account_role, phone')
-      .eq('account_role', 'owner')
-      .like('phone', `%${phoneSuffix}`);
+      .eq('account_id', accountId)
+      .eq('account_role', 'owner');
 
-    if (error || !ownerProfiles) {
-      console.error('[chatbot-engine] Error querying owner profiles:', error);
+    if (error || !ownerProfiles || ownerProfiles.length === 0) {
+      if (error) {
+        console.error('[chatbot-engine] Error querying owner profiles:', error);
+      }
       return { isOwner: false };
     }
 
-    const ownerProfile = ownerProfiles.find((p: { phone?: string | null }) => 
-      p.phone && phonesMatch(p.phone, senderPhone)
-    );
-
-    if (ownerProfile) {
+    const ownerProfile = ownerProfiles[0];
+    if (ownerProfile.phone && phonesMatch(ownerProfile.phone, senderPhone)) {
       return { 
         isOwner: true, 
         accountId: ownerProfile.account_id, 
