@@ -15,6 +15,9 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const CORE_PROJECTS = [
+  { name: "SJR Blue Waters", promoter_name: "SJR Primecorp", project_type: "Flat/ Apartment", sublocality: "Harlur Road", address: "Harlur Road, Near Sarjapur Road", total_units: 300, total_land_area: 4 },
+  { name: "Swiss Town", promoter_name: "Swiss Infrastructure", project_type: "Residential Land/ Plot", sublocality: "Devanahalli", address: "Sadahalli Road, Devanahalli Outskirts, Bangalore", total_units: 250, total_land_area: 120 },
+  { name: "Hollywood Town", promoter_name: "Swiss Infrastructure", project_type: "Residential Land/ Plot", sublocality: "Devanahalli", address: "Sadahalli Road, Devanahalli Outskirts, Bangalore", total_units: 180, total_land_area: 60 },
   // APARTMENTS
   { name: "Prestige Shantiniketan", promoter_name: "Prestige Group", project_type: "Flat/ Apartment", sublocality: "Whitefield", address: "ITPL Main Road, Whitefield", total_units: 3000, total_land_area: 105 },
   { name: "Sobha Dream Acres", promoter_name: "Sobha Developers", project_type: "Flat/ Apartment", sublocality: "Panathur", address: "Balagere Road, Panathur", total_units: 6500, total_land_area: 81 },
