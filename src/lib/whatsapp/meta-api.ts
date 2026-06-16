@@ -29,6 +29,8 @@ interface MetaErrorResponse {
     message?: string
     code?: number
     type?: string
+    error_user_title?: string
+    error_user_msg?: string
     error_data?: {
       details?: string
     }
@@ -41,6 +43,15 @@ async function throwMetaError(response: Response, fallback: string): Promise<nev
     const data = (await response.json()) as MetaErrorResponse
     if (data.error?.message) {
       message = data.error.message
+      const userMsg = data.error.error_user_msg
+      const userTitle = data.error.error_user_title
+
+      if (userMsg) {
+        message += `: ${userMsg}`
+      }
+      if (userTitle) {
+        message += ` (${userTitle})`
+      }
       if (data.error.error_data?.details) {
         message += ` (Details: ${data.error.error_data.details})`
       }

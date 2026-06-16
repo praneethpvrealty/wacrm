@@ -331,6 +331,41 @@ export function validateTemplatePayload(payload: TemplatePayload): {
   const headerResult = validateHeader(payload);
   validateButtons(payload.buttons);
   validateSampleValues(payload, bodyVars.length, headerResult.variableCount);
+
+  if (bodyVars.length > 0) {
+    if (/^\s*\{\{\d+\}\}/.test(payload.body_text)) {
+      throw new Error('Template body cannot start with a variable placeholder.');
+    }
+    if (/\{\{\d+\}\}\s*$/.test(payload.body_text)) {
+      throw new Error('Template body cannot end with a variable placeholder.');
+    }
+    if (/\{\{\d+\}\}[\s,.;:!?_#-]*\{\{\d+\}\}/.test(payload.body_text)) {
+      throw new Error(
+        'Consecutive variable placeholders (e.g. {{1}} {{2}}) are not allowed. Please insert some text between them.'
+      );
+    }
+
+    const allWords = payload.body_text.trim().split(/\s+/).filter((w) => w.length > 0);
+    const staticWords = allWords.filter((w) => !/\{\{\d+\}\}/.test(w));
+    const staticWordCount = staticWords.length;
+
+    if (payload.category === 'Utility') {
+      const minStaticWords = 3 * bodyVars.length;
+      if (staticWordCount < minStaticWords) {
+        throw new Error(
+          `This Utility template has too many variables for its length (${bodyVars.length} variables for ${staticWordCount} static words). Reduce the number of variables or add more text (need at least ${minStaticWords} words of static text).`
+        );
+      }
+    } else if (payload.category === 'Marketing') {
+      const minStaticWords = Math.ceil(2.5 * bodyVars.length);
+      if (staticWordCount < minStaticWords) {
+        throw new Error(
+          `This Marketing template has too many variables for its length (${bodyVars.length} variables for ${staticWordCount} static words). Reduce the number of variables or add more text (need at least ${minStaticWords} words of static text).`
+        );
+      }
+    }
+  }
+
   return {
     bodyVarCount: bodyVars.length,
     headerVarCount: headerResult.variableCount,

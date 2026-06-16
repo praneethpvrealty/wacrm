@@ -261,7 +261,7 @@ describe('validateTemplatePayload — integration', () => {
     expect(
       validateTemplatePayload({
         ...baseValid,
-        body_text: 'Hi {{1}}, order {{2}} confirmed.',
+        body_text: 'Hi {{1}}, your order {{2}} is confirmed and ready for pickup.',
         sample_values: { body: ['John', 'ORD-42'] },
       }),
     ).toEqual({ bodyVarCount: 2, headerVarCount: 0 });
@@ -270,8 +270,56 @@ describe('validateTemplatePayload — integration', () => {
     expect(() =>
       validateTemplatePayload({
         ...baseValid,
-        body_text: 'Hi {{1}}',
+        body_text: 'Hi {{1}}, welcome!',
+        sample_values: { body: [] },
       }),
     ).toThrow(/exactly 1 sample/);
+  });
+  it('rejects templates starting with a variable placeholder', () => {
+    expect(() =>
+      validateTemplatePayload({
+        ...baseValid,
+        body_text: '{{1}} Welcome to our store.',
+        sample_values: { body: ['John'] },
+      }),
+    ).toThrow(/cannot start with/);
+  });
+  it('rejects templates ending with a variable placeholder', () => {
+    expect(() =>
+      validateTemplatePayload({
+        ...baseValid,
+        body_text: 'Welcome to our store {{1}}',
+        sample_values: { body: ['John'] },
+      }),
+    ).toThrow(/cannot end with/);
+  });
+  it('rejects consecutive variable placeholders', () => {
+    expect(() =>
+      validateTemplatePayload({
+        ...baseValid,
+        body_text: 'Hi {{1}} {{2}}, welcome to Aryavarta Realty!',
+        sample_values: { body: ['John', 'Doe'] },
+      }),
+    ).toThrow(/Consecutive variable/);
+  });
+  it('rejects utility template with bad ratio', () => {
+    expect(() =>
+      validateTemplatePayload({
+        ...baseValid,
+        category: 'Utility',
+        body_text: 'Hi {{1}}, order {{2}} confirmed.',
+        sample_values: { body: ['John', 'ORD-42'] },
+      }),
+    ).toThrow(/too many variables for its length/);
+  });
+  it('rejects marketing template with bad ratio', () => {
+    expect(() =>
+      validateTemplatePayload({
+        ...baseValid,
+        category: 'Marketing',
+        body_text: 'Hi {{1}} {{2}}.',
+        sample_values: { body: ['John', 'Doe'] },
+      }),
+    ).toThrow(/Consecutive variable|too many variables for its length/);
   });
 });
