@@ -642,7 +642,13 @@ export function TemplateManager() {
               <Input
                 placeholder="e.g. order_confirmation"
                 value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                onChange={(e) => {
+                  const sanitized = e.target.value
+                    .toLowerCase()
+                    .replace(/[\s\-]+/g, '_')
+                    .replace(/[^a-z0-9_]/g, '');
+                  setForm({ ...form, name: sanitized });
+                }}
                 disabled={editingId !== null}
                 className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 disabled:opacity-60 disabled:cursor-not-allowed"
               />
