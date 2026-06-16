@@ -298,10 +298,19 @@ export function PropertyForm({
       
       const contactedIds = new Set<string>();
       if (data) {
-        (data as Array<{ conversation: { contact_id: string } | null }>).forEach((m) => {
-          const cid = m.conversation?.contact_id;
-          if (cid) {
-            contactedIds.add(cid);
+        (data as unknown as Array<{
+          conversation: { contact_id: string } | Array<{ contact_id: string }> | null;
+        }>).forEach((m) => {
+          if (m.conversation) {
+            if (Array.isArray(m.conversation)) {
+              m.conversation.forEach((c) => {
+                if (c.contact_id) {
+                  contactedIds.add(c.contact_id);
+                }
+              });
+            } else if (m.conversation.contact_id) {
+              contactedIds.add(m.conversation.contact_id);
+            }
           }
         });
       }
