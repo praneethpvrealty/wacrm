@@ -167,6 +167,84 @@ export async function POST(request: Request) {
       console.error("[POST /api/public/inquiry] Todo creation failed:", todoError);
     }
 
+    // 5. Route the inquiry as an inbox message
+    try {
+      // Find or create conversation for the contact to show in the Inbox
+      const { data: existingConv, error: findConvError } = await admin
+        .from("conversations")
+        .select("*")
+        .eq("account_id", accountId)
+        .eq("contact_id", contactId)
+        .maybeSingle();
+
+      let conversationId: string | undefined;
+      let currentUnreadCount = 0;
+
+      if (!findConvError && existingConv) {
+        conversationId = existingConv.id;
+        currentUnreadCount = existingConv.unread_count || 0;
+      } else {
+        const { data: newConv, error: createConvError } = await admin
+          .from("conversations")
+          .insert({
+            account_id: accountId,
+            user_id: systemUserId,
+            contact_id: contactId,
+            unread_count: 0,
+          })
+          .select()
+          .single();
+
+        if (createConvError) {
+          console.error("[POST /api/public/inquiry] Conversation creation failed:", createConvError);
+        }
+        conversationId = newConv?.id;
+      }
+
+      if (conversationId) {
+        // Formulate inbox message text
+        let inboxText = `📩 *Website Inquiry Received*\n\n`;
+        if (propertyTitle) {
+          inboxText += `🏡 *Property*: ${propertyTitle}${propertyCode ? ` (${propertyCode})` : ""}\n`;
+        }
+        if (message) {
+          inboxText += `💬 *Message*: ${message.trim()}\n`;
+        }
+        if (email) {
+          inboxText += `📧 *Email*: ${email.trim().toLowerCase()}\n`;
+        }
+        inboxText += `👤 *Name*: ${name || "Website Lead"}\n📞 *Phone*: ${normalizedPhone}`;
+
+        // Insert message in messages table
+        const { error: msgInsertError } = await admin.from("messages").insert({
+          conversation_id: conversationId,
+          sender_type: "customer",
+          content_type: "text",
+          content_text: inboxText,
+          message_id: `web-inquiry-${Date.now()}`,
+          status: "delivered",
+          created_at: new Date().toISOString(),
+        });
+
+        if (msgInsertError) {
+          console.error("[POST /api/public/inquiry] Inbox message insertion failed:", msgInsertError);
+        } else {
+          // Update conversation last_message_text, last_message_at, unread_count
+          await admin
+            .from("conversations")
+            .update({
+              last_message_text: inboxText,
+              last_message_at: new Date().toISOString(),
+              unread_count: currentUnreadCount + 1,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", conversationId);
+        }
+      }
+    } catch (inboxErr) {
+      console.error("[POST /api/public/inquiry] Failed to route inquiry to inbox:", inboxErr);
+    }
+
     return NextResponse.json({ success: true, contactId });
   } catch (err) {
     console.error("[POST /api/public/inquiry] Unexpected error:", err);
