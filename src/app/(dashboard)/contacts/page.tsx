@@ -84,6 +84,9 @@ export default function ContactsPage() {
       case 'Agent':
         styles = 'bg-sky-500/10 text-sky-400 border-sky-500/20';
         break;
+      case 'Developer':
+        styles = 'bg-purple-500/10 text-purple-400 border-purple-500/20';
+        break;
       case 'Others':
       default:
         styles = 'bg-slate-500/10 text-slate-400 border-slate-500/20';

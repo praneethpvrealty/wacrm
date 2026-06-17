@@ -375,7 +375,7 @@ export interface ParsedContactDraft {
   phone: string | null;
   email: string | null;
   company: string | null;
-  classification: "Owner" | "Seller" | "Buyer" | "Agent" | "Others";
+  classification: "Owner" | "Seller" | "Buyer" | "Agent" | "Developer" | "Others";
   notes: string | null;
 }
 
@@ -383,13 +383,14 @@ export interface ParsedContactDraftsContainer {
   contacts: ParsedContactDraft[];
 }
 
-export function normalizeClassification(val?: string | null): "Owner" | "Seller" | "Buyer" | "Agent" | "Others" {
+export function normalizeClassification(val?: string | null): "Owner" | "Seller" | "Buyer" | "Agent" | "Developer" | "Others" {
   if (!val) return "Others";
   const norm = val.trim().toLowerCase();
   if (norm === "owner") return "Owner";
   if (norm === "seller") return "Seller";
   if (norm === "buyer") return "Buyer";
   if (norm === "agent") return "Agent";
+  if (norm === "developer") return "Developer";
   return "Others";
 }
 
@@ -411,7 +412,7 @@ export async function parseContactFromImageOrText(
     "      \"phone\": \"Phone number (numeric digits only, e.g. '9876543210' or with country code if visible like '919876543210') or null\",\n" +
     "      \"email\": \"Email address or null\",\n" +
     "      \"company\": \"Company name if specified or null\",\n" +
-    "      \"classification\": \"Must be exactly one of: 'Owner', 'Seller', 'Buyer', 'Agent', 'Others'\",\n" +
+    "      \"classification\": \"Must be exactly one of: 'Owner', 'Seller', 'Buyer', 'Agent', 'Developer', 'Others'\",\n" +
     "      \"notes\": \"Any additional details or requirements found in the text/image (e.g. 'Interested in SJR Blue Waters, Sarjapur Road. Source: Magicbricks') or null\"\n" +
     "    }\n" +
     "  ]\n" +

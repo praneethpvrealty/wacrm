@@ -107,7 +107,7 @@ export function ContactDetailView({
       console.error('Failed to load showcase settings currency:', err);
     }
   }, [supabase]);
-  const [editClassification, setEditClassification] = useState<'Owner' | 'Seller' | 'Buyer' | 'Agent' | 'Others'>('Others');
+  const [editClassification, setEditClassification] = useState<'Owner' | 'Seller' | 'Buyer' | 'Agent' | 'Developer' | 'Others'>('Others');
   const [editLeadTemp, setEditLeadTemp] = useState<'HOT' | 'COLD' | 'Not Responding' | 'Dead' | ''>('');
   const [editLastInquiredPropertyId, setEditLastInquiredPropertyId] = useState<string | null>(null);
   const [allProperties, setAllProperties] = useState<Property[]>([]);
@@ -947,7 +947,7 @@ export function ContactDetailView({
                     Preferences
                   </TabsTrigger>
                 )}
-                {['Owner', 'Seller', 'Agent', 'Buyer'].includes(editClassification) && (
+                {['Owner', 'Seller', 'Agent', 'Developer', 'Buyer'].includes(editClassification) && (
                   <TabsTrigger
                     value="properties"
                     className="data-active:bg-slate-800 data-active:text-primary text-slate-400 shrink-0"
@@ -1074,7 +1074,7 @@ export function ContactDetailView({
                     <Label className="text-slate-400 text-xs">Classification</Label>
                     <select
                       value={editClassification}
-                      onChange={(e) => setEditClassification(e.target.value as 'Owner' | 'Seller' | 'Buyer' | 'Agent' | 'Others')}
+                      onChange={(e) => setEditClassification(e.target.value as 'Owner' | 'Seller' | 'Buyer' | 'Agent' | 'Developer' | 'Others')}
                       className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-white focus:border-primary focus:outline-none"
                     >
                       <option value="Others">Others</option>
@@ -1082,6 +1082,7 @@ export function ContactDetailView({
                       <option value="Seller">Seller</option>
                       <option value="Buyer">Buyer</option>
                       <option value="Agent">Agent</option>
+                      <option value="Developer">Developer</option>
                     </select>
                   </div>
 
@@ -1387,7 +1388,7 @@ export function ContactDetailView({
               )}
 
               {/* Properties Tab (Owner / Seller / Agent / Buyer) */}
-              {['Owner', 'Seller', 'Agent', 'Buyer'].includes(editClassification) && (
+              {['Owner', 'Seller', 'Agent', 'Developer', 'Buyer'].includes(editClassification) && (
                 <TabsContent value="properties" className="flex-1 overflow-y-auto px-4 py-3 flex flex-col min-h-0">
                   {['Buyer', 'Agent'].includes(editClassification) ? (
                     // Shown Interest Properties Layout

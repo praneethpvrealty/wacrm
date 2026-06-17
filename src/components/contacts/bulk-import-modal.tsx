@@ -24,7 +24,7 @@ export interface BulkImportContact {
   name: string;
   phone: string;
   email: string;
-  classification: 'Owner' | 'Seller' | 'Buyer' | 'Agent' | 'Others';
+  classification: 'Owner' | 'Seller' | 'Buyer' | 'Agent' | 'Developer' | 'Others';
   selected: boolean;
 }
 
@@ -190,6 +190,7 @@ export function BulkImportModal({
                       <option value="Seller">Seller</option>
                       <option value="Buyer">Buyer</option>
                       <option value="Agent">Agent</option>
+                      <option value="Developer">Developer</option>
                     </select>
                   </TableCell>
                 </TableRow>
