@@ -1,3 +1,5 @@
+import { normalizePhoneWithCountryCode } from '@/lib/whatsapp/phone-utils';
+
 /**
  * Centralized Gemini AI client helper.
  * Uses the Generative Language REST API directly to avoid additional SDK dependencies.
@@ -450,7 +452,7 @@ export async function parseContactFromImageOrText(
     return {
       contacts: contactsList.map((c: Partial<ParsedContactDraft>) => ({
         name: c.name || null,
-        phone: c.phone || null,
+        phone: c.phone ? (normalizePhoneWithCountryCode(c.phone, "91") || null) : null,
         email: c.email || null,
         company: c.company || null,
         classification: normalizeClassification(c.classification),
@@ -488,7 +490,7 @@ export async function updateContactDraft(
     return {
       contacts: contactsList.map((c: Partial<ParsedContactDraft>) => ({
         name: c.name || null,
-        phone: c.phone || null,
+        phone: c.phone ? (normalizePhoneWithCountryCode(c.phone, "91") || null) : null,
         email: c.email || null,
         company: c.company || null,
         classification: normalizeClassification(c.classification),

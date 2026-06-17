@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { phonesMatch } from '@/lib/whatsapp/phone-utils';
+import { phonesMatch, normalizePhoneWithCountryCode } from '@/lib/whatsapp/phone-utils';
 import type { Contact } from '@/types';
 import { 
   parseListingFromImageOrText, 
@@ -554,22 +554,23 @@ export async function processOwnerChatbotMessage(
       const duplicates = [];
 
       for (const draft of container.contacts) {
-        const cleanPhone = draft.phone!.replace(/\D/g, '');
+        const normalized = normalizePhoneWithCountryCode(draft.phone || '', '91');
+        const cleanPhone = normalized.replace(/\D/g, '');
         const { data: existingContact } = await supabaseAdmin()
           .from('contacts')
           .select('id, name')
           .eq('account_id', accountId)
-          .or(`phone.eq.${draft.phone},phone.eq.${cleanPhone}`)
+          .or(`phone.eq.${draft.phone},phone.eq.${normalized},phone.eq.${cleanPhone}`)
           .maybeSingle();
 
         if (existingContact) {
-          duplicates.push(`${existingContact.name} (${draft.phone})`);
+          duplicates.push(`${existingContact.name} (${normalized || draft.phone})`);
         } else {
           toInsert.push({
             account_id: accountId,
             user_id: userId,
             name: draft.name!.trim(),
-            phone: draft.phone!.trim(),
+            phone: normalized || draft.phone!.trim(),
             email: draft.email || null,
             company: draft.company || '',
             classification: normalizeClassification(draft.classification),
