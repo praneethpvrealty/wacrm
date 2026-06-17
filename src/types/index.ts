@@ -591,6 +591,7 @@ export interface Property {
   interested_contacts?: Contact[];
   rental_income?: number | null;
   roi?: number | null;
+  listing_source?: 'owner' | 'agent';
   created_at: string;
   updated_at: string;
 }

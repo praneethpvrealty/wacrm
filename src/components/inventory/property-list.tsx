@@ -171,7 +171,7 @@ export function PropertyList({
               )}
 
               {/* Status Badge */}
-              <div className="absolute top-3 left-3 flex gap-1.5">
+              <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 max-w-[calc(100%-4rem)]">
                 <Badge
                   className={`border font-semibold text-[10px] tracking-wider uppercase px-2 py-0.5 rounded-full ${
                     statusColors[property.status] || 'bg-slate-800 text-slate-300 border-slate-700'
@@ -179,6 +179,13 @@ export function PropertyList({
                 >
                   {property.status}
                 </Badge>
+                {property.listing_source === 'agent' && (
+                  <Badge
+                    className="bg-sky-500/90 text-white border-sky-600 font-semibold text-[10px] tracking-wider uppercase px-2 py-0.5 rounded-full"
+                  >
+                    Agent Referred
+                  </Badge>
+                )}
               </div>
 
               {/* Publication Status Overlay */}

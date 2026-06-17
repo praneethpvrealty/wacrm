@@ -66,6 +66,7 @@ export async function PUT(
       google_map_link,
       rental_income,
       roi,
+      listing_source,
     } = body;
 
     // Validate only if passed
@@ -223,6 +224,10 @@ export async function PUT(
 
     if (roi !== undefined) {
       updateData.roi = typeof roi === "number" ? roi : null;
+    }
+
+    if (listing_source !== undefined) {
+      updateData.listing_source = listing_source === "agent" ? "agent" : "owner";
     }
 
     // Verify it exists in this account before updating (defensive check)

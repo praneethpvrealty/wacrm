@@ -80,6 +80,7 @@ export async function POST(request: Request) {
       google_map_link,
       rental_income,
       roi,
+      listing_source,
     } = body;
 
     // Validation
@@ -147,6 +148,7 @@ export async function POST(request: Request) {
       google_map_link: typeof google_map_link === "string" ? google_map_link.trim() : null,
       rental_income: typeof rental_income === "number" ? rental_income : null,
       roi: typeof roi === "number" ? roi : null,
+      listing_source: listing_source === "agent" ? "agent" : "owner",
     };
 
     const { data, error } = await ctx.supabase

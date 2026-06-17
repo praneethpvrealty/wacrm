@@ -187,6 +187,7 @@ export function PropertyForm({
   
   const [saving, setSaving] = useState(false);
   const [ownerContactId, setOwnerContactId] = useState<string | null>(null);
+  const [listingSource, setListingSource] = useState<'owner' | 'agent'>('owner');
   const [interestedContactIds, setInterestedContactIds] = useState<string[]>([]);
   const [contactedContactIds, setContactedContactIds] = useState<Set<string>>(new Set());
   const [contactSearchInput, setContactSearchInput] = useState('');
@@ -898,6 +899,7 @@ export function PropertyForm({
         setNearbyHighlights(property.nearby_highlights || []);
         setImages(property.images && property.images.length > 0 ? property.images : ['']);
         setOwnerContactId(property.owner_contact_id ?? null);
+        setListingSource(property.listing_source ?? 'owner');
         setGoogleMapLink(property.google_map_link ?? '');
         
         if (contacts && contacts.length > 0) {
@@ -969,6 +971,7 @@ export function PropertyForm({
         setSearchQuery('');
         setGoogleMapLink('');
         setOwnerContactId(defaultOwnerId ?? null);
+        setListingSource('owner');
       }
     }
   }, [open, property, defaultOwnerId, contacts]);
@@ -1332,6 +1335,7 @@ export function PropertyForm({
         features: parsedFeatures,
         images: parsedImages,
         owner_contact_id: ownerContactId,
+        listing_source: listingSource,
         google_map_link: googleMapLink.trim() || null,
         rental_income: hasCommercialFields && rentalIncome.trim() !== '' ? Number(rentalIncome) : null,
         roi: hasCommercialFields && roiValue !== null ? roiValue : null,
@@ -2241,7 +2245,7 @@ export function PropertyForm({
                   <h4 className="text-sm font-semibold text-white">Owner & Inquiries</h4>
                   
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5 col-span-2">
+                    <div className="space-y-1.5 col-span-2 md:col-span-1">
                       <Label htmlFor="prop-owner" className="text-slate-300">
                         Property Owner
                       </Label>
@@ -2257,6 +2261,21 @@ export function PropertyForm({
                             {contact.name || 'Unnamed'} ({contact.phone}) - {contact.classification}
                           </option>
                         ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5 col-span-2 md:col-span-1">
+                      <Label htmlFor="prop-listing-source" className="text-slate-300">
+                        Listing Source
+                      </Label>
+                      <select
+                        id="prop-listing-source"
+                        value={listingSource}
+                        onChange={(e) => setListingSource(e.target.value as 'owner' | 'agent')}
+                        className="flex h-9 w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-slate-950 font-medium"
+                      >
+                        <option value="owner">Direct (from Owner)</option>
+                        <option value="agent">Referred by Agent</option>
                       </select>
                     </div>
 

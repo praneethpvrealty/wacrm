@@ -45,6 +45,7 @@ export default function InventoryPage() {
   const [typeFilter, setTypeFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
   const [showcaseFilter, setShowcaseFilter] = useState('All');
+  const [sourceFilter, setSourceFilter] = useState('All');
 
   // Modals state
   const [formOpen, setFormOpen] = useState(false);
@@ -260,9 +261,16 @@ export default function InventoryPage() {
       if (showcaseFilter === 'Showcased' && !prop.is_published) return false;
       if (showcaseFilter === 'Private' && prop.is_published) return false;
 
+      // 5. Source filter match
+      if (sourceFilter !== 'All') {
+        const isAgent = prop.listing_source === 'agent';
+        if (sourceFilter === 'Owner' && isAgent) return false;
+        if (sourceFilter === 'Agent' && !isAgent) return false;
+      }
+
       return true;
     });
-  }, [properties, search, typeFilter, statusFilter, showcaseFilter]);
+  }, [properties, search, typeFilter, statusFilter, showcaseFilter, sourceFilter]);
 
   return (
     <div className="flex flex-col flex-1 p-6 space-y-6">
@@ -344,7 +352,7 @@ export default function InventoryPage() {
         </div>
 
         {/* Filter Selection Panel */}
-        <div className="grid grid-cols-3 gap-3 shrink-0">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0">
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
@@ -376,6 +384,16 @@ export default function InventoryPage() {
             <option value="All">All Showcase</option>
             <option value="Showcased">Showcased Only</option>
             <option value="Private">Private Only</option>
+          </select>
+
+          <select
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value)}
+            className="h-9 rounded-md border border-slate-700 bg-slate-800 px-3 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary font-medium"
+          >
+            <option value="All">All Sources</option>
+            <option value="Owner">Direct (Owner)</option>
+            <option value="Agent">Referred by Agent</option>
           </select>
         </div>
       </div>
