@@ -52,8 +52,33 @@ import { useCan } from '@/hooks/use-can';
 import { GatedButton } from '@/components/ui/gated-button';
 import { normalizePhoneWithCountryCode } from '@/lib/whatsapp/phone-utils';
 import { BulkImportModal, type BulkImportContact } from '@/components/contacts/bulk-import-modal';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 const PAGE_SIZE = 25;
+
+const BUDGET_OPTIONS = [
+  { label: '5 Lakhs', value: '500000' },
+  { label: '10 Lakhs', value: '1000000' },
+  { label: '20 Lakhs', value: '2000000' },
+  { label: '30 Lakhs', value: '3000000' },
+  { label: '40 Lakhs', value: '4000000' },
+  { label: '50 Lakhs', value: '5000000' },
+  { label: '60 Lakhs', value: '6000000' },
+  { label: '80 Lakhs', value: '8000000' },
+  { label: '1 Crore', value: '10000000' },
+  { label: '1.5 Crores', value: '15000000' },
+  { label: '2 Crores', value: '20000000' },
+  { label: '3 Crores', value: '30000000' },
+  { label: '5 Crores', value: '50000000' },
+  { label: '10 Crores', value: '100000000' },
+  { label: '20 Crores', value: '200000000' },
+];
 
 interface ContactWithTags extends Contact {
   tags?: Tag[];
@@ -219,6 +244,11 @@ export default function ContactsPage() {
   const [activeCount, setActiveCount] = useState(0);
   const [reviewCount, setReviewCount] = useState(0);
 
+  const [filterClassification, setFilterClassification] = useState<string>('All');
+  const [filterTag, setFilterTag] = useState<string>('All');
+  const [filterMinBudget, setFilterMinBudget] = useState<string>('All');
+  const [filterMaxBudget, setFilterMaxBudget] = useState<string>('All');
+
   // Modals
   const [formOpen, setFormOpen] = useState(false);
   const [editContact, setEditContact] = useState<Contact | null>(null);
@@ -262,6 +292,37 @@ export default function ContactsPage() {
       .eq('account_id', accountId)
       .eq('status', activeTab)
       .order('created_at', { ascending: false });
+
+    if (filterClassification !== 'All') {
+      query = query.eq('classification', filterClassification);
+    }
+
+    if (filterTag !== 'All') {
+      const { data: matchedTags } = await supabaseClient
+        .from('contact_tags')
+        .select('contact_id')
+        .eq('tag_id', filterTag);
+      
+      const tagContactIds = matchedTags
+        ? Array.from(new Set(matchedTags.map((t) => t.contact_id).filter(Boolean)))
+        : [];
+      
+      if (tagContactIds.length > 0) {
+        query = query.in('id', tagContactIds);
+      } else {
+        query = query.eq('id', '00000000-0000-0000-0000-000000000000');
+      }
+    }
+
+    if (filterMinBudget !== 'All') {
+      const minVal = Number(filterMinBudget);
+      query = query.or(`max_budget.gte.${minVal},no_budget.eq.true`);
+    }
+
+    if (filterMaxBudget !== 'All') {
+      const maxVal = Number(filterMaxBudget);
+      query = query.lte('max_budget', maxVal);
+    }
 
     if (search.trim()) {
       const term = `%${search.trim()}%`;
@@ -339,7 +400,17 @@ export default function ContactsPage() {
 
     setContacts(enriched);
     setLoading(false);
-  }, [page, search, tagsMap, activeTab, accountId]);
+  }, [
+    page,
+    search,
+    tagsMap,
+    activeTab,
+    accountId,
+    filterClassification,
+    filterTag,
+    filterMinBudget,
+    filterMaxBudget,
+  ]);
 
   // Load-once-on-mount-ish data fetches. Each setter inside runs
   // inside an async promise completion (Supabase await), not
@@ -559,23 +630,133 @@ export default function ContactsPage() {
         </div>
       </div>
 
-      {/* Search and Tabs Row */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div className="relative max-w-sm w-full">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-slate-500" />
-          <Input
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
+      {/* Search and Filters */}
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Search bar */}
+          <div className="relative w-full sm:max-w-xs md:max-w-sm">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-slate-500" />
+            <Input
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(0);
+              }}
+              placeholder="Search by name, phone, or email..."
+              className="pl-8 bg-slate-900 border-slate-700 text-white placeholder:text-slate-500"
+            />
+          </div>
+
+          {/* Classification Filter */}
+          <Select
+            value={filterClassification}
+            onValueChange={(val) => {
+              setFilterClassification(val ?? 'All');
               setPage(0);
             }}
-            placeholder="Search by name, phone, or email..."
-            className="pl-8 bg-slate-900 border-slate-700 text-white placeholder:text-slate-500"
-          />
+          >
+            <SelectTrigger className="w-full sm:w-[160px] bg-slate-900 border-slate-700 text-white">
+              <SelectValue placeholder="Classification" />
+            </SelectTrigger>
+            <SelectContent className="bg-slate-900 border-slate-700 text-slate-200">
+              <SelectItem value="All">All Classifications</SelectItem>
+              <SelectItem value="Owner">Owner</SelectItem>
+              <SelectItem value="Seller">Seller</SelectItem>
+              <SelectItem value="Buyer">Buyer</SelectItem>
+              <SelectItem value="Agent">Agent</SelectItem>
+              <SelectItem value="Developer">Developer</SelectItem>
+              <SelectItem value="Others">Others</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Tag Filter */}
+          <Select
+            value={filterTag}
+            onValueChange={(val) => {
+              setFilterTag(val ?? 'All');
+              setPage(0);
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-[150px] bg-slate-900 border-slate-700 text-white">
+              <SelectValue placeholder="Tag" />
+            </SelectTrigger>
+            <SelectContent className="bg-slate-900 border-slate-700 text-slate-200">
+              <SelectItem value="All">All Tags</SelectItem>
+              {Object.values(tagsMap).map((tag) => (
+                <SelectItem key={tag.id} value={tag.id}>
+                  <span className="flex items-center gap-2">
+                    <span className="size-2 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
+                    <span className="truncate">{tag.name}</span>
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Min Budget Filter */}
+          <Select
+            value={filterMinBudget}
+            onValueChange={(val) => {
+              setFilterMinBudget(val ?? 'All');
+              setPage(0);
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-[140px] bg-slate-900 border-slate-700 text-white">
+              <SelectValue placeholder="Min Budget" />
+            </SelectTrigger>
+            <SelectContent className="bg-slate-900 border-slate-700 text-slate-200">
+              <SelectItem value="All">Min Budget: All</SelectItem>
+              {BUDGET_OPTIONS.map((opt) => (
+                <SelectItem key={`min-${opt.value}`} value={opt.value}>
+                  ≥ {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Max Budget Filter */}
+          <Select
+            value={filterMaxBudget}
+            onValueChange={(val) => {
+              setFilterMaxBudget(val ?? 'All');
+              setPage(0);
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-[140px] bg-slate-900 border-slate-700 text-white">
+              <SelectValue placeholder="Max Budget" />
+            </SelectTrigger>
+            <SelectContent className="bg-slate-900 border-slate-700 text-slate-200">
+              <SelectItem value="All">Max Budget: All</SelectItem>
+              {BUDGET_OPTIONS.map((opt) => (
+                <SelectItem key={`max-${opt.value}`} value={opt.value}>
+                  ≤ {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Clear Filters Button */}
+          {(filterClassification !== 'All' || filterTag !== 'All' || filterMinBudget !== 'All' || filterMaxBudget !== 'All' || search.trim() !== '') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setFilterClassification('All');
+                setFilterTag('All');
+                setFilterMinBudget('All');
+                setFilterMaxBudget('All');
+                setSearch('');
+                setPage(0);
+              }}
+              className="text-slate-400 hover:text-white text-xs border border-dashed border-slate-700 hover:border-slate-500 rounded-md px-2.5"
+            >
+              Clear Filters
+            </Button>
+          )}
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex bg-slate-900/60 p-1 border border-slate-800 rounded-lg self-start md:self-auto">
+        <div className="flex bg-slate-900/60 p-1 border border-slate-800 rounded-lg self-start">
           <button
             onClick={() => {
               setActiveTab('active');

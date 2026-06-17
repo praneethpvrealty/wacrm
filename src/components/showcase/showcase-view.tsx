@@ -887,7 +887,7 @@ export function ShowcaseView({
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0">
-                          {displayPhone && (
+                          {(displayPhone || property.agent_details?.phone) && (
                             <a
                               href={getWhatsAppLink(property)}
                               target="_blank"
@@ -1049,7 +1049,7 @@ export function ShowcaseView({
                       {formatPrice(selectedProperty.price)}
                     </span>
                   </div>
-                  {displayPhone && (
+                  {(displayPhone || selectedProperty.agent_details?.phone) && (
                     <a
                       href={getWhatsAppLink(selectedProperty)}
                       target="_blank"
@@ -1324,7 +1324,7 @@ export function ShowcaseView({
                     />
 
                     <div className="flex flex-col sm:flex-row gap-3">
-                      {displayPhone && (
+                      {(displayPhone || selectedProperty.agent_details?.phone) && (
                         <a
                           href={getWhatsAppLink(selectedProperty)}
                           target="_blank"
