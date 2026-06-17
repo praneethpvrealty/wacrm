@@ -840,7 +840,7 @@ async function processMessage(
       replyText += `\nClick here to complete classification and details:\n${baseUrl}/contacts`
 
       try {
-        await sendTextMessage({
+        const sendRes = await sendTextMessage({
           phoneNumberId,
           accessToken,
           to: senderPhone,
@@ -853,7 +853,7 @@ async function processMessage(
           sender_type: 'bot',
           content_type: 'text',
           content_text: replyText,
-          message_id: `bot-${Date.now()}`,
+          message_id: sendRes.messageId,
           status: 'sent',
           created_at: new Date().toISOString(),
         }).select('id').single();
@@ -927,7 +927,7 @@ async function processMessage(
 
     try {
       // Send the reply via Meta API
-      await sendTextMessage({
+      const sendRes = await sendTextMessage({
         phoneNumberId,
         accessToken,
         to: senderPhone,
@@ -940,7 +940,9 @@ async function processMessage(
         sender_type: 'bot',
         content_type: 'text',
         content_text: replyText,
+        message_id: sendRes.messageId,
         status: 'sent',
+        created_at: new Date().toISOString(),
       })
 
       // Update conversation

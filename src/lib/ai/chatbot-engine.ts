@@ -72,7 +72,8 @@ export async function checkIsAccountOwner(
  */
 async function saveBotMessage(
   conversationId: string,
-  replyText: string
+  replyText: string,
+  metaMessageId?: string
 ): Promise<void> {
   try {
     const { error: msgErr } = await supabaseAdmin()
@@ -82,7 +83,7 @@ async function saveBotMessage(
         sender_type: 'bot',
         content_type: 'text',
         content_text: replyText,
-        message_id: `bot-${Date.now()}`,
+        message_id: metaMessageId || `bot-${Date.now()}`,
         status: 'sent',
         created_at: new Date().toISOString()
       });
@@ -183,7 +184,7 @@ async function sendPropertyDraftPreview(
         { id: 'cancel_property', title: 'Cancel' }
       ];
 
-  await sendInteractiveButtons({
+  const sendRes = await sendInteractiveButtons({
     phoneNumberId,
     accessToken,
     to,
@@ -191,7 +192,7 @@ async function sendPropertyDraftPreview(
     buttons
   });
 
-  await saveBotMessage(conversationId, reply);
+  await saveBotMessage(conversationId, reply, sendRes.messageId);
 }
 
 function validateContactDraftsContainer(container: ParsedContactDraftsContainer): { 
@@ -280,7 +281,7 @@ async function sendContactDraftPreview(
         { id: 'cancel_contact', title: 'Cancel' }
       ];
 
-  await sendInteractiveButtons({
+  const sendRes = await sendInteractiveButtons({
     phoneNumberId,
     accessToken,
     to,
@@ -288,7 +289,7 @@ async function sendContactDraftPreview(
     buttons
   });
 
-  await saveBotMessage(conversationId, reply);
+  await saveBotMessage(conversationId, reply, sendRes.messageId);
 }
 
 /**
@@ -353,8 +354,8 @@ export async function processOwnerChatbotMessage(
         .eq('id', propSession.id);
 
       const reply = "❌ *Property draft discarded.* Send another property details text or listing screenshot to start a new draft.";
-      await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
-      await saveBotMessage(conversation.id, reply);
+      const sendRes = await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
+      await saveBotMessage(conversation.id, reply, sendRes.messageId);
       return true;
     }
 
@@ -365,8 +366,8 @@ export async function processOwnerChatbotMessage(
         const reply = `⚠️ *Cannot confirm yet.* The following mandatory fields are missing:\n\n` +
           missingFields.map(f => `• *${f}*`).join('\n') +
           `\n\nPlease provide them first (e.g. 'price is 1.5 Cr', 'title is HSR 3BHK Apartment').`;
-        await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
-        await saveBotMessage(conversation.id, reply);
+        const sendRes = await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
+        await saveBotMessage(conversation.id, reply, sendRes.messageId);
         return true;
       }
 
@@ -402,8 +403,8 @@ export async function processOwnerChatbotMessage(
       if (propErr) {
         console.error('[chatbot-engine] Failed to save property:', propErr);
         const reply = "❌ *Error saving property to database.* Please try again later.";
-        await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
-        await saveBotMessage(conversation.id, reply);
+        const sendRes = await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
+        await saveBotMessage(conversation.id, reply, sendRes.messageId);
         return true;
       }
 
@@ -428,20 +429,22 @@ export async function processOwnerChatbotMessage(
 
       reply += `\nView it in your dashboard: ${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/inventory?propertyId=${prop.id}`;
         
-      await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
-      await saveBotMessage(conversation.id, reply);
+      const sendRes = await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
+      await saveBotMessage(conversation.id, reply, sendRes.messageId);
       return true;
     }
 
     // Handle image upload inside active session
     if (message.type === 'image' && message.image?.id) {
       // Prompt user that we are downloading/uploading
-      await sendTextMessage({
+      const uploadMsg = "⏳ _Uploading photo to draft listing... Please wait._";
+      const uploadSendRes = await sendTextMessage({
         phoneNumberId,
         accessToken,
         to: contactRecord.phone,
-        text: "⏳ _Uploading photo to draft listing... Please wait._"
+        text: uploadMsg
       });
+      await saveBotMessage(conversation.id, uploadMsg, uploadSendRes.messageId);
 
       try {
         const mediaId = message.image.id;
@@ -479,8 +482,8 @@ export async function processOwnerChatbotMessage(
       } catch (err) {
         console.error('[chatbot-engine] Error processing photo upload:', err);
         const reply = "❌ *Failed to upload image.* Please verify the photo format and try again.";
-        await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
-        await saveBotMessage(conversation.id, reply);
+        const sendRes = await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
+        await saveBotMessage(conversation.id, reply, sendRes.messageId);
         return true;
       }
     }
@@ -528,8 +531,8 @@ export async function processOwnerChatbotMessage(
         .eq('id', contactSession.id);
 
       const reply = "❌ *Contact drafts discarded.* Send another contact text details or screenshot to start a new contact draft.";
-      await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
-      await saveBotMessage(conversation.id, reply);
+      const sendRes = await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
+      await saveBotMessage(conversation.id, reply, sendRes.messageId);
       return true;
     }
 
@@ -540,8 +543,8 @@ export async function processOwnerChatbotMessage(
         const reply = `⚠️ *Cannot confirm yet.* The following fields are missing:\n\n` +
           missingFields.map(f => `• *${f}*`).join('\n') +
           `\n\nPlease provide them first.`;
-        await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
-        await saveBotMessage(conversation.id, reply);
+        const sendRes = await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
+        await saveBotMessage(conversation.id, reply, sendRes.messageId);
         return true;
       }
 
@@ -583,8 +586,8 @@ export async function processOwnerChatbotMessage(
           .from('contact_draft_sessions')
           .delete()
           .eq('id', contactSession.id);
-        await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
-        await saveBotMessage(conversation.id, reply);
+        const sendRes = await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
+        await saveBotMessage(conversation.id, reply, sendRes.messageId);
         return true;
       }
 
@@ -597,8 +600,8 @@ export async function processOwnerChatbotMessage(
       if (contactErr) {
         console.error('[chatbot-engine] Failed to save contacts:', contactErr);
         const reply = "❌ *Error saving contacts to database.* Please try again later.";
-        await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
-        await saveBotMessage(conversation.id, reply);
+        const sendRes = await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
+        await saveBotMessage(conversation.id, reply, sendRes.messageId);
         return true;
       }
 
@@ -621,8 +624,8 @@ export async function processOwnerChatbotMessage(
         reply += `\nView in dashboard: ${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/contacts`;
       }
         
-      await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
-      await saveBotMessage(conversation.id, reply);
+      const sendRes = await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
+      await saveBotMessage(conversation.id, reply, sendRes.messageId);
       return true;
     }
 
@@ -676,12 +679,14 @@ export async function processOwnerChatbotMessage(
 
     // --- PROPERTY INGESTION FLOW ---
     if (classification === 'property') {
-      await sendTextMessage({
+      const analyzingMsg = "⏳ _Analyzing listing details... Please wait._";
+      const analyzingSendRes = await sendTextMessage({
         phoneNumberId,
         accessToken,
         to: contactRecord.phone,
-        text: "⏳ _Analyzing listing details... Please wait._"
+        text: analyzingMsg
       });
+      await saveBotMessage(conversation.id, analyzingMsg, analyzingSendRes.messageId);
 
       try {
         let parsedDraft: ParsedPropertyDraft;
@@ -729,20 +734,22 @@ export async function processOwnerChatbotMessage(
       } catch (err) {
         console.error('[chatbot-engine] Error initializing property draft session:', err);
         const reply = "❌ *Failed to parse listing.* Please copy paste details as text or send a clean property advertisement image.";
-        await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
-        await saveBotMessage(conversation.id, reply);
+        const sendRes = await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
+        await saveBotMessage(conversation.id, reply, sendRes.messageId);
         return true;
       }
     }
 
     // --- CONTACT INGESTION FLOW ---
     if (classification === 'contact') {
-      await sendTextMessage({
+      const analyzingContactMsg = "⏳ _Analyzing contact details... Please wait._";
+      const analyzingContactSendRes = await sendTextMessage({
         phoneNumberId,
         accessToken,
         to: contactRecord.phone,
-        text: "⏳ _Analyzing contact details... Please wait._"
+        text: analyzingContactMsg
       });
+      await saveBotMessage(conversation.id, analyzingContactMsg, analyzingContactSendRes.messageId);
 
       try {
         let parsedContainer: ParsedContactDraftsContainer;
@@ -780,8 +787,8 @@ export async function processOwnerChatbotMessage(
       } catch (err) {
         console.error('[chatbot-engine] Error initializing contact draft session:', err);
         const reply = "❌ *Failed to parse contact details.* Please copy paste details as text or send a clean contact screenshot.";
-        await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
-        await saveBotMessage(conversation.id, reply);
+        const sendRes = await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
+        await saveBotMessage(conversation.id, reply, sendRes.messageId);
         return true;
       }
     }
@@ -797,8 +804,8 @@ export async function processOwnerChatbotMessage(
       `• Click the **Cancel** button to discard\n` +
       `• Click the **Confirm** button to save`;
 
-    await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
-    await saveBotMessage(conversation.id, reply);
+    const sendRes = await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
+    await saveBotMessage(conversation.id, reply, sendRes.messageId);
     return true;
   }
 
