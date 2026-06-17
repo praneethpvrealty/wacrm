@@ -7,7 +7,8 @@ import {
   classifyImageOrText,
   parseContactFromImageOrText,
   updateContactDraft,
-  type ParsedContactDraft
+  type ParsedContactDraft,
+  type ParsedContactDraftsContainer
 } from '@/lib/ai/gemini';
 import { uploadPropertyImage } from '@/lib/storage/upload';
 import { 
@@ -193,40 +194,67 @@ async function sendPropertyDraftPreview(
   await saveBotMessage(conversationId, reply);
 }
 
-function validateContactDraft(draft: ParsedContactDraft): { 
+function validateContactDraftsContainer(container: ParsedContactDraftsContainer): { 
   isValid: boolean; 
-  missingFields: string[] 
+  missingFields: string[];
+  invalidCount: number;
 } {
   const missingFields: string[] = [];
-  if (!draft.name || draft.name.trim().length === 0) {
-    missingFields.push('Name');
-  }
-  if (!draft.phone || draft.phone.trim().length === 0) {
-    missingFields.push('Phone');
+  let invalidCount = 0;
+  
+  if (!container.contacts || container.contacts.length === 0) {
+    missingFields.push('No contacts found');
+    return { isValid: false, missingFields, invalidCount: 0 };
   }
 
+  container.contacts.forEach((contact, idx) => {
+    const contactMissing: string[] = [];
+    if (!contact.name || contact.name.trim().length === 0) {
+      contactMissing.push(`Contact #${idx + 1} Name`);
+    }
+    if (!contact.phone || contact.phone.trim().length === 0) {
+      contactMissing.push(`Contact #${idx + 1} Phone`);
+    }
+    if (contactMissing.length > 0) {
+      invalidCount++;
+      missingFields.push(...contactMissing);
+    }
+  });
+
   return {
-    isValid: missingFields.length === 0,
-    missingFields
+    isValid: invalidCount === 0,
+    missingFields,
+    invalidCount
   };
 }
 
-function formatContactDraftPreview(
+function formatContactDraftsContainerPreview(
   header: string,
-  draft: ParsedContactDraft,
+  container: ParsedContactDraftsContainer,
   nextStatus: string,
   missingFields: string[]
 ): string {
-  const reply = `${header}\n\n` +
-    `*Name:* ${draft.name || '❓ _Missing_'}\n` +
-    `*Phone:* ${draft.phone || '❓ _Missing_'}\n` +
-    `*Email:* ${draft.email || '_Not specified_'}\n` +
-    `*Company:* ${draft.company || '_Not specified_'}\n` +
-    `*Role/Classification:* ${draft.classification || 'Others'}\n` +
-    `*Notes:* ${draft.notes || '_No notes_'}\n\n` +
-    (nextStatus === 'awaiting_confirmation'
-      ? "✅ All mandatory fields populated!\n• Use the buttons below to Confirm or Cancel.\n• Send updates to correct details."
-      : `⚠️ *Still missing:* ${missingFields.join(', ')}.\n• Use the Cancel button below to discard.\n• Reply with details to complete.`);
+  let reply = `${header}\n\n`;
+  
+  if (container.contacts && container.contacts.length > 0) {
+    container.contacts.forEach((draft, idx) => {
+      reply += `*Contact #${idx + 1}:*\n` +
+        `• *Name:* ${draft.name || '❓ _Missing_'}\n` +
+        `• *Phone:* ${draft.phone || '❓ _Missing_'}\n` +
+        `• *Email:* ${draft.email || '_Not specified_'}\n` +
+        `• *Company:* ${draft.company || '_Not specified_'}\n` +
+        `• *Role/Classification:* ${draft.classification || 'Others'}\n` +
+        `• *Notes:* ${draft.notes || '_No notes_'}\n\n`;
+    });
+  } else {
+    reply += `_No contacts parsed._\n\n`;
+  }
+
+  if (nextStatus === 'awaiting_confirmation') {
+    reply += `✅ All mandatory fields populated for *${container.contacts.length}* contact(s)!\n• Use the buttons below to Confirm or Cancel.\n• Send updates to correct details.`;
+  } else {
+    reply += `⚠️ *Still missing:* ${missingFields.join(', ')}.\n• Use the Cancel button below to discard.\n• Reply with details to complete.`;
+  }
 
   return reply;
 }
@@ -236,12 +264,12 @@ async function sendContactDraftPreview(
   accessToken: string,
   to: string,
   header: string,
-  draft: ParsedContactDraft,
+  container: ParsedContactDraftsContainer,
   nextStatus: string,
   missingFields: string[],
   conversationId: string
 ): Promise<void> {
-  const reply = formatContactDraftPreview(header, draft, nextStatus, missingFields);
+  const reply = formatContactDraftsContainerPreview(header, container, nextStatus, missingFields);
   
   const buttons = nextStatus === 'awaiting_confirmation'
     ? [
@@ -490,7 +518,7 @@ export async function processOwnerChatbotMessage(
 
   // 3. Active Contact Session Exists Flow
   if (contactSession) {
-    const draft = contactSession.draft_data as ParsedContactDraft;
+    const container = contactSession.draft_data as ParsedContactDraftsContainer;
 
     // Handle CANCEL instruction
     if (buttonId === 'cancel_contact' || lowerText === 'cancel') {
@@ -499,7 +527,7 @@ export async function processOwnerChatbotMessage(
         .delete()
         .eq('id', contactSession.id);
 
-      const reply = "❌ *Contact draft discarded.* Send another contact text details or screenshot to start a new contact draft.";
+      const reply = "❌ *Contact drafts discarded.* Send another contact text details or screenshot to start a new contact draft.";
       await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
       await saveBotMessage(conversation.id, reply);
       return true;
@@ -507,27 +535,50 @@ export async function processOwnerChatbotMessage(
 
     // Handle CONFIRM instruction
     if (buttonId === 'confirm_contact' || lowerText === 'confirm') {
-      const { isValid, missingFields } = validateContactDraft(draft);
+      const { isValid, missingFields } = validateContactDraftsContainer(container);
       if (!isValid) {
         const reply = `⚠️ *Cannot confirm yet.* The following fields are missing:\n\n` +
           missingFields.map(f => `• *${f}*`).join('\n') +
-          `\n\nPlease provide them first (e.g. 'name is Ramesh').`;
+          `\n\nPlease provide them first.`;
         await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
         await saveBotMessage(conversation.id, reply);
         return true;
       }
 
-      // Check if contact already exists
-      const cleanPhone = draft.phone!.replace(/\D/g, '');
-      const { data: existingContact } = await supabaseAdmin()
-        .from('contacts')
-        .select('id, name')
-        .eq('account_id', accountId)
-        .or(`phone.eq.${draft.phone},phone.eq.${cleanPhone}`)
-        .maybeSingle();
+      // Check duplicates and save new contacts in bulk
+      const toInsert = [];
+      const duplicates = [];
 
-      if (existingContact) {
-        const reply = `⚠️ *Contact already exists in CRM:* ${existingContact.name}. Contact draft discarded.`;
+      for (const draft of container.contacts) {
+        const cleanPhone = draft.phone!.replace(/\D/g, '');
+        const { data: existingContact } = await supabaseAdmin()
+          .from('contacts')
+          .select('id, name')
+          .eq('account_id', accountId)
+          .or(`phone.eq.${draft.phone},phone.eq.${cleanPhone}`)
+          .maybeSingle();
+
+        if (existingContact) {
+          duplicates.push(`${existingContact.name} (${draft.phone})`);
+        } else {
+          toInsert.push({
+            account_id: accountId,
+            user_id: userId,
+            name: draft.name!.trim(),
+            phone: draft.phone!.trim(),
+            email: draft.email || null,
+            company: draft.company || '',
+            classification: draft.classification || 'Others',
+            status: 'pending_review',
+            source: 'WhatsApp'
+          });
+        }
+      }
+
+      if (toInsert.length === 0) {
+        const reply = `⚠️ *All contacts already exist in CRM:* \n` + 
+          duplicates.map(d => `• ${d}`).join('\n') + 
+          `\n\nContact draft session discarded.`;
         await supabaseAdmin()
           .from('contact_draft_sessions')
           .delete()
@@ -537,26 +588,15 @@ export async function processOwnerChatbotMessage(
         return true;
       }
 
-      // Create new contact in CRM
-      const { data: contact, error: contactErr } = await supabaseAdmin()
+      // Create new contacts in CRM
+      const { data: inserted, error: contactErr } = await supabaseAdmin()
         .from('contacts')
-        .insert({
-          account_id: accountId,
-          user_id: userId,
-          name: draft.name!.trim(),
-          phone: draft.phone!.trim(),
-          email: draft.email || null,
-          company: draft.company || '',
-          classification: draft.classification || 'Others',
-          status: 'pending_review',
-          source: 'WhatsApp'
-        })
-        .select()
-        .single();
+        .insert(toInsert)
+        .select();
 
       if (contactErr) {
-        console.error('[chatbot-engine] Failed to save contact:', contactErr);
-        const reply = "❌ *Error saving contact to database.* Please try again later.";
+        console.error('[chatbot-engine] Failed to save contacts:', contactErr);
+        const reply = "❌ *Error saving contacts to database.* Please try again later.";
         await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
         await saveBotMessage(conversation.id, reply);
         return true;
@@ -568,28 +608,30 @@ export async function processOwnerChatbotMessage(
         .delete()
         .eq('id', contactSession.id);
 
-      const reply = `✅ *Contact created successfully!*\n\n` +
-        `*Name:* ${contact.name}\n` +
-        `*Phone:* ${contact.phone}\n` +
-        `*Role/Classification:* ${contact.classification}\n` +
-        `*Email:* ${contact.email || '_None_'}\n\n` +
-        `View in dashboard: ${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/contacts`;
+      let reply = `✅ *Successfully saved ${inserted.length} new contact(s) to CRM!*\n\n`;
+      inserted.forEach((c: any) => {
+        reply += `• *Name:* ${c.name} (${c.phone}) [${c.classification}]\n`;
+      });
+      if (duplicates.length > 0) {
+        reply += `\n⚠️ *Skipped duplicates:* \n` + duplicates.map(d => `• ${d}`).join('\n') + `\n`;
+      }
+      reply += `\nView in dashboard: ${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/contacts`;
         
       await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
       await saveBotMessage(conversation.id, reply);
       return true;
     }
 
-    // Handle conversational updates to contact draft
+    // Handle conversational updates to contact drafts
     if (cleanedText) {
-      const updatedDraft = await updateContactDraft(draft, cleanedText);
-      const { isValid, missingFields } = validateContactDraft(updatedDraft);
+      const updatedContainer = await updateContactDraft(container, cleanedText);
+      const { isValid, missingFields } = validateContactDraftsContainer(updatedContainer);
       const nextStatus = isValid ? 'awaiting_confirmation' : 'collecting';
 
       await supabaseAdmin()
         .from('contact_draft_sessions')
         .update({
-          draft_data: updatedDraft,
+          draft_data: updatedContainer,
           status: nextStatus,
           updated_at: new Date().toISOString()
         })
@@ -599,8 +641,8 @@ export async function processOwnerChatbotMessage(
         phoneNumberId,
         accessToken,
         contactRecord.phone,
-        `📝 *Contact Draft Updated:*`,
-        updatedDraft,
+        `📝 *Contact Drafts Updated:*`,
+        updatedContainer,
         nextStatus,
         missingFields,
         conversation.id
@@ -699,15 +741,15 @@ export async function processOwnerChatbotMessage(
       });
 
       try {
-        let parsedDraft: ParsedContactDraft;
+        let parsedContainer: ParsedContactDraftsContainer;
 
         if (isImageMsg && mediaBuffer && mediaMimeType) {
-          parsedDraft = await parseContactFromImageOrText(contentText || '', mediaBuffer, mediaMimeType);
+          parsedContainer = await parseContactFromImageOrText(contentText || '', mediaBuffer, mediaMimeType);
         } else {
-          parsedDraft = await parseContactFromImageOrText(cleanedText);
+          parsedContainer = await parseContactFromImageOrText(cleanedText);
         }
 
-        const { isValid, missingFields } = validateContactDraft(parsedDraft);
+        const { isValid, missingFields } = validateContactDraftsContainer(parsedContainer);
         const initialStatus = isValid ? 'awaiting_confirmation' : 'collecting';
 
         // Insert new active session
@@ -716,7 +758,7 @@ export async function processOwnerChatbotMessage(
           .insert({
             account_id: accountId,
             contact_id: contactRecord.id,
-            draft_data: parsedDraft,
+            draft_data: parsedContainer,
             status: initialStatus
           });
 
@@ -724,8 +766,8 @@ export async function processOwnerChatbotMessage(
           phoneNumberId,
           accessToken,
           contactRecord.phone,
-          `📝 *Contact Draft Created!*`,
-          parsedDraft,
+          `📝 *Contact Drafts Created!*`,
+          parsedContainer,
           initialStatus,
           missingFields,
           conversation.id

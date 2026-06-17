@@ -379,6 +379,10 @@ export interface ParsedContactDraft {
   notes: string | null;
 }
 
+export interface ParsedContactDraftsContainer {
+  contacts: ParsedContactDraft[];
+}
+
 /**
  * Parses contact details from an image buffer (screenshot) and/or text block.
  */
@@ -386,22 +390,27 @@ export async function parseContactFromImageOrText(
   text?: string,
   buffer?: Buffer,
   mimeType?: string
-): Promise<ParsedContactDraft> {
+): Promise<ParsedContactDraftsContainer> {
   const systemInstruction = 
     "You are an expert contact data parser. Extract contact details from the provided text and/or image.\n" +
-    "You must return a JSON object conforming to the following structure:\n" +
+    "You must return a JSON object containing an array of contacts conforming to the following structure:\n" +
     "{\n" +
-    "  \"name\": \"Full name of the contact or null\",\n" +
-    "  \"phone\": \"Phone number (numeric digits only, e.g. '9876543210' or with country code if visible like '919876543210') or null\",\n" +
-    "  \"email\": \"Email address or null\",\n" +
-    "  \"company\": \"Company name if specified or null\",\n" +
-    "  \"classification\": \"Must be exactly one of: 'Owner', 'Seller', 'Buyer', 'Agent', 'Others'\",\n" +
-    "  \"notes\": \"Any additional details or requirements found in the text/image (e.g. 'Interested in SJR Blue Waters, Sarjapur Road. Source: Magicbricks') or null\"\n" +
+    "  \"contacts\": [\n" +
+    "    {\n" +
+    "      \"name\": \"Full name of the contact or null\",\n" +
+    "      \"phone\": \"Phone number (numeric digits only, e.g. '9876543210' or with country code if visible like '919876543210') or null\",\n" +
+    "      \"email\": \"Email address or null\",\n" +
+    "      \"company\": \"Company name if specified or null\",\n" +
+    "      \"classification\": \"Must be exactly one of: 'Owner', 'Seller', 'Buyer', 'Agent', 'Others'\",\n" +
+    "      \"notes\": \"Any additional details or requirements found in the text/image (e.g. 'Interested in SJR Blue Waters, Sarjapur Road. Source: Magicbricks') or null\"\n" +
+    "    }\n" +
+    "  ]\n" +
     "}\n\n" +
     "Important parsing rules:\n" +
-    "1. Set any fields that cannot be found to null. For classification, choose the best fit based on context. Lead forwards showing interest in buying/renting a property must be classified as 'Buyer'.\n" +
-    "2. In lead forwarding messages (e.g. 'VaishaliGaur, 917737932199 is interested in SJR Blue Waters...'), extract the lead's name ('VaishaliGaur'), phone ('917737932199'), classify as 'Buyer', and put their interest ('Interested in SJR Blue Waters, Sarjapur Road Magicbricks') in 'notes'.\n" +
-    "3. Output MUST be valid JSON.";
+    "1. You can parse MULTIPLE contacts from the same image or text block. If there are multiple people/profiles/leads, create a separate object inside the 'contacts' array for each one.\n" +
+    "2. Set any fields that cannot be found to null. For classification, choose the best fit based on context. Lead forwards showing interest in buying/renting a property must be classified as 'Buyer'.\n" +
+    "3. In lead forwarding messages (e.g. 'VaishaliGaur, 917737932199 is interested in SJR Blue Waters...'), extract the lead's name ('VaishaliGaur'), phone ('917737932199'), classify as 'Buyer', and put their interest ('Interested in SJR Blue Waters, Sarjapur Road Magicbricks') in 'notes'.\n" +
+    "4. Output MUST be valid JSON matching the schema.";
 
   const parts: GeminiPart[] = [];
 
@@ -425,14 +434,17 @@ export async function parseContactFromImageOrText(
   try {
     const rawResult = await generateContentRaw(contents, systemInstruction, true);
     const parsed = JSON.parse(rawResult);
+    const contactsList = Array.isArray(parsed.contacts) ? parsed.contacts : [];
     
     return {
-      name: parsed.name || null,
-      phone: parsed.phone || null,
-      email: parsed.email || null,
-      company: parsed.company || null,
-      classification: parsed.classification || "Others",
-      notes: parsed.notes || null
+      contacts: contactsList.map((c: any) => ({
+        name: c.name || null,
+        phone: c.phone || null,
+        email: c.email || null,
+        company: c.company || null,
+        classification: c.classification || "Others",
+        notes: c.notes || null
+      }))
     };
   } catch (err) {
     console.error("[Gemini AI] Error parsing contact details:", err);
@@ -441,15 +453,16 @@ export async function parseContactFromImageOrText(
 }
 
 /**
- * Updates an existing parsed contact draft JSON with a conversational update instruction.
+ * Updates an existing parsed contact drafts container JSON with a conversational update instruction.
  */
 export async function updateContactDraft(
-  currentDraft: ParsedContactDraft,
+  currentDraft: ParsedContactDraftsContainer,
   updateRequest: string
-): Promise<ParsedContactDraft> {
+): Promise<ParsedContactDraftsContainer> {
   const systemInstruction = 
-    "You are an expert contact data updater. You are given a current contact draft JSON object and a natural language instruction from the user.\n" +
+    "You are an expert contact data updater. You are given a current contact drafts JSON object containing an array of contacts and a natural language instruction from the user.\n" +
     "Your job is to apply the updates requested by the user and return the complete updated JSON object matching the exact structure.\n" +
+    "For example, if the user says 'name of second contact is Vaishali', update the name of the second contact. If they say 'change classification to Agent for all', update the classification field to 'Agent' for all contacts in the list.\n" +
     "Do not change any other fields unless requested by the user.\n" +
     "Output MUST be valid JSON.";
 
@@ -459,10 +472,17 @@ export async function updateContactDraft(
   try {
     const rawResult = await generateContentRaw(contents, systemInstruction, true);
     const parsed = JSON.parse(rawResult);
+    const contactsList = Array.isArray(parsed.contacts) ? parsed.contacts : [];
     
     return {
-      ...currentDraft,
-      ...parsed
+      contacts: contactsList.map((c: any) => ({
+        name: c.name || null,
+        phone: c.phone || null,
+        email: c.email || null,
+        company: c.company || null,
+        classification: c.classification || "Others",
+        notes: c.notes || null
+      }))
     };
   } catch (err) {
     console.error("[Gemini AI] Error updating contact draft:", err);
