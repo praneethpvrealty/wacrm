@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { phonesMatch } from '@/lib/whatsapp/phone-utils';
+import type { Contact } from '@/types';
 import { 
   parseListingFromImageOrText, 
   updateListingDraft, 
@@ -7,7 +8,6 @@ import {
   classifyImageOrText,
   parseContactFromImageOrText,
   updateContactDraft,
-  type ParsedContactDraft,
   type ParsedContactDraftsContainer
 } from '@/lib/ai/gemini';
 import { uploadPropertyImage } from '@/lib/storage/upload';
@@ -609,7 +609,7 @@ export async function processOwnerChatbotMessage(
         .eq('id', contactSession.id);
 
       let reply = `✅ *Successfully saved ${inserted.length} new contact(s) to CRM!*\n\n`;
-      inserted.forEach((c: any) => {
+      inserted.forEach((c: Contact) => {
         reply += `• *Name:* ${c.name} (${c.phone}) [${c.classification}]\n`;
       });
       if (duplicates.length > 0) {

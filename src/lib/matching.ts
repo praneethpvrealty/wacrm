@@ -22,7 +22,6 @@ function isNegated(text: string, keyword: string): boolean {
   while (index !== -1) {
     // Look back up to 35 characters for negation terms
     const precedingText = text.substring(Math.max(0, index - 35), index).trim();
-    const words = precedingText.split(/[\s,]+/);
     const negationWords = ['not', 'no', 'except', 'excluding', 'exclude', 'avoid', 'dont', "don't", 'never', 'outside', 'but'];
     
     const negated = negationWords.some(neg => {

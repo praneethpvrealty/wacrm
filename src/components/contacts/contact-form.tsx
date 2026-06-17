@@ -187,7 +187,7 @@ export function ContactForm({
       setAreasOfInterest(initialAreas);
       setAreasText(initialAreas.join(', ') + (initialAreas.length > 0 ? ', ' : ''));
       setPropertyInterests(contact?.property_interests ?? []);
-      setMinRoi((contact as any)?.min_roi ? String((contact as any).min_roi) : '');
+      setMinRoi(contact?.min_roi ? String(contact.min_roi) : '');
       setSource(contact?.source ?? '');
       setSelectedTagIds(contactTags.map((ct) => ct.tag_id));
       fetchTags();

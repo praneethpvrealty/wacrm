@@ -63,7 +63,7 @@ describe('getMatchingContacts', () => {
     it('parses yield requirements from notes text dynamically when min_roi field is null', () => {
       const contact = createTestContact({
         min_roi: null,
-        contact_notes: [{ note_text: 'looking for yield > 5% on commercial spaces' } as any],
+        contact_notes: [{ note_text: 'looking for yield > 5% on commercial spaces' }],
       });
       const lowYieldProp = createTestProperty({ roi: 4 });
       const highYieldProp = createTestProperty({ roi: 6 });

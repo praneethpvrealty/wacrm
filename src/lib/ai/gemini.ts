@@ -437,7 +437,7 @@ export async function parseContactFromImageOrText(
     const contactsList = Array.isArray(parsed.contacts) ? parsed.contacts : [];
     
     return {
-      contacts: contactsList.map((c: any) => ({
+      contacts: contactsList.map((c: Partial<ParsedContactDraft>) => ({
         name: c.name || null,
         phone: c.phone || null,
         email: c.email || null,
@@ -475,7 +475,7 @@ export async function updateContactDraft(
     const contactsList = Array.isArray(parsed.contacts) ? parsed.contacts : [];
     
     return {
-      contacts: contactsList.map((c: any) => ({
+      contacts: contactsList.map((c: Partial<ParsedContactDraft>) => ({
         name: c.name || null,
         phone: c.phone || null,
         email: c.email || null,

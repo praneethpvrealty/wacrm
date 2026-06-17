@@ -208,7 +208,7 @@ export function ContactDetailView({
       setEditAreasOfInterest(initialAreas);
       setEditAreasText(initialAreas.join(', ') + (initialAreas.length > 0 ? ', ' : ''));
       setEditPropertyInterests(data.property_interests ?? []);
-      setEditMinRoi((data as any).min_roi ? String((data as any).min_roi) : '');
+      setEditMinRoi(data.min_roi ? String(data.min_roi) : '');
 
       // Fetch last inquired property details
       if (data.last_inquired_property_id) {
