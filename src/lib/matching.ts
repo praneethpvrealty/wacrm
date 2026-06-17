@@ -48,10 +48,10 @@ export function getMatchingContacts(
     // 2. Area Match
     let areaMatch = false;
     const areas = contact.areas_of_interest || [];
-    const propLoc = (property.location || '').toLowerCase();
-    const propSub = (property.sublocality || '').toLowerCase();
-    const propCity = (property.city || '').toLowerCase();
-    const propProject = (property.project || '').toLowerCase();
+    const propLoc = (property.location || '').toLowerCase().replace(/\./g, '');
+    const propSub = (property.sublocality || '').toLowerCase().replace(/\./g, '');
+    const propCity = (property.city || '').toLowerCase().replace(/\./g, '');
+    const propProject = (property.project || '').toLowerCase().replace(/\./g, '');
 
     if (
       areas.length === 0 ||
@@ -64,7 +64,7 @@ export function getMatchingContacts(
     } else {
       // Check substring match for any area of interest
       areaMatch = areas.some((area) => {
-        const cleanArea = area.toLowerCase().trim();
+        const cleanArea = area.toLowerCase().replace(/\./g, '').trim();
         if (!cleanArea) return false;
         return (
           propLoc.includes(cleanArea) ||
