@@ -210,10 +210,51 @@ export default async function RootPage({ searchParams }: PageProps) {
     }
   }
 
+  // Fetch all agents (contacts with classification 'Agent') for this account to resolve listing agents
+  const { data: agentContacts } = await admin
+    .from('contacts')
+    .select('id, name, phone, email')
+    .eq('account_id', accountId)
+    .eq('classification', 'Agent');
+
+  // Also fetch profiles to map profiles' user_id to emails (and then to contacts)
+  const { data: profiles } = await admin
+    .from('profiles')
+    .select('user_id, full_name, email, avatar_url')
+    .eq('account_id', accountId);
+
+  // Build the user_id to agent contact mapping
+  const userIdToAgentMap: Record<string, { id: string; name: string; phone: string; email?: string | null; avatar_url?: string | null }> = {};
+
+  if (profiles) {
+    profiles.forEach(p => {
+      // Find matching agent contact by email
+      const matchingContact = agentContacts?.find(c => c.email && c.email.toLowerCase() === p.email.toLowerCase());
+      if (matchingContact) {
+        userIdToAgentMap[p.user_id] = {
+          id: matchingContact.id,
+          name: p.full_name || matchingContact.name,
+          phone: matchingContact.phone,
+          email: matchingContact.email,
+          avatar_url: p.avatar_url
+        };
+      }
+    });
+  }
+
+  // Attach agent details to each property object
+  const propertiesWithAgent = propertiesList.map(prop => {
+    const agent = prop.user_id ? userIdToAgentMap[prop.user_id] : null;
+    return {
+      ...prop,
+      agent_details: agent || null
+    };
+  });
+
   // 6. Render
   return (
     <ShowcaseView
-      properties={propertiesList}
+      properties={propertiesWithAgent}
       settings={settings}
       accountId={accountId}
       referrerContactId={filterContactId || undefined}

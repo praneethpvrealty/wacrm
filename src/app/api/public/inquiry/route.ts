@@ -48,6 +48,42 @@ export async function POST(request: Request) {
 
     const systemUserId = account.owner_user_id;
 
+    // Resolve the managing agent of the property if propertyId is provided
+    let targetAgentUserId = systemUserId;
+    let resolvedReferrerContactId = referrerContactId || null;
+
+    if (propertyId) {
+      const { data: propData } = await admin
+        .from("properties")
+        .select("user_id")
+        .eq("id", propertyId)
+        .maybeSingle();
+
+      if (propData?.user_id) {
+        targetAgentUserId = propData.user_id;
+
+        // Try resolving the agent's contact ID using their profile email
+        const { data: agentProfile } = await admin
+          .from("profiles")
+          .select("email")
+          .eq("user_id", targetAgentUserId)
+          .maybeSingle();
+
+        if (agentProfile?.email) {
+          const { data: agentContact } = await admin
+            .from("contacts")
+            .select("id")
+            .eq("account_id", accountId)
+            .eq("email", agentProfile.email)
+            .maybeSingle();
+
+          if (agentContact) {
+            resolvedReferrerContactId = resolvedReferrerContactId || agentContact.id;
+          }
+        }
+      }
+    }
+
     // 2. Check if contact exists under this account
     const { data: existingContact, error: findError } = await admin
       .from("contacts")
@@ -77,7 +113,7 @@ export async function POST(request: Request) {
       };
       if (!existingContact.name && name) updates.name = name.trim();
       if (!existingContact.email && email) updates.email = email.trim().toLowerCase();
-      if (referrerContactId) updates.referrer_contact_id = referrerContactId;
+      if (resolvedReferrerContactId) updates.referrer_contact_id = resolvedReferrerContactId;
 
       await admin
         .from("contacts")
@@ -90,14 +126,14 @@ export async function POST(request: Request) {
         .insert([
           {
             account_id: accountId,
-            user_id: systemUserId,
+            user_id: targetAgentUserId,
             phone: normalizedPhone,
             name: (name || "Website Lead").trim(),
             email: email ? email.trim().toLowerCase() : null,
             classification: "Buyer",
             status: "pending_review",
             referrer: "Website Showcase",
-            referrer_contact_id: referrerContactId || null,
+            referrer_contact_id: resolvedReferrerContactId,
             last_inquired_property_id: propertyId || null,
           },
         ])
@@ -138,7 +174,7 @@ export async function POST(request: Request) {
         {
           account_id: accountId,
           contact_id: contactId,
-          user_id: systemUserId,
+          user_id: targetAgentUserId,
           note_text: noteText,
         },
       ]);
@@ -154,7 +190,7 @@ export async function POST(request: Request) {
       .insert([
         {
           account_id: accountId,
-          user_id: systemUserId,
+          user_id: targetAgentUserId,
           title: `New Website Inquiry - @${name || phone}`,
           description: `Visitor ${name || ""} (${phone}) inquired about property: "${propertyTitle || "Unknown"}"${propertyCode ? ` (${propertyCode})` : ""}. Review contact and follow up.`,
           due_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // due in 1 day
@@ -190,7 +226,7 @@ export async function POST(request: Request) {
           .from("conversations")
           .insert({
             account_id: accountId,
-            user_id: systemUserId,
+            user_id: targetAgentUserId,
             contact_id: contactId,
             unread_count: 0,
           })

@@ -21,6 +21,8 @@ import {
   Send,
   CheckCircle,
   Share2,
+  ThumbsUp,
+  ThumbsDown,
 } from 'lucide-react';
 import type { Property, ShowcaseSettings } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -59,12 +61,238 @@ export function ShowcaseView({
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
+  // Load visitor details and interests from localStorage
+  const [visitorName, setVisitorName] = useState('');
+  const [visitorPhone, setVisitorPhone] = useState('');
+  const [visitorEmail, setVisitorEmail] = useState('');
+  const [interestStatus, setInterestStatus] = useState<Record<string, 'interested' | 'not_interested'>>({});
+
+  // Trigger modal for interest submission
+  const [interestProperty, setInterestProperty] = useState<Property | null>(null);
+  const [interestModalOpen, setInterestModalOpen] = useState(false);
+  const [interestSubmitting, setInterestSubmitting] = useState(false);
+
+  // General requirements modal
+  const [requirementsModalOpen, setRequirementsModalOpen] = useState(false);
+
+  // General Requirements Form inputs
+  const [reqName, setReqName] = useState('');
+  const [reqPhone, setReqPhone] = useState('');
+  const [reqEmail, setReqEmail] = useState('');
+  const [reqCategories, setReqCategories] = useState<string[]>([]);
+  const [reqLocations, setReqLocations] = useState<string[]>([]);
+  const [reqMinBudget, setReqMinBudget] = useState('');
+  const [reqMaxBudget, setReqMaxBudget] = useState('');
+  const [reqMinRoi, setReqMinRoi] = useState('');
+  const [reqNotes, setReqNotes] = useState('');
+  const [reqSubmitting, setReqSubmitting] = useState(false);
+  const [newLocationTag, setNewLocationTag] = useState('');
+
+  const isCommercialSelected = useMemo(() => {
+    return reqCategories.some(cat => 
+      ['Commercial Building', 'Office Space', 'Shop/ Showroom', 'Warehouse', 'Commercial Land'].includes(cat)
+    );
+  }, [reqCategories]);
+
+  const toggleCategory = (cat: string) => {
+    if (reqCategories.includes(cat)) {
+      setReqCategories(reqCategories.filter((c) => c !== cat));
+    } else {
+      setReqCategories([...reqCategories, cat]);
+    }
+  };
+
+  const addLocationTag = () => {
+    if (newLocationTag.trim() && !reqLocations.includes(newLocationTag.trim())) {
+      setReqLocations([...reqLocations, newLocationTag.trim()]);
+      setNewLocationTag('');
+    }
+  };
+
+  const removeLocationTag = (loc: string) => {
+    setReqLocations(reqLocations.filter((l) => l !== loc));
+  };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const storedName = localStorage.getItem('visitor_name') || '';
+      const storedPhone = localStorage.getItem('visitor_phone') || '';
+      const storedEmail = localStorage.getItem('visitor_email') || '';
+      const storedInterests = localStorage.getItem('visitor_interests');
+
+      setVisitorName(storedName);
+      setVisitorPhone(storedPhone);
+      setVisitorEmail(storedEmail);
+
+      // Pre-fill inquiry form inputs if stored
+      if (storedName) setInquiryName(storedName);
+      if (storedPhone) setInquiryPhone(storedPhone);
+      if (storedEmail) setInquiryEmail(storedEmail);
+
+      if (storedInterests) {
+        try {
+          setInterestStatus(JSON.parse(storedInterests));
+        } catch (e) {
+          console.error('Failed to parse interests:', e);
+        }
+      }
+    }
+  }, []);
+
+  const saveVisitorInfo = (name: string, phone: string, email?: string) => {
+    localStorage.setItem('visitor_name', name);
+    localStorage.setItem('visitor_phone', phone);
+    if (email) {
+      localStorage.setItem('visitor_email', email);
+    }
+    setVisitorName(name);
+    setVisitorPhone(phone);
+    if (email) {
+      setVisitorEmail(email);
+    }
+    // Also update inquiry form states
+    setInquiryName(name);
+    setInquiryPhone(phone);
+    if (email) setInquiryEmail(email);
+  };
+
+  const updateInterestStatus = (propertyId: string, status: 'interested' | 'not_interested') => {
+    const updated = { ...interestStatus, [propertyId]: status };
+    setInterestStatus(updated);
+    localStorage.setItem('visitor_interests', JSON.stringify(updated));
+  };
+
+  const handleInterestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!visitorName.trim() || !visitorPhone.trim() || !interestProperty) return;
+
+    setInterestSubmitting(true);
+    try {
+      const res = await fetch('/api/public/inquiry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: visitorName.trim(),
+          phone: visitorPhone.trim(),
+          email: visitorEmail.trim() || undefined,
+          message: `Visitor expressed quick interest in this property listing.`,
+          propertyId: interestProperty.id,
+          propertyTitle: interestProperty.title,
+          propertyCode: interestProperty.property_code,
+          accountId,
+          referrerContactId: interestProperty.agent_details?.id || referrerContactId,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to register interest');
+      }
+
+      saveVisitorInfo(visitorName, visitorPhone, visitorEmail);
+      updateInterestStatus(interestProperty.id, 'interested');
+      setInterestModalOpen(false);
+      setInterestProperty(null);
+      toast.success(`Interest recorded for "${interestProperty.title}"!`);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to register interest. Please try again.');
+    } finally {
+      setInterestSubmitting(false);
+    }
+  };
+
+  const handleQuickInterestClick = async (property: Property) => {
+    if (!visitorName || !visitorPhone) {
+      setInterestProperty(property);
+      setInterestModalOpen(true);
+      return;
+    }
+
+    try {
+      updateInterestStatus(property.id, 'interested');
+      toast.success(`Interest recorded for "${property.title}"!`);
+
+      await fetch('/api/public/inquiry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: visitorName.trim(),
+          phone: visitorPhone.trim(),
+          email: visitorEmail.trim() || undefined,
+          message: `Visitor expressed quick interest in this property listing.`,
+          propertyId: property.id,
+          propertyTitle: property.title,
+          propertyCode: property.property_code,
+          accountId,
+          referrerContactId: property.agent_details?.id || referrerContactId,
+        }),
+      });
+    } catch (err) {
+      console.error(err);
+      const updated = { ...interestStatus };
+      delete updated[property.id];
+      setInterestStatus(updated);
+      localStorage.setItem('visitor_interests', JSON.stringify(updated));
+      toast.error('Failed to register interest. Please try again.');
+    }
+  };
+
+  const openRequirementsModal = () => {
+    setReqName(visitorName);
+    setReqPhone(visitorPhone);
+    setReqEmail(visitorEmail);
+    setRequirementsModalOpen(true);
+  };
+
+  const handleRequirementsSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reqName.trim() || !reqPhone.trim()) return;
+
+    setReqSubmitting(true);
+    try {
+      const res = await fetch('/api/public/requirements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: reqName.trim(),
+          phone: reqPhone.trim(),
+          email: reqEmail.trim() || undefined,
+          categories: reqCategories,
+          locations: reqLocations,
+          minBudget: reqMinBudget ? Number(reqMinBudget) : null,
+          maxBudget: reqMaxBudget ? Number(reqMaxBudget) : null,
+          minRoi: reqMinRoi ? Number(reqMinRoi) : null,
+          notes: reqNotes.trim() || undefined,
+          accountId,
+          referrerContactId,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error('Requirements submission failed');
+      }
+
+      saveVisitorInfo(reqName.trim(), reqPhone.trim(), reqEmail.trim());
+      toast.success('Your requirements have been recorded. Our team will contact you shortly!');
+      setRequirementsModalOpen(false);
+      
+      setReqCategories([]);
+      setReqLocations([]);
+      setReqMinBudget('');
+      setReqMaxBudget('');
+      setReqMinRoi('');
+      setReqNotes('');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to submit requirements. Please try again.');
+    } finally {
+      setReqSubmitting(false);
+    }
+  };
+
   // Fallback defaults if settings don't exist yet
   const siteName = settings?.website_name || 'Aryavarta Ventures';
   const displayPhone = referrerPhone || settings?.contact_phone || '';
-  
-  // Format WhatsApp Link targeting the referrer agent phone or settings default
-  const targetPhone = displayPhone.replace(/\D/g, '') || '919876543210';
 
   const getWhatsAppLink = (property: Property) => {
     const defaultTemplate = settings?.whatsapp_message_template || 'Hi! I am interested in your property "{title}" in {location}. Please share details.';
@@ -83,7 +311,9 @@ export function ShowcaseView({
       message = message.replace('({property_code})', '').replace('{property_code}', '');
     }
 
-    return `https://wa.me/${targetPhone}?text=${encodeURIComponent(message)}`;
+    const phone = property.agent_details?.phone || displayPhone || '';
+    const cleanPhone = phone.replace(/\D/g, '') || '919876543210';
+    return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
   };
 
   // Check if selected property is land/plot type
@@ -203,7 +433,7 @@ export function ShowcaseView({
           propertyTitle: selectedProperty.title,
           propertyCode: selectedProperty.property_code,
           accountId,
-          referrerContactId,
+          referrerContactId: selectedProperty.agent_details?.id || referrerContactId,
         }),
       });
 
@@ -309,7 +539,6 @@ export function ShowcaseView({
       {/* Decorative Radial Background Lights */}
       <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute top-1/3 right-1/4 w-[400px] h-[400px] bg-indigo-500/5 rounded-full blur-[80px] pointer-events-none" />
-
       {/* Header */}
       <header className="sticky top-0 z-30 w-full border-b border-slate-900 bg-slate-950/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -332,6 +561,14 @@ export function ShowcaseView({
                 {displayPhone}
               </a>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={openRequirementsModal}
+              className="border-primary/30 bg-primary/10 hover:bg-primary/20 text-primary hover:text-primary-hover text-xs font-bold px-4 cursor-pointer"
+            >
+              Share Requirements
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -426,6 +663,30 @@ export function ShowcaseView({
           </div>
         </div>
 
+        {/* CTA Requirements Ingestion Banner */}
+        <div className="relative overflow-hidden bg-gradient-to-r from-slate-900/60 to-indigo-950/20 border border-slate-800 rounded-3xl p-6 sm:p-8 mb-12 shadow-2xl backdrop-blur-md">
+          {/* Decorative glows */}
+          <div className="absolute -top-20 -right-20 w-60 h-60 bg-primary/10 rounded-full blur-[60px]" />
+          <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-indigo-500/10 rounded-full blur-[50px]" />
+          
+          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="max-w-2xl text-left">
+              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                Can&apos;t find your ideal property?
+              </h2>
+              <p className="mt-2 text-slate-400 text-sm leading-relaxed">
+                Tell us your specific requirements, and our team will match you with exclusive, off-market listings. Get notified directly on WhatsApp!
+              </p>
+            </div>
+            <Button
+              onClick={openRequirementsModal}
+              className="bg-primary hover:bg-primary-hover text-white text-xs font-bold px-6 py-5 rounded-xl hover:scale-102 transition-all shadow-lg shadow-primary/25 cursor-pointer shrink-0"
+            >
+              Submit Requirements
+            </Button>
+          </div>
+        </div>
+
         {/* Listings Result Grid */}
         {filteredProperties.length === 0 ? (
           <div className="flex flex-col items-center justify-center text-center py-20 border border-dashed border-slate-900 rounded-3xl bg-slate-900/10">
@@ -448,10 +709,42 @@ export function ShowcaseView({
                 'Land'
               ].includes(property.type);
 
+              if (interestStatus[property.id] === 'not_interested') {
+                return (
+                  <div
+                    key={property.id}
+                    className="flex flex-col justify-center items-center p-6 h-52 rounded-2xl border border-slate-900 border-dashed bg-slate-900/10 text-center space-y-3 transition-all duration-300"
+                  >
+                    <Building className="size-8 text-slate-700 opacity-40" />
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-400 line-clamp-1">{property.title}</h4>
+                      <p className="text-[11px] text-slate-500">You marked this property as not interested.</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const updated = { ...interestStatus };
+                        delete updated[property.id];
+                        setInterestStatus(updated);
+                        localStorage.setItem('visitor_interests', JSON.stringify(updated));
+                      }}
+                      className="border-slate-850 hover:border-slate-700 bg-slate-950 hover:bg-slate-900 text-slate-300 text-xs font-semibold px-3 py-1 cursor-pointer"
+                    >
+                      Show property again
+                    </Button>
+                  </div>
+                );
+              }
+
               return (
                 <div
                   key={property.id}
-                  className="flex flex-col rounded-2xl border border-slate-900 bg-slate-900/30 overflow-hidden hover:border-slate-800 hover:shadow-2xl hover:shadow-primary/5 transition-all duration-500 group relative"
+                  className={`flex flex-col rounded-2xl border bg-slate-900/30 overflow-hidden hover:border-slate-800 hover:shadow-2xl hover:shadow-primary/5 transition-all duration-500 group relative ${
+                    interestStatus[property.id] === 'interested'
+                      ? 'border-emerald-500/30 ring-1 ring-emerald-500/20 shadow-lg shadow-emerald-950/10'
+                      : 'border-slate-900'
+                  }`}
                 >
                   {/* Image Container */}
                   <div 
@@ -476,6 +769,12 @@ export function ShowcaseView({
                     <div className="absolute top-3 left-3 bg-slate-950/80 backdrop-blur-md px-2.5 py-0.5 rounded-full border border-slate-800/80 text-[10px] font-extrabold tracking-wider uppercase text-primary">
                       {property.type}
                     </div>
+
+                    {interestStatus[property.id] === 'interested' && (
+                      <div className="absolute top-3 right-3 bg-emerald-500/90 text-white font-extrabold text-[9px] uppercase tracking-wider px-2.5 py-0.5 rounded-full shadow-md backdrop-blur-sm">
+                        Interested
+                      </div>
+                    )}
                   </div>
 
                   {/* Body Content */}
@@ -544,6 +843,40 @@ export function ShowcaseView({
                     </div>
 
                     <div>
+                      {/* Quick Feedback Bar */}
+                      <div className="flex items-center justify-between border-b border-slate-900/60 pb-3 mb-3 text-xs">
+                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Are you interested?</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleQuickInterestClick(property);
+                            }}
+                            className={`flex items-center gap-1 px-2 py-1 rounded-md transition-all font-bold text-[10px] cursor-pointer ${
+                              interestStatus[property.id] === 'interested'
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                : 'bg-slate-950 hover:bg-slate-900 border border-slate-850 text-slate-400 hover:text-slate-200'
+                            }`}
+                          >
+                            <ThumbsUp className="size-3" />
+                            <span>{interestStatus[property.id] === 'interested' ? 'Interested' : 'Yes'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateInterestStatus(property.id, 'not_interested');
+                              toast.info('Property hidden. You can undo this anytime.');
+                            }}
+                            className="flex items-center gap-1 px-2 py-1 rounded-md bg-slate-950 hover:bg-slate-900 border border-slate-850 text-slate-400 hover:text-red-400 hover:border-red-500/30 transition-all font-semibold text-[10px] cursor-pointer"
+                          >
+                            <ThumbsDown className="size-3" />
+                            <span>No</span>
+                          </button>
+                        </div>
+                      </div>
+
                       {/* Price & Primary CTA */}
                       <div className="flex items-center justify-between mt-2 pt-2 gap-2">
                         <div className="flex flex-col">
@@ -848,7 +1181,92 @@ export function ShowcaseView({
               </div>
 
               {/* Inquiry Form Block */}
-              <div className="mt-6 pt-6 border-t border-slate-850">
+              <div className="mt-6 pt-6 border-t border-slate-850 space-y-4">
+                {/* Agent Profile & Direct Message option */}
+                {selectedProperty.agent_details && (
+                  <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Managing Agent</h4>
+                      <span className="text-[9px] font-mono font-bold text-slate-400 bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded select-all">
+                        ID: {selectedProperty.agent_details.id.substring(0, 8)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        {selectedProperty.agent_details.avatar_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={selectedProperty.agent_details.avatar_url}
+                            alt={selectedProperty.agent_details.name}
+                            className="size-10 rounded-full border border-slate-800 object-cover"
+                          />
+                        ) : (
+                          <div className="size-10 rounded-full bg-primary/25 border border-primary/40 flex items-center justify-center font-black text-primary text-sm">
+                            {selectedProperty.agent_details.name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-white">{selectedProperty.agent_details.name}</span>
+                          <span className="text-[10px] text-slate-400">Listing Specialist</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={`tel:${selectedProperty.agent_details.phone.replace(/\D/g, '')}`}
+                          className="h-8 px-3 rounded-lg border border-slate-800 bg-slate-900 hover:bg-slate-850 text-slate-250 hover:text-white flex items-center justify-center gap-1.5 text-[11px] font-semibold cursor-pointer"
+                        >
+                          <Phone className="size-3 text-primary" />
+                          Call
+                        </a>
+                        <a
+                          href={getWhatsAppLink(selectedProperty)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="h-8 px-3 rounded-lg bg-green-600 hover:bg-green-500 text-white flex items-center justify-center gap-1.5 text-[11px] font-bold cursor-pointer shadow-md shadow-green-950/20"
+                        >
+                          <MessageCircle className="size-3.5 fill-white text-green-650" />
+                          Chat
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Quick Feedback Bar inside Modal */}
+                <div className="bg-slate-950/30 border border-slate-850 p-4 rounded-xl flex items-center justify-between gap-4">
+                  <div className="flex flex-col">
+                    <h5 className="text-[11px] font-bold text-slate-350 uppercase tracking-wider">Are you interested?</h5>
+                    <p className="text-[10px] text-slate-500">Expressing interest creates a priority follow-up.</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleQuickInterestClick(selectedProperty);
+                      }}
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-lg transition-all text-xs font-bold cursor-pointer ${
+                        interestStatus[selectedProperty.id] === 'interested'
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          : 'bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <ThumbsUp className="size-3.5" />
+                      <span>{interestStatus[selectedProperty.id] === 'interested' ? 'Interested' : 'Yes'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateInterestStatus(selectedProperty.id, 'not_interested');
+                        toast.info('Property marked as not interested.');
+                        closePropertyModal();
+                      }}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-400 hover:text-red-400 hover:border-red-550/20 transition-all text-xs font-semibold cursor-pointer"
+                    >
+                      <ThumbsDown className="size-3.5" />
+                      <span>No</span>
+                    </button>
+                  </div>
+                </div>
                 {submitSuccess ? (
                   <div className="bg-green-500/10 border border-green-500/30 p-4 rounded-xl text-center space-y-2 animate-zoom-in">
                     <CheckCircle className="size-10 text-green-400 mx-auto" />
@@ -935,6 +1353,289 @@ export function ShowcaseView({
               </div>
 
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Interest Modal */}
+      {interestModalOpen && interestProperty && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+          <div className="relative max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4 animate-zoom-in">
+            {/* Close Button */}
+            <button
+              onClick={() => {
+                setInterestModalOpen(false);
+                setInterestProperty(null);
+              }}
+              className="absolute top-3 right-3 p-1.5 rounded-full bg-slate-950/80 text-slate-400 hover:text-white border border-slate-800/80 cursor-pointer"
+            >
+              <X className="size-4" />
+            </button>
+
+            <div className="text-center space-y-1">
+              <h3 className="text-lg font-bold text-white">Express Interest</h3>
+              <p className="text-xs text-slate-400">
+                Share your details for &quot;{interestProperty.title}&quot; to receive priority updates.
+              </p>
+            </div>
+
+            <form onSubmit={handleInterestSubmit} className="space-y-3 pt-2">
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-550 font-bold uppercase tracking-wider">Your Name</label>
+                <Input
+                  required
+                  value={visitorName}
+                  onChange={(e) => setVisitorName(e.target.value)}
+                  placeholder="John Doe"
+                  className="bg-slate-950 border-slate-850 text-white placeholder:text-slate-700 focus:border-primary text-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-550 font-bold uppercase tracking-wider">Mobile Number</label>
+                <Input
+                  required
+                  type="tel"
+                  value={visitorPhone}
+                  onChange={(e) => setVisitorPhone(e.target.value)}
+                  placeholder="+91 98765 43210"
+                  className="bg-slate-950 border-slate-850 text-white placeholder:text-slate-700 focus:border-primary text-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-550 font-bold uppercase tracking-wider">Email (Optional)</label>
+                <Input
+                  type="email"
+                  value={visitorEmail}
+                  onChange={(e) => setVisitorEmail(e.target.value)}
+                  placeholder="john@example.com"
+                  className="bg-slate-950 border-slate-850 text-white placeholder:text-slate-700 focus:border-primary text-xs w-full"
+                />
+              </div>
+
+              <div className="pt-2">
+                <Button
+                  type="submit"
+                  disabled={interestSubmitting}
+                  className="w-full bg-primary hover:bg-primary-hover text-white text-xs font-bold py-2.5 rounded-lg flex items-center justify-center gap-1.5 shadow-lg shadow-primary/20 cursor-pointer"
+                >
+                  {interestSubmitting ? (
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                  ) : (
+                    <>
+                      <Send className="size-3.5" />
+                      Submit Interest
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Property Requirements Modal */}
+      {requirementsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+          <div className="relative max-w-lg w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 animate-zoom-in my-8 max-h-[90vh] overflow-y-auto">
+            {/* Close Button */}
+            <button
+              onClick={() => setRequirementsModalOpen(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-full bg-slate-950/80 text-slate-400 hover:text-white border border-slate-800/80 cursor-pointer"
+            >
+              <X className="size-4" />
+            </button>
+
+            <div className="space-y-1">
+              <h3 className="text-xl font-black text-white tracking-tight">Submit Your Requirements</h3>
+              <p className="text-xs text-slate-400">
+                Share what you are looking for, and our engine will notify you when matching properties are listed.
+              </p>
+            </div>
+
+            <form onSubmit={handleRequirementsSubmit} className="space-y-4 pt-2">
+              
+              {/* Basic Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Your Name *</label>
+                  <Input
+                    required
+                    value={reqName}
+                    onChange={(e) => setReqName(e.target.value)}
+                    placeholder="Enter name"
+                    className="bg-slate-950 border-slate-850 text-white placeholder:text-slate-755 focus:border-primary text-xs"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Mobile Number *</label>
+                  <Input
+                    required
+                    type="tel"
+                    value={reqPhone}
+                    onChange={(e) => setReqPhone(e.target.value)}
+                    placeholder="e.g. +91 98765 43210"
+                    className="bg-slate-950 border-slate-850 text-white placeholder:text-slate-755 focus:border-primary text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Email Address (Optional)</label>
+                <Input
+                  type="email"
+                  value={reqEmail}
+                  onChange={(e) => setReqEmail(e.target.value)}
+                  placeholder="e.g. buyer@example.com"
+                  className="bg-slate-950 border-slate-850 text-white placeholder:text-slate-755 focus:border-primary text-xs w-full"
+                />
+              </div>
+
+              {/* Category Pills Choice */}
+              <div className="space-y-2">
+                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Property Categories</label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    'Flat/ Apartment',
+                    'Villa',
+                    'Residential Land/ Plot',
+                    'Commercial Building',
+                    'Office Space',
+                    'Shop/ Showroom',
+                    'Warehouse',
+                    'Commercial Land'
+                  ].map((cat) => {
+                    const selected = reqCategories.includes(cat);
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => toggleCategory(cat)}
+                        className={`text-[10px] font-bold px-3 py-1.5 rounded-full border transition-all cursor-pointer ${
+                          selected
+                            ? 'bg-primary border-primary text-white shadow-md shadow-primary/20'
+                            : 'bg-slate-950 border-slate-850 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Locations Input & List */}
+              <div className="space-y-2">
+                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Areas of Interest</label>
+                <div className="flex gap-2">
+                  <Input
+                    value={newLocationTag}
+                    onChange={(e) => setNewLocationTag(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addLocationTag();
+                      }
+                    }}
+                    placeholder="Type area (e.g. Indiranagar) and press enter or click +"
+                    className="bg-slate-950 border-slate-850 text-white placeholder:text-slate-755 focus:border-primary text-xs flex-1"
+                  />
+                  <Button
+                    type="button"
+                    onClick={addLocationTag}
+                    className="bg-slate-950 border border-slate-850 hover:bg-slate-900 text-slate-350 text-xs font-bold px-3 cursor-pointer shrink-0"
+                  >
+                    +
+                  </Button>
+                </div>
+                {reqLocations.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1.5">
+                    {reqLocations.map((loc) => (
+                      <span
+                        key={loc}
+                        onClick={() => removeLocationTag(loc)}
+                        className="bg-slate-950 border border-slate-850 hover:border-red-500/20 text-slate-300 hover:text-red-400 text-[10px] font-bold px-2.5 py-1 rounded-full cursor-pointer transition-all flex items-center gap-1"
+                        title="Click to remove"
+                      >
+                        📍 {loc}
+                        <span className="text-[8px] text-slate-500 font-bold">×</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Budget Range Input */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Min Budget (₹ / Rupees)</label>
+                  <Input
+                    type="number"
+                    value={reqMinBudget}
+                    onChange={(e) => setReqMinBudget(e.target.value)}
+                    placeholder="e.g. 5000000 (50 Lakhs)"
+                    className="bg-slate-950 border-slate-850 text-white placeholder:text-slate-755 focus:border-primary text-xs"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Max Budget (₹ / Rupees)</label>
+                  <Input
+                    type="number"
+                    value={reqMaxBudget}
+                    onChange={(e) => setReqMaxBudget(e.target.value)}
+                    placeholder="e.g. 20000000 (2 Crores)"
+                    className="bg-slate-950 border-slate-850 text-white placeholder:text-slate-755 focus:border-primary text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Expected ROI Yield - Conditional */}
+              {isCommercialSelected && (
+                <div className="space-y-1.5 animate-zoom-in">
+                  <label className="text-[10px] text-amber-500 font-bold uppercase tracking-wider">
+                    Expected Min ROI / Yield (% per annum)
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={reqMinRoi}
+                    onChange={(e) => setReqMinRoi(e.target.value)}
+                    placeholder="e.g. 4.5 (for 4.5% rent yield)"
+                    className="bg-slate-950 border-slate-850 text-white placeholder:text-slate-755 focus:border-primary text-xs w-full"
+                  />
+                </div>
+              )}
+
+              {/* Notes */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Additional Requirements / Notes</label>
+                <Textarea
+                  value={reqNotes}
+                  onChange={(e) => setReqNotes(e.target.value)}
+                  placeholder="Tell us about specific needs (e.g. corner plot, road width, hospital proximity, not near Jayanagar, etc.)"
+                  rows={3}
+                  className="bg-slate-950 border-slate-850 text-white placeholder:text-slate-650 focus:border-primary text-xs w-full min-h-[70px]"
+                />
+              </div>
+
+              <div className="pt-2">
+                <Button
+                  type="submit"
+                  disabled={reqSubmitting}
+                  className="w-full bg-primary hover:bg-primary-hover text-white text-xs font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-primary/20 cursor-pointer"
+                >
+                  {reqSubmitting ? (
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                  ) : (
+                    <>
+                      <Send className="size-4" />
+                      Submit Profile Requirements
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}

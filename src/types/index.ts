@@ -594,6 +594,13 @@ export interface Property {
   rental_income?: number | null;
   roi?: number | null;
   listing_source?: 'owner' | 'agent';
+  agent_details?: {
+    id: string;
+    name: string;
+    phone: string;
+    email?: string | null;
+    avatar_url?: string | null;
+  } | null;
   created_at: string;
   updated_at: string;
 }
