@@ -575,7 +575,8 @@ export async function processOwnerChatbotMessage(
             company: draft.company || '',
             classification: normalizeClassification(draft.classification),
             status: 'pending_review',
-            source: 'WhatsApp'
+            source: 'WhatsApp',
+            _notes: draft.notes || null, // temporary field, stripped before DB insert
           });
         }
       }
@@ -593,10 +594,18 @@ export async function processOwnerChatbotMessage(
         return true;
       }
 
+      // Strip the temporary _notes field before DB insert
+      const notesMap: Record<string, string | null> = {};
+      const contactsToInsert = toInsert.map((c: Record<string, unknown>) => {
+        const { _notes, ...rest } = c;
+        notesMap[rest.phone as string] = _notes as string | null;
+        return rest;
+      });
+
       // Create new contacts in CRM
       const { data: inserted, error: contactErr } = await supabaseAdmin()
         .from('contacts')
-        .insert(toInsert)
+        .insert(contactsToInsert)
         .select();
 
       if (contactErr) {
@@ -605,6 +614,25 @@ export async function processOwnerChatbotMessage(
         const sendRes = await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
         await saveBotMessage(conversation.id, reply, sendRes.messageId);
         return true;
+      }
+
+      // Save notes as contact_notes rows for contacts that have notes
+      const noteRows = inserted
+        .filter((c: Contact) => notesMap[c.phone])
+        .map((c: Contact) => ({
+          contact_id: c.id,
+          user_id: userId,
+          account_id: accountId,
+          note_text: notesMap[c.phone]!.trim(),
+        }));
+
+      if (noteRows.length > 0) {
+        const { error: noteErr } = await supabaseAdmin()
+          .from('contact_notes')
+          .insert(noteRows);
+        if (noteErr) {
+          console.error('[chatbot-engine] Failed to save contact notes:', noteErr);
+        }
       }
 
       // Delete contact draft session
@@ -630,6 +658,7 @@ export async function processOwnerChatbotMessage(
       await saveBotMessage(conversation.id, reply, sendRes.messageId);
       return true;
     }
+
 
     // Handle conversational updates to contact drafts
     if (cleanedText) {

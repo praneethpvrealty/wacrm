@@ -932,7 +932,7 @@ export function ContactDetailView({
             )}
 
             <Tabs defaultValue="details" className="flex-1 flex flex-col min-h-0">
-              <TabsList className="bg-slate-800/50 border-b border-slate-700 mx-4 mt-3 overflow-x-auto flex-nowrap scrollbar-none justify-start">
+              <TabsList className="bg-slate-800/50 border-b border-slate-700 mx-0 px-4 mt-3 overflow-x-auto flex-nowrap scrollbar-none justify-start w-full rounded-none">
                 <TabsTrigger
                   value="details"
                   className="data-active:bg-slate-800 data-active:text-primary text-slate-400 shrink-0"

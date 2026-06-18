@@ -76,8 +76,16 @@ const BUDGET_OPTIONS = [
   { label: '2 Crores', value: '20000000' },
   { label: '3 Crores', value: '30000000' },
   { label: '5 Crores', value: '50000000' },
+  { label: '7 Crores', value: '70000000' },
   { label: '10 Crores', value: '100000000' },
+  { label: '15 Crores', value: '150000000' },
   { label: '20 Crores', value: '200000000' },
+  { label: '30 Crores', value: '300000000' },
+  { label: '50 Crores', value: '500000000' },
+  { label: '75 Crores', value: '750000000' },
+  { label: '100 Crores', value: '1000000000' },
+  { label: '150 Crores', value: '1500000000' },
+  { label: '200 Crores', value: '2000000000' },
 ];
 
 interface ContactWithTags extends Contact {
@@ -248,6 +256,9 @@ export default function ContactsPage() {
   const [filterTag, setFilterTag] = useState<string>('All');
   const [filterMinBudget, setFilterMinBudget] = useState<string>('All');
   const [filterMaxBudget, setFilterMaxBudget] = useState<string>('All');
+  const [filterArea, setFilterArea] = useState<string>('All');
+  // All unique areas across all contacts for the area filter dropdown
+  const [allAreas, setAllAreas] = useState<string[]>([]);
 
   // Modals
   const [formOpen, setFormOpen] = useState(false);
@@ -277,6 +288,26 @@ export default function ContactsPage() {
       setTagsMap(map);
     }
   }, []);
+
+  const fetchAreas = useCallback(async () => {
+    if (!accountId) return;
+    const supabaseClient = createClient();
+    const { data } = await supabaseClient
+      .from('contacts')
+      .select('areas_of_interest')
+      .eq('account_id', accountId)
+      .not('areas_of_interest', 'is', null);
+    if (data) {
+      const unique = Array.from(
+        new Set(
+          data.flatMap((c) => (c.areas_of_interest as string[] | null) ?? [])
+            .filter(Boolean)
+            .map((a: string) => a.trim())
+        )
+      ).sort();
+      setAllAreas(unique);
+    }
+  }, [accountId]);
 
   const fetchContacts = useCallback(async () => {
     if (!accountId) return;
@@ -322,6 +353,11 @@ export default function ContactsPage() {
     if (filterMaxBudget !== 'All') {
       const maxVal = Number(filterMaxBudget);
       query = query.lte('max_budget', maxVal);
+    }
+
+    if (filterArea !== 'All') {
+      // areas_of_interest is a text[] column — filter contacts whose array contains the selected area
+      query = query.contains('areas_of_interest', [filterArea]);
     }
 
     if (search.trim()) {
@@ -410,6 +446,7 @@ export default function ContactsPage() {
     filterTag,
     filterMinBudget,
     filterMaxBudget,
+    filterArea,
   ]);
 
   // Load-once-on-mount-ish data fetches. Each setter inside runs
@@ -418,7 +455,9 @@ export default function ContactsPage() {
   // warns about doesn't apply here.
   useEffect(() => {
     fetchTags();
-  }, [fetchTags]);
+    fetchAreas();
+  }, [fetchTags, fetchAreas]);
+
 
   useEffect(() => {
     fetchContacts();
@@ -735,8 +774,31 @@ export default function ContactsPage() {
             </SelectContent>
           </Select>
 
+          {/* Areas of Preference Filter */}
+          {allAreas.length > 0 && (
+            <Select
+              value={filterArea}
+              onValueChange={(val) => {
+                setFilterArea(val ?? 'All');
+                setPage(0);
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-[170px] bg-slate-900 border-slate-700 text-white">
+                <SelectValue placeholder="Area" />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-900 border-slate-700 text-slate-200">
+                <SelectItem value="All">All Areas</SelectItem>
+                {allAreas.map((area) => (
+                  <SelectItem key={area} value={area}>
+                    {area}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
           {/* Clear Filters Button */}
-          {(filterClassification !== 'All' || filterTag !== 'All' || filterMinBudget !== 'All' || filterMaxBudget !== 'All' || search.trim() !== '') && (
+          {(filterClassification !== 'All' || filterTag !== 'All' || filterMinBudget !== 'All' || filterMaxBudget !== 'All' || filterArea !== 'All' || search.trim() !== '') && (
             <Button
               variant="ghost"
               size="sm"
@@ -745,6 +807,7 @@ export default function ContactsPage() {
                 setFilterTag('All');
                 setFilterMinBudget('All');
                 setFilterMaxBudget('All');
+                setFilterArea('All');
                 setSearch('');
                 setPage(0);
               }}
@@ -754,6 +817,7 @@ export default function ContactsPage() {
             </Button>
           )}
         </div>
+
 
         {/* Tab Switcher */}
         <div className="flex bg-slate-900/60 p-1 border border-slate-800 rounded-lg self-start">
