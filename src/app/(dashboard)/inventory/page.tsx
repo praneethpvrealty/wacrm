@@ -135,13 +135,30 @@ export default function InventoryPage() {
   // Automatically open property form modal if propertyId is specified in query parameters
   useEffect(() => {
     const pid = searchParams?.get('propertyId');
-    if (pid && properties.length > 0 && !hasAutoOpened) {
-      const prop = properties.find((p) => p.id === pid || p.property_code === pid);
-      if (prop) {
-        setSelectedProperty(prop);
-        setFormOpen(true);
-        setHasAutoOpened(true);
-      }
+    if (pid && !hasAutoOpened) {
+      // Try finding in current list first
+      let prop = properties.find((p) => p.id === pid || p.property_code === pid);
+      
+      const loadAndOpen = async () => {
+        if (!prop) {
+          // Not in current page, fetch from API
+          try {
+            const response = await fetch(`/api/properties/${pid}`, { cache: 'no-store' });
+            if (response.ok) {
+              prop = await response.json();
+            }
+          } catch {
+            // ignore
+          }
+        }
+        if (prop) {
+          setSelectedProperty(prop);
+          setFormOpen(true);
+          setHasAutoOpened(true);
+        }
+      };
+      
+      loadAndOpen();
     }
   }, [searchParams, properties, hasAutoOpened]);
 
@@ -167,10 +184,24 @@ export default function InventoryPage() {
     }
   }, [properties, selectedProperty, flyerProperty, shareProperty]);
 
-  // Handle edit click
-  function handleEditClick(property: Property) {
-    setSelectedProperty(property);
-    setFormOpen(true);
+  // Handle edit click - fetch full property with interested_contacts
+  async function handleEditClick(property: Property) {
+    try {
+      const response = await fetch(`/api/properties/${property.id}`, {
+        cache: 'no-store',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch property details');
+      }
+      const fullProperty = await response.json();
+      setSelectedProperty(fullProperty);
+      setFormOpen(true);
+    } catch (err) {
+      console.error('Failed to load property details:', err);
+      // Fallback to list property if detail fetch fails
+      setSelectedProperty(property);
+      setFormOpen(true);
+    }
   }
 
   // Handle add click

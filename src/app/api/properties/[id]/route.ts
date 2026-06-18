@@ -2,6 +2,51 @@ import { NextResponse } from "next/server";
 import { requireRole, toErrorResponse } from "@/lib/auth/account";
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from "@/lib/rate-limit";
 
+// GET /api/properties/[id]
+// Returns a single property with full relations (owner + interested_contacts)
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const ctx = await requireRole("viewer");
+    const { id } = await params;
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "Property ID is required" },
+        { status: 400 }
+      );
+    }
+
+    const { data, error } = await ctx.supabase
+      .from("properties")
+      .select("*, owner:contacts!properties_owner_contact_id_fkey(*), interested_contacts:contacts!contacts_last_inquired_property_id_fkey(*)")
+      .eq("id", id)
+      .eq("account_id", ctx.accountId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[GET /api/properties/[id]] Select error:", error);
+      return NextResponse.json(
+        { error: "Failed to fetch property" },
+        { status: 500 }
+      );
+    }
+
+    if (!data) {
+      return NextResponse.json(
+        { error: "Property not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(data);
+  } catch (err) {
+    return toErrorResponse(err);
+  }
+}
+
 // PUT /api/properties/[id]
 // Updates an existing property listing
 export async function PUT(
