@@ -386,13 +386,13 @@ export async function processOwnerChatbotMessage(
   phoneNumberId: string
 ): Promise<boolean> {
   // 1. Fetch active sessions for this contact
-  const { data: propSession, error: propSessionErr } = await supabaseAdmin()
+  const { data: propSessionData, error: propSessionErr } = await supabaseAdmin()
     .from('property_draft_sessions')
     .select('*')
     .eq('contact_id', contactRecord.id)
     .maybeSingle();
 
-  const { data: contactSession, error: contactSessionErr } = await supabaseAdmin()
+  const { data: contactSessionData, error: contactSessionErr } = await supabaseAdmin()
     .from('contact_draft_sessions')
     .select('*')
     .eq('contact_id', contactRecord.id)
@@ -405,8 +405,71 @@ export async function processOwnerChatbotMessage(
     console.error('[chatbot-engine] Error fetching contact draft session:', contactSessionErr);
   }
 
+  let propSession = propSessionData;
+  let contactSession = contactSessionData;
+
   const cleanedText = contentText?.trim() || '';
   const lowerText = cleanedText.toLowerCase();
+
+  // 1.5. Session Expiry Timeout (15 minutes of inactivity)
+  const SESSION_TIMEOUT_MS = 15 * 60 * 1000;
+  const now = Date.now();
+
+  if (propSession) {
+    const updatedAt = new Date(propSession.updated_at).getTime();
+    if (now - updatedAt > SESSION_TIMEOUT_MS) {
+      console.log(`[chatbot-engine] Expiring inactive property draft session ${propSession.id}`);
+      await supabaseAdmin().from('property_draft_sessions').delete().eq('id', propSession.id);
+      propSession = null;
+    }
+  }
+
+  if (contactSession) {
+    const updatedAt = new Date(contactSession.updated_at).getTime();
+    if (now - updatedAt > SESSION_TIMEOUT_MS) {
+      console.log(`[chatbot-engine] Expiring inactive contact draft session ${contactSession.id}`);
+      await supabaseAdmin().from('contact_draft_sessions').delete().eq('id', contactSession.id);
+      contactSession = null;
+    }
+  }
+
+  // 1.8. Quick Task Switch / Fresh Ingestion Intercept
+  const isImageMsg = message.type === 'image' && message.image?.id;
+  const hasContactKeywords = cleanedText && (
+    /is interested in|referred by|magicbricks|99acres|housing\.com/i.test(cleanedText) ||
+    (cleanedText.split('\n').length >= 2 && /\b\d{10,15}\b/.test(cleanedText))
+  );
+
+  if (propSession && (isImageMsg || hasContactKeywords)) {
+    const classification = await classifyImageOrText(cleanedText, undefined, undefined);
+    if (classification === 'contact') {
+      console.log(`[chatbot-engine] Discarding active property session ${propSession.id} to start contact flow`);
+      await supabaseAdmin().from('property_draft_sessions').delete().eq('id', propSession.id);
+      propSession = null;
+    }
+  }
+
+  if (contactSession && isImageMsg) {
+    console.log(`[chatbot-engine] Discarding active contact session ${contactSession.id} to start property flow`);
+    await supabaseAdmin().from('contact_draft_sessions').delete().eq('id', contactSession.id);
+    contactSession = null;
+  } else if (contactSession && cleanedText) {
+    const isNewContactForward = /is interested in|referred by|magicbricks|99acres|housing\.com/i.test(cleanedText);
+    const isPropertyListing = /\b(bhk|sqft|flat|plot|villa|crore|lakh|price)\b/i.test(cleanedText) && cleanedText.length > 50;
+    
+    if (isNewContactForward || isPropertyListing) {
+      const classification = await classifyImageOrText(cleanedText, undefined, undefined);
+      if (classification === 'property') {
+        console.log(`[chatbot-engine] Discarding active contact session ${contactSession.id} to start property flow`);
+        await supabaseAdmin().from('contact_draft_sessions').delete().eq('id', contactSession.id);
+        contactSession = null;
+      } else if (classification === 'contact' && isNewContactForward) {
+        console.log(`[chatbot-engine] Discarding old contact session ${contactSession.id} to start fresh contact flow`);
+        await supabaseAdmin().from('contact_draft_sessions').delete().eq('id', contactSession.id);
+        contactSession = null;
+      }
+    }
+  }
 
   const buttonId = message.type === 'interactive'
     ? message.interactive?.button_reply?.id ?? message.interactive?.list_reply?.id
