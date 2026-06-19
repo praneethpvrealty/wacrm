@@ -788,6 +788,13 @@ export async function processOwnerChatbotMessage(
         return true;
       }
 
+      // Fetch all published properties to do auto-matching
+      const { data: properties } = await supabaseAdmin()
+        .from('properties')
+        .select('id, title, property_code')
+        .eq('account_id', accountId)
+        .eq('is_published', true);
+
       // Check duplicates and save new contacts in bulk
       const toInsert = [];
       const duplicates = [];
@@ -829,6 +836,29 @@ export async function processOwnerChatbotMessage(
             }
           }
 
+          let lastInquiredPropertyId = null;
+          if (properties && draft.notes) {
+            const notesLower = draft.notes.toLowerCase();
+            const matchedProp = properties.find(p => {
+              const codeMatches = p.property_code ? notesLower.includes(p.property_code.toLowerCase()) : false;
+              const titleMatches = notesLower.includes(p.title.toLowerCase());
+              
+              // Project name match fallback (minimum 5 chars)
+              let projectMatches = false;
+              if (!codeMatches && !titleMatches) {
+                const projectKeywords = p.title.replace(/(?:\d+\s*(?:BHK|bhk)|apartment|villa|plot|house|for\s+sale|for\s+rent)/gi, '').trim();
+                if (projectKeywords.length > 5) {
+                  projectMatches = notesLower.includes(projectKeywords.toLowerCase());
+                }
+              }
+
+              return codeMatches || titleMatches || projectMatches;
+            });
+            if (matchedProp) {
+              lastInquiredPropertyId = matchedProp.id;
+            }
+          }
+
           toInsert.push({
             account_id: accountId,
             user_id: userId,
@@ -841,7 +871,8 @@ export async function processOwnerChatbotMessage(
             source: 'WhatsApp',
             _notes: draft.notes || null, // temporary field, stripped before DB insert
             referrer: referrerNameText,
-            referrer_contact_id: referrerContactId
+            referrer_contact_id: referrerContactId,
+            last_inquired_property_id: lastInquiredPropertyId
           });
         }
       }
