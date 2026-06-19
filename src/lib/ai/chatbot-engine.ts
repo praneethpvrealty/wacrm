@@ -958,8 +958,6 @@ export async function processOwnerChatbotMessage(
   }
 
   // 4. Start New Session Flow (No Session Exists)
-  const isImageMsg = message.type === 'image' && message.image?.id;
-  
   if (isImageMsg || cleanedText) {
     let mediaBuffer: Buffer | undefined = undefined;
     let mediaMimeType: string | undefined = undefined;
