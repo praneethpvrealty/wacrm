@@ -155,6 +155,9 @@ function formatDraftPreviewMessage(
   if (draft.roi) {
     reply += `*ROI (Yield):* ${draft.roi}%\n`;
   }
+  if (draft.google_map_link) {
+    reply += `*Google Map Link:* ${draft.google_map_link}\n`;
+  }
 
   reply += `*Images:* ${draft.images.length} attached\n\n` +
     (nextStatus === 'awaiting_confirmation'
@@ -449,7 +452,8 @@ export async function processOwnerChatbotMessage(
           features: draft.features || [],
           images: draft.images || [],
           rental_income: draft.rental_income,
-          roi: draft.roi
+          roi: draft.roi,
+          google_map_link: draft.google_map_link
         })
         .select()
         .single();

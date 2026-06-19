@@ -215,6 +215,7 @@ export interface ParsedPropertyDraft {
   facing_direction: string | null;
   rental_income: number | null;
   roi: number | null;
+  google_map_link: string | null;
   images: string[];
 }
 
@@ -244,7 +245,8 @@ export async function parseListingFromImageOrText(
     "  \"features\": Array of string features/amenities (e.g., ['Fenced Boundary', 'Access Road']) or empty array,\n" +
     "  \"dimensions\": \"Dimensions if land/plot (e.g., '30x40') or null\",\n" +
     "  \"facing_direction\": \"E.g. 'North', 'East', 'West', 'South' or null\",\n" +
-    "  \"rental_income\": \"Numeric monthly rental income in INR if specified (e.g., if text says 'rent 2.5 Lakhs/month' or '2.5 L rent', rental_income is 250000) or null\"\n" +
+    "  \"rental_income\": \"Numeric monthly rental income in INR if specified (e.g., if text says 'rent 2.5 Lakhs/month' or '2.5 L rent', rental_income is 250000) or null\",\n" +
+    "  \"google_map_link\": \"Google Map link URL if present in text/image (e.g., 'https://maps.app.goo.gl/...' or 'https://google.com/maps/...') or null\"\n" +
     "}\n\n" +
     "Important parsing rules:\n" +
     "1. For Price and Rental Income: Convert terms like 'Crore', 'Cr', 'Lakhs', 'L' to standard numeric integer values (e.g., '80 Lakhs' -> 8000000, '1.5 Cr' -> 15000000, '2.5 L' -> 250000).\n" +
@@ -298,6 +300,7 @@ export async function parseListingFromImageOrText(
       facing_direction: parsed.facing_direction || null,
       rental_income,
       roi,
+      google_map_link: parsed.google_map_link || null,
       images: []
     };
   } catch (err) {
@@ -317,7 +320,7 @@ export async function updateListingDraft(
     "You are an expert real estate data updater. You are given a current property draft JSON object and a natural language instruction from the user.\n" +
     "Your job is to apply the updates requested by the user and return the complete updated JSON object matching the exact structure.\n" +
     "Do not change any other fields unless requested by the user.\n" +
-    "Convert terms like 'Crore', 'Cr', 'Lakhs', 'L' to standard numeric integer values for the price and rental_income fields.\n" +
+    "Convert terms like 'Crore', 'Cr', 'Lakhs', 'L' to standard numeric integer values for the price and rental_income fields. Extracted Google Map links should be placed in 'google_map_link' field.\n" +
     "Output MUST be valid JSON.";
 
   const prompt = `Current Draft:\n${JSON.stringify(currentDraft, null, 2)}\n\nUser Update Request:\n"${updateRequest}"\n\nApply these updates and return the updated JSON.`;
