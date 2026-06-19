@@ -979,6 +979,16 @@ export default function CalendarPage() {
                     >
                       {renderTodoTitle(todo)}
                     </p>
+                    {todo.description && (
+                      <p
+                        className={cn(
+                          "text-[10px] text-slate-400 mt-1 break-words line-clamp-2 leading-relaxed group-hover:line-clamp-none transition-all duration-300",
+                          todo.completed && "line-through text-slate-650"
+                        )}
+                      >
+                        {todo.description}
+                      </p>
+                    )}
                     {todo.priority && !todo.completed && (
                       <span
                         className={cn(
