@@ -468,6 +468,53 @@ export function ContactDetailView({
     }
   }, [open, contactId, allProperties, fetchSharedProperties]);
 
+  // Auto-map inquired property from contact notes if none is assigned
+  useEffect(() => {
+    if (
+      open &&
+      contactId &&
+      !editLastInquiredPropertyId &&
+      notes.length > 0 &&
+      allProperties.length > 0
+    ) {
+      // Find matching property in notes
+      let matchedProperty: Property | null = null;
+      
+      for (const note of notes) {
+        const text = note.note_text || '';
+        if (!text) continue;
+
+        // Try to match one of the properties
+        const match = allProperties.find((prop) => {
+          // 1. Match by Property Code (e.g. PROP-1002) - strongest match
+          const hasCode = prop.property_code && text.includes(prop.property_code);
+          if (hasCode) return true;
+
+          // 2. Match by Project Name - check if it is explicitly mentioned
+          const hasProject = prop.project && prop.project.trim().length > 4 && text.toLowerCase().includes(prop.project.trim().toLowerCase());
+          if (hasProject) return true;
+
+          // 3. Match by Property Title (minimum length to avoid common short word matches)
+          const cleanTitle = prop.title.trim();
+          const hasTitle = cleanTitle.length > 10 && text.toLowerCase().includes(cleanTitle.toLowerCase());
+          if (hasTitle) return true;
+
+          return false;
+        });
+
+        if (match) {
+          matchedProperty = match;
+          break;
+        }
+      }
+
+      if (matchedProperty) {
+        toast.info(`Auto-mapping "${matchedProperty.title}" as inquired property from notes...`);
+        handleLinkInterestProperty(matchedProperty.id);
+      }
+    }
+  }, [open, contactId, editLastInquiredPropertyId, notes, allProperties]);
+
   async function copyPhone() {
     if (!contact) return;
     await navigator.clipboard.writeText(contact.phone);

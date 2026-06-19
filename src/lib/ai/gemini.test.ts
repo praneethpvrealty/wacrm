@@ -140,5 +140,21 @@ Referred by Suresh Babu.`;
       expect(updated.contacts[0].referrer_name).toBe('Suresh Babu');
       expect(updated.contacts[0].referrer_phone).toContain('918888888888');
     });
+
+    it('parses multi-line lead forwarding messages from user screenshot', async () => {
+      const message = `Hi User, Shreenath, 91789344713 is interested in SJR Blue Waters, Sarjapur Road Magicbricks
+Hi User, LAKSHMAN, 917502598759 is interested in SJR Blue Waters, Sarjapur Road Magicbricks
+Hi User, Praveen, 919686194933 is interested in SJR Blue Waters, Sarjapur Road Magicbricks
+Hi User, Omi NA, 919986033197 is interested in SJR Blue Waters, Sarjapur Road Magicbricks`;
+
+      try {
+        const container = await parseContactFromImageOrText(message);
+        console.log("SUCCESSFUL PARSE CONTAINER:", JSON.stringify(container, null, 2));
+        expect(container.contacts.length).toBe(4);
+      } catch (err) {
+        console.error("PARSING FAILED WITH ERROR:", err);
+        throw err;
+      }
+    });
   });
 });

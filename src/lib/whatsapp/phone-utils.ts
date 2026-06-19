@@ -3,18 +3,20 @@
  * Meta requires digits only — no + prefix, no spaces, no dashes.
  * e.g. "+370 63949836" → "37063949836"
  */
-export function sanitizePhoneForMeta(phone: string): string {
-  if (!phone) return ''
-  return phone.replace(/\D/g, '')
+export function sanitizePhoneForMeta(phone: any): string {
+  if (phone === null || phone === undefined) return ''
+  const phoneStr = String(phone)
+  return phoneStr.replace(/\D/g, '')
 }
 
 /**
  * Normalize phone number by removing all non-digit characters.
  * Used for comparing phone numbers in different formats.
  */
-export function normalizePhone(phone: string): string {
-  if (!phone) return ''
-  return phone.replace(/\D/g, '')
+export function normalizePhone(phone: any): string {
+  if (phone === null || phone === undefined) return ''
+  const phoneStr = String(phone)
+  return phoneStr.replace(/\D/g, '')
 }
 
 /**
@@ -22,11 +24,12 @@ export function normalizePhone(phone: string): string {
  * If the number is a local number (e.g. 10 digits in India), it prefixes it with the default country code.
  * Strips leading zeros (e.g. domestic trunk prefixes like '0') before prefixing.
  */
-export function normalizePhoneWithCountryCode(phone: string, defaultCountryCode: string = '91'): string {
-  if (!phone) return ''
+export function normalizePhoneWithCountryCode(phone: any, defaultCountryCode: string = '91'): string {
+  if (phone === null || phone === undefined) return ''
+  const phoneStr = String(phone)
   
   // 1. Remove all non-digits
-  let digits = phone.replace(/\D/g, '')
+  let digits = phoneStr.replace(/\D/g, '')
   
   // 2. Strip leading international double zero prefix (e.g. 0091... -> 91...)
   if (digits.startsWith('00')) {
