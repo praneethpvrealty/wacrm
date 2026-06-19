@@ -519,11 +519,25 @@ export function PropertyShareDialog({
 
         const messageParams: {
           headerMediaUrl?: string;
+          headerText?: string;
           buttonParams?: Record<number, string>;
         } = {};
         if (hasImageHeader && propertyImage) {
           messageParams.headerMediaUrl = propertyImage;
         }
+
+        const hasTextHeaderVar = selectedTemplate.header_type === 'text' && 
+          selectedTemplate.header_content && 
+          /\{\{\d+\}\}/.test(selectedTemplate.header_content);
+
+        if (hasTextHeaderVar) {
+          let headerTextVal = property.project?.trim() || property.title.trim();
+          if (headerTextVal.length > 60) {
+            headerTextVal = headerTextVal.substring(0, 57) + '...';
+          }
+          messageParams.headerText = headerTextVal;
+        }
+
         if (Object.keys(buttonParams).length > 0) {
           messageParams.buttonParams = buttonParams;
         }
