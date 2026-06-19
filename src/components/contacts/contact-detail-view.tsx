@@ -334,7 +334,7 @@ export function ContactDetailView({
     }
   }
 
-  async function handleLinkInterestProperty(propertyId: string | null) {
+  const handleLinkInterestProperty = useCallback(async (propertyId: string | null) => {
     try {
       const { error } = await supabase
         .from('contacts')
@@ -360,7 +360,7 @@ export function ContactDetailView({
       console.error('Failed to update interest property:', err);
       toast.error('Failed to update interest property');
     }
-  }
+  }, [supabase, contactId, onUpdated]);
 
 
   useEffect(() => {

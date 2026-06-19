@@ -841,7 +841,7 @@ export async function processOwnerChatbotMessage(
           let lastInquiredPropertyId = null;
           if (properties && draft.notes) {
             const notesLower = draft.notes.toLowerCase();
-            const matchedProp = properties.find(p => {
+            const matchedProp = properties.find((p: any) => {
               // 1. Code match (e.g. PROP-1002)
               if (p.property_code && notesLower.includes(p.property_code.toLowerCase())) {
                 return true;
@@ -877,7 +877,7 @@ export async function processOwnerChatbotMessage(
                 .replace(/[^\w\s]/g, ' ')
                 .trim();
               
-              const cleanWords = cleanTitle.split(/\s+/).filter(w => w.length > 1 && !stopWords.has(w));
+              const cleanWords = cleanTitle.split(/\s+/).filter((w: string) => w.length > 1 && !stopWords.has(w));
               if (cleanWords.length >= 2) {
                 const phrase2 = cleanWords.slice(0, 2).join(' ');
                 if (phrase2.length >= 6 && notesLower.includes(phrase2)) {
@@ -968,7 +968,7 @@ export async function processOwnerChatbotMessage(
 
           const tagsCache = new Map<string, string>();
           if (existingTags) {
-            existingTags.forEach(t => tagsCache.set(t.name.toLowerCase(), t.id));
+            existingTags.forEach((t: any) => tagsCache.set(t.name.toLowerCase(), t.id));
           }
 
           const tagColors = ['#0EA5E9', '#10B981', '#8B5CF6', '#F59E0B', '#EC4899', '#6366F1', '#EF4444', '#14B8A6'];
@@ -1008,7 +1008,7 @@ export async function processOwnerChatbotMessage(
 
                   if (!createTagErr && newTag) {
                     tagId = newTag.id;
-                    tagsCache.set(lowerName, tagId);
+                    tagsCache.set(lowerName, newTag.id);
                   } else {
                     console.error('[chatbot-engine] Failed to create tag for property:', createTagErr);
                   }
