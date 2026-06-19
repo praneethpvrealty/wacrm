@@ -142,7 +142,16 @@ export function PropertyShareDialog({
         .in('status', ['APPROVED', 'Approved'])
         .order('name');
       if (error) throw error;
-      setTemplates(data || []);
+      const tData = data || [];
+      setTemplates(tData);
+      
+      // Intelligent auto-selection
+      if (tData.length > 0) {
+        const matching = tData.find((t) =>
+          /property|share|detail|send/i.test(t.name)
+        );
+        setSelectedTemplate(matching || tData[0]);
+      }
     } catch (err) {
       console.error('Failed to load templates for share:', err);
     } finally {
@@ -903,24 +912,51 @@ export function PropertyShareDialog({
             </div>
 
             {/* Bottom Actions */}
-            <div className="border-t border-slate-800 pt-3.5 flex justify-between items-center mt-auto">
+            <div className="border-t border-slate-800 pt-3.5 flex justify-between items-center mt-auto gap-3">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setBroadcastStep('link')}
-                className="border-slate-800 hover:bg-slate-850 text-xs text-slate-300 h-9 flex items-center gap-1"
+                className="border-slate-800 hover:bg-slate-850 text-xs text-slate-300 h-9 flex items-center gap-1 shrink-0"
               >
                 <ArrowLeft className="size-3.5" /> Back
               </Button>
-              <Button
-                type="button"
-                disabled={selectedContactIds.length === 0}
-                onClick={() => setBroadcastStep('configure')}
-                className="bg-primary hover:bg-primary/95 text-primary-foreground font-semibold text-xs h-9 flex items-center gap-1.5"
-              >
-                <Send className="size-3.5" />
-                Configure Sharing ({selectedContactIds.length})
-              </Button>
+              
+              <div className="flex items-center gap-2">
+                {selectedTemplate && (
+                  <span className="hidden md:inline text-[11px] text-slate-400 italic max-w-[200px] truncate mr-1.5" title={`Template: ${selectedTemplate.name}`}>
+                    Template: {selectedTemplate.name}
+                  </span>
+                )}
+                
+                <Button
+                  type="button"
+                  disabled={selectedContactIds.length === 0 || !selectedTemplate}
+                  variant="outline"
+                  onClick={() => setBroadcastStep('configure')}
+                  className="border-slate-805 hover:bg-slate-800 text-slate-300 text-xs h-9 flex items-center gap-1"
+                >
+                  Configure & Review
+                </Button>
+                
+                <Button
+                  type="button"
+                  disabled={selectedContactIds.length === 0 || !selectedTemplate || sendingBroadcast}
+                  onClick={handleSendBroadcast}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 flex items-center gap-1.5"
+                >
+                  {sendingBroadcast ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin mr-1" /> Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="size-3.5" />
+                      Send Directly ({selectedContactIds.length})
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           </div>
         )}
