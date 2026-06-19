@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSendComponents } from './template-send-builder';
+import { buildSendComponents, sanitizeParamText } from './template-send-builder';
 import type { MessageTemplate } from '@/types';
 
 function row(overrides: Partial<MessageTemplate> = {}): MessageTemplate {
@@ -260,5 +260,40 @@ describe('buildSendComponents — end-to-end mix', () => {
     // QUICK_REPLY at index 0 doesn't need send-time params, so only the
     // URL button at index 1 emits a component.
     expect((components[2] as { index: string }).index).toBe('1');
+  });
+});
+
+describe('sanitizeParamText', () => {
+  it('strips newlines, carriage returns and tabs', () => {
+    expect(sanitizeParamText('Hello\nWorld\r\nThis\tis\ta\ttest')).toBe('Hello World This is a test');
+  });
+
+  it('collapses multiple consecutive spaces to a single space', () => {
+    expect(sanitizeParamText('Too    many     spaces')).toBe('Too many spaces');
+  });
+
+  it('trims leading and trailing spaces', () => {
+    expect(sanitizeParamText('   trimmed   ')).toBe('trimmed');
+  });
+
+  it('handles null and undefined gracefully', () => {
+    expect(sanitizeParamText(null)).toBe('');
+    expect(sanitizeParamText(undefined)).toBe('');
+  });
+
+  it('cleans body variables inside buildSendComponents', () => {
+    const components = buildSendComponents(
+      row({ body_text: 'Location: {{1}} Highlights: {{2}}' }),
+      { body: ['Koramangala 1st Block\nBengaluru', 'Gym   &   Pool'] }
+    );
+    expect(components).toEqual([
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: 'Koramangala 1st Block Bengaluru' },
+          { type: 'text', text: 'Gym & Pool' }
+        ]
+      }
+    ]);
   });
 });

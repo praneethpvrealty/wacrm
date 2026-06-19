@@ -69,6 +69,19 @@ type MetaSendParameter =
   | { type: 'coupon_code'; coupon_code: string }
   | { type: 'payload'; payload: string };
 
+/**
+ * Sanitizes template parameter values for Meta API compliance.
+ * Strips/replaces newlines, carriage returns, tabs with spaces,
+ * and collapses multiple spaces to avoid Meta Graph API error #132018.
+ */
+export function sanitizeParamText(text: string | null | undefined): string {
+  if (!text) return '';
+  return String(text)
+    .replace(/[\r\n\t]/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 function buildHeaderComponent(
   template: MessageTemplate,
   params: SendTimeParams,
@@ -90,7 +103,7 @@ function buildHeaderComponent(
     }
     return {
       type: 'header',
-      parameters: [{ type: 'text', text: value }],
+      parameters: [{ type: 'text', text: sanitizeParamText(value) }],
     };
   }
 
@@ -143,7 +156,7 @@ function buildBodyComponent(
   const values = body.slice(0, varCount);
   return {
     type: 'body',
-    parameters: values.map((text) => ({ type: 'text', text: String(text) })),
+    parameters: values.map((text) => ({ type: 'text', text: sanitizeParamText(text) })),
   };
 }
 
@@ -185,7 +198,7 @@ function buildButtonComponent(
         type: 'button',
         sub_type: 'url',
         index: String(index),
-        parameters: [{ type: 'text', text: override }],
+        parameters: [{ type: 'text', text: sanitizeParamText(override) }],
       };
     }
     case 'COPY_CODE': {
