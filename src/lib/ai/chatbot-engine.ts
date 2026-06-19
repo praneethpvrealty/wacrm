@@ -511,26 +511,64 @@ export async function processOwnerChatbotMessage(
         
         const publicUrl = await uploadPropertyImage(accountId, buffer, mimeType);
         
-        const updatedImages = [...(draft.images || []), publicUrl];
-        const updatedDraft = { ...draft, images: updatedImages };
-        
-        const { isValid, missingFields } = validateDraft(updatedDraft);
-        const nextStatus = isValid ? 'awaiting_confirmation' : 'collecting';
+        let updatedDraft = draft;
+        let nextStatus = propSession.status;
+        let missingFields: string[] = [];
+        let success = false;
+        let retryCount = 0;
+        const maxRetries = 5;
 
-        await supabaseAdmin()
-          .from('property_draft_sessions')
-          .update({
-            draft_data: updatedDraft,
-            status: nextStatus,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', propSession.id);
+        while (retryCount < maxRetries && !success) {
+          const { data: latestSession, error: fetchErr } = await supabaseAdmin()
+            .from('property_draft_sessions')
+            .select('*')
+            .eq('id', propSession.id)
+            .single();
+
+          if (fetchErr || !latestSession) {
+            throw fetchErr || new Error('Session not found during image append retry');
+          }
+
+          const currentDraft = latestSession.draft_data as ParsedPropertyDraft;
+          const currentImages = currentDraft.images || [];
+          const updatedImages = currentImages.includes(publicUrl)
+            ? currentImages
+            : [...currentImages, publicUrl];
+          
+          updatedDraft = { ...currentDraft, images: updatedImages };
+          
+          const validation = validateDraft(updatedDraft);
+          nextStatus = validation.isValid ? 'awaiting_confirmation' : 'collecting';
+          missingFields = validation.missingFields;
+
+          const { data: updateData, error: updateErr } = await supabaseAdmin()
+            .from('property_draft_sessions')
+            .update({
+              draft_data: updatedDraft,
+              status: nextStatus,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', propSession.id)
+            .eq('updated_at', latestSession.updated_at)
+            .select();
+
+          if (!updateErr && updateData && updateData.length > 0) {
+            success = true;
+          } else {
+            retryCount++;
+            await new Promise((resolve) => setTimeout(resolve, Math.random() * 200 + 50));
+          }
+        }
+
+        if (!success) {
+          throw new Error('Failed to update draft session due to concurrent modifications');
+        }
 
         await sendPropertyDraftPreview(
           phoneNumberId,
           accessToken,
           contactRecord.phone,
-          `📸 *Photo added successfully!* Total photos attached: *${updatedImages.length}*.`,
+          `📸 *Photo added successfully!* Total photos attached: *${updatedDraft.images.length}*.`,
           updatedDraft,
           nextStatus,
           missingFields,
@@ -800,7 +838,7 @@ export async function processOwnerChatbotMessage(
         const initialStatus = isValid ? 'awaiting_confirmation' : 'collecting';
 
         // Insert new active session
-        await supabaseAdmin()
+        const { error: insertErr } = await supabaseAdmin()
           .from('property_draft_sessions')
           .insert({
             account_id: accountId,
@@ -808,6 +846,83 @@ export async function processOwnerChatbotMessage(
             draft_data: parsedDraft,
             status: initialStatus
           });
+
+        if (insertErr) {
+          // If a concurrent thread created the session first, fall back to appending the uploaded image
+          if (insertErr.code === '23505') {
+            console.log('[chatbot-engine] Session already initialized by concurrent request. Falling back to append flow.');
+            const { data: existingSession } = await supabaseAdmin()
+              .from('property_draft_sessions')
+              .select('*')
+              .eq('contact_id', contactRecord.id)
+              .maybeSingle();
+
+            if (existingSession && isImageMsg && uploadedImages.length > 0) {
+              const publicUrl = uploadedImages[0];
+              let success = false;
+              let retryCount = 0;
+              const maxRetries = 5;
+              let updatedDraft = existingSession.draft_data as ParsedPropertyDraft;
+              let nextStatus = existingSession.status;
+              let validationFields: string[] = [];
+
+              while (retryCount < maxRetries && !success) {
+                const { data: latestSession } = await supabaseAdmin()
+                  .from('property_draft_sessions')
+                  .select('*')
+                  .eq('id', existingSession.id)
+                  .single();
+
+                if (latestSession) {
+                  const currentDraft = latestSession.draft_data as ParsedPropertyDraft;
+                  const currentImages = currentDraft.images || [];
+                  const updatedImages = currentImages.includes(publicUrl)
+                    ? currentImages
+                    : [...currentImages, publicUrl];
+                  
+                  updatedDraft = { ...currentDraft, images: updatedImages };
+                  const validation = validateDraft(updatedDraft);
+                  nextStatus = validation.isValid ? 'awaiting_confirmation' : 'collecting';
+                  validationFields = validation.missingFields;
+
+                  const { data: updateData, error: updateErr } = await supabaseAdmin()
+                    .from('property_draft_sessions')
+                    .update({
+                      draft_data: updatedDraft,
+                      status: nextStatus,
+                      updated_at: new Date().toISOString()
+                    })
+                    .eq('id', existingSession.id)
+                    .eq('updated_at', latestSession.updated_at)
+                    .select();
+
+                  if (!updateErr && updateData && updateData.length > 0) {
+                    success = true;
+                  } else {
+                    retryCount++;
+                    await new Promise((resolve) => setTimeout(resolve, Math.random() * 200 + 50));
+                  }
+                } else {
+                  retryCount++;
+                }
+              }
+              if (success) {
+                await sendPropertyDraftPreview(
+                  phoneNumberId,
+                  accessToken,
+                  contactRecord.phone,
+                  `📸 *Photo added successfully!* Total photos attached: *${updatedDraft.images.length}*.`,
+                  updatedDraft,
+                  nextStatus,
+                  validationFields,
+                  conversation.id
+                );
+                return true;
+              }
+            }
+          }
+          throw insertErr;
+        }
 
         await sendPropertyDraftPreview(
           phoneNumberId,
