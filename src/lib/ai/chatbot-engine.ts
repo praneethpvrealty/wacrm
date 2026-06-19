@@ -440,7 +440,7 @@ export async function processOwnerChatbotMessage(
     (cleanedText.split('\n').length >= 2 && /\b\d{10,15}\b/.test(cleanedText))
   );
 
-  if (propSession && (isImageMsg || hasContactKeywords)) {
+  if (propSession && hasContactKeywords) {
     const classification = await classifyImageOrText(cleanedText, undefined, undefined);
     if (classification === 'contact') {
       console.log(`[chatbot-engine] Discarding active property session ${propSession.id} to start contact flow`);
@@ -670,6 +670,10 @@ export async function processOwnerChatbotMessage(
             .single();
 
           if (fetchErr || !latestSession) {
+            if (fetchErr?.code === 'PGRST116') {
+              console.log('[chatbot-engine] Active session was deleted concurrently. Exiting photo upload flow.');
+              return true;
+            }
             throw fetchErr || new Error('Session not found during image append retry');
           }
 
