@@ -37,9 +37,11 @@ import {
   Unlink,
   Edit,
   CalendarDays,
+  Share2,
 } from 'lucide-react';
 import { getCurrencyIcon } from '@/lib/currency-utils';
 import { ScheduleDialog } from '@/components/calendar/schedule-dialog';
+import { PropertyShareDialog } from '@/components/inventory/property-share-dialog';
 
 const SUGGESTED_AREAS = ['Whitefield', 'Koramangala', 'Not specific', 'East Bangalore', 'Indiranagar', 'Jayanagar'];
 
@@ -89,6 +91,7 @@ export function ContactDetailView({
   const [loading, setLoading] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   // Details tab
   const [editName, setEditName] = useState('');
@@ -555,7 +558,17 @@ export function ContactDetailView({
       toast.success('Property details sent successfully via WhatsApp!');
     } catch (err) {
       console.error(err);
-      toast.error(err instanceof Error ? err.message : 'Failed to send property details');
+      const isReengagementError = err instanceof Error && (
+        err.message.includes('131047') ||
+        err.message.toLowerCase().includes('24 hours') ||
+        err.message.toLowerCase().includes('re-engagement')
+      );
+      if (isReengagementError) {
+        toast.warning('WhatsApp session has expired (over 24 hours). Redirecting to template selection...');
+        setShareOpen(true);
+      } else {
+        toast.error(err instanceof Error ? err.message : 'Failed to send property details');
+      }
     } finally {
       setApproving(false);
     }
@@ -581,7 +594,17 @@ export function ContactDetailView({
           toast.success('Approved & property details sent via WhatsApp!');
         } catch (waErr) {
           console.error('Failed to auto-send WhatsApp details:', waErr);
-          toast.warning('Contact approved, but failed to send WhatsApp details (check WhatsApp configuration).');
+          const isReengagementError = waErr instanceof Error && (
+            waErr.message.includes('131047') ||
+            waErr.message.toLowerCase().includes('24 hours') ||
+            waErr.message.toLowerCase().includes('re-engagement')
+          );
+          if (isReengagementError) {
+            toast.warning('Contact approved, but WhatsApp free-text failed (session >24 hrs). Redirecting to templates...');
+            setShareOpen(true);
+          } else {
+            toast.warning('Contact approved, but failed to send WhatsApp details (check WhatsApp configuration).');
+          }
         }
       } else {
         toast.success('Contact approved and added to CRM!');
@@ -909,16 +932,28 @@ export function ContactDetailView({
                         <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Inquired Property</span>
                         <span className="text-xs font-bold text-white">{inquiredProperty.title}</span>
                       </div>
-                      <Button
-                        size="xs"
-                        variant="outline"
-                        onClick={handleSendPropertyDetails}
-                        disabled={approving}
-                        className="bg-slate-900 border-slate-800 text-slate-300 text-[10px] h-6 py-0 px-2.5 flex items-center gap-1 cursor-pointer"
-                      >
-                        <MessageSquare className="size-3 text-green-500 fill-green-500" />
-                        Send Complete Info via WhatsApp
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          onClick={handleSendPropertyDetails}
+                          disabled={approving}
+                          className="bg-slate-900 border-slate-800 text-slate-300 text-[10px] h-6 py-0 px-2.5 flex items-center gap-1 cursor-pointer"
+                        >
+                          <MessageSquare className="size-3 text-green-500 fill-green-500" />
+                          Send Free-text
+                        </Button>
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          onClick={() => setShareOpen(true)}
+                          disabled={approving}
+                          className="bg-slate-900 border-slate-800 text-slate-300 text-[10px] h-6 py-0 px-2.5 flex items-center gap-1 cursor-pointer"
+                        >
+                          <Share2 className="size-3 text-primary" />
+                          Send Template
+                        </Button>
+                      </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2 border-t border-slate-800/50 pt-2 text-[11px] text-slate-400">
                       <div>
@@ -1163,16 +1198,28 @@ export function ContactDetailView({
                           <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block">Inquired Property</span>
                           <span className="text-xs font-bold text-white">{inquiredProperty.title}</span>
                         </div>
-                        <Button
-                          size="xs"
-                          variant="outline"
-                          onClick={handleSendPropertyDetails}
-                          disabled={approving}
-                          className="bg-slate-900 border-slate-800 text-slate-350 text-[10px] h-6 py-0 px-2 flex items-center gap-1 cursor-pointer"
-                        >
-                          <MessageSquare className="size-3 text-green-500 fill-green-500" />
-                          Send Details via WhatsApp
-                        </Button>
+                        <div className="flex gap-1.5">
+                          <Button
+                            size="xs"
+                            variant="outline"
+                            onClick={handleSendPropertyDetails}
+                            disabled={approving}
+                            className="bg-slate-900 border-slate-800 text-slate-350 text-[10px] h-6 py-0 px-2 flex items-center gap-1 cursor-pointer"
+                          >
+                            <MessageSquare className="size-3 text-green-500 fill-green-500" />
+                            Send Free-text
+                          </Button>
+                          <Button
+                            size="xs"
+                            variant="outline"
+                            onClick={() => setShareOpen(true)}
+                            disabled={approving}
+                            className="bg-slate-900 border-slate-800 text-slate-350 text-[10px] h-6 py-0 px-2 flex items-center gap-1 cursor-pointer"
+                          >
+                            <Share2 className="size-3 text-primary" />
+                            Send Template
+                          </Button>
+                        </div>
                       </div>
                       <div className="grid grid-cols-1 gap-1.5 text-[10px] text-slate-400 border-t border-slate-800/40 pt-1.5">
                         <div>
@@ -1805,6 +1852,16 @@ export function ContactDetailView({
               onOpenChange={setScheduleOpen}
               contactId={contactId}
             />
+
+            {/* Property Share Dialog */}
+            {inquiredProperty && (
+              <PropertyShareDialog
+                open={shareOpen}
+                onOpenChange={setShareOpen}
+                property={inquiredProperty}
+                preSelectedContactId={contactId || undefined}
+              />
+            )}
           </div>
         )}
       </SheetContent>

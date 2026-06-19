@@ -41,6 +41,7 @@ interface PropertyShareDialogProps {
   onOpenChange: (open: boolean) => void;
   property: Property | null;
   onSaved?: () => void;
+  preSelectedContactId?: string;
 }
 
 export function PropertyShareDialog({
@@ -48,6 +49,7 @@ export function PropertyShareDialog({
   onOpenChange,
   property,
   onSaved,
+  preSelectedContactId,
 }: PropertyShareDialogProps) {
   const supabase = createClient();
   const { user, accountId, profile } = useAuth();
@@ -166,10 +168,10 @@ export function PropertyShareDialog({
             }
           });
       }
-      setBroadcastStep('link');
+      setBroadcastStep(preSelectedContactId ? 'matches' : 'link');
       setSearchQuery('');
       setCopiedLink(false);
-      setSelectedContactIds([]);
+      setSelectedContactIds(preSelectedContactId ? [preSelectedContactId] : []);
       setSelectedTemplate(null);
       setVariableMappings({});
       setCustomVariableValues({});
@@ -179,7 +181,7 @@ export function PropertyShareDialog({
       setFreshPhone('');
       setFreshClassification('Buyer');
     }
-  }, [open, property, fetchContacts, fetchTemplates, accountId, supabase]);
+  }, [open, property, fetchContacts, fetchTemplates, accountId, supabase, preSelectedContactId]);
 
   // Get matching contacts from list
   const matchedContacts = useMemo(() => {
@@ -436,7 +438,12 @@ export function PropertyShareDialog({
             } else {
               if (mapping.value === 'title') val = property.title || '';
               else if (mapping.value === 'price') val = formattedPrice || '';
-              else if (mapping.value === 'location') val = property.sublocality || fullLoc || '';
+              else if (mapping.value === 'location') {
+                const locVal = property.sublocality || fullLoc || '';
+                val = property.google_map_link
+                  ? `${locVal}\n🗺️ Google Maps Link: ${property.google_map_link}`
+                  : locVal;
+              }
               else if (mapping.value === 'area') {
                 const isLand = property.type.includes('Land') || property.type.includes('Plot');
                 const areaVal = isLand ? property.land_area : property.area_sqft;
@@ -1095,9 +1102,14 @@ export function PropertyShareDialog({
                               else if (mapping.value === 'email') val = `[Recipient Email]`;
                               else if (mapping.value === 'company') val = `[Recipient Company]`;
                             } else {
-                              if (mapping.value === 'title') val = property.title || `[Title]`;
+                               if (mapping.value === 'title') val = property.title || `[Title]`;
                               else if (mapping.value === 'price') val = formattedPrice || `[Price]`;
-                              else if (mapping.value === 'location') val = property.sublocality || property.location || `[Location]`;
+                              else if (mapping.value === 'location') {
+                                const locVal = property.sublocality || property.location || `[Location]`;
+                                val = property.google_map_link
+                                  ? `${locVal}\n🗺️ Google Maps Link: ${property.google_map_link}`
+                                  : locVal;
+                              }
                               else if (mapping.value === 'area') {
                                 const isLand = property.type.includes('Land') || property.type.includes('Plot');
                                 const areaVal = isLand ? property.land_area : property.area_sqft;
