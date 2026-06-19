@@ -165,10 +165,10 @@ function formatDraftPreviewMessage(
   if (draft.nearby_highlights && draft.nearby_highlights.length > 0) {
     reply += `*Nearby Highlights:* ${draft.nearby_highlights.join(', ')}\n`;
   }
-  if ((draft as any).owner_contact_name) {
-    const rolePart = (draft as any).owner_contact_role ? ` [${(draft as any).owner_contact_role}]` : '';
-    const phonePart = (draft as any).owner_contact_phone ? ` (${(draft as any).owner_contact_phone})` : '';
-    reply += `*Listing Owner/Agent:* ${(draft as any).owner_contact_name}${phonePart}${rolePart}\n`;
+  if (draft.owner_contact_name) {
+    const rolePart = draft.owner_contact_role ? ` [${draft.owner_contact_role}]` : '';
+    const phonePart = draft.owner_contact_phone ? ` (${draft.owner_contact_phone})` : '';
+    reply += `*Listing Owner/Agent:* ${draft.owner_contact_name}${phonePart}${rolePart}\n`;
   }
 
   reply += `*Images:* ${draft.images.length} attached\n\n` +
@@ -311,7 +311,7 @@ async function formatContactDraftsContainerPreview(
         `• *Email:* ${draft.email || '_Not specified_'}\n` +
         `• *Company:* ${draft.company || '_Not specified_'}\n` +
         `• *Role/Classification:* ${draft.classification || 'Others'}\n` +
-        ((draft as any).referrer_name ? `• *Referrer:* ${(draft as any).referrer_name}${(draft as any).referrer_phone ? ' (' + (draft as any).referrer_phone + ')' : ''}\n` : '') +
+        (draft.referrer_name ? `• *Referrer:* ${draft.referrer_name}${draft.referrer_phone ? ' (' + draft.referrer_phone + ')' : ''}\n` : '') +
         `• *Notes:* ${draft.notes || '_No notes_'}\n` +
         (duplicateWarning ? `${duplicateWarning}\n` : '') +
         `\n`;
@@ -444,9 +444,9 @@ export async function processOwnerChatbotMessage(
       let ownerContactId = null;
       let listingSource = 'owner';
 
-      if ((draft as any).owner_contact_name) {
-        const ownerName = (draft as any).owner_contact_name.trim();
-        const ownerPhone = (draft as any).owner_contact_phone;
+      if (draft.owner_contact_name) {
+        const ownerName = draft.owner_contact_name.trim();
+        const ownerPhone = draft.owner_contact_phone;
         let query = supabaseAdmin().from('contacts').select('id, name, classification').eq('account_id', accountId);
         
         if (ownerPhone) {
@@ -468,7 +468,7 @@ export async function processOwnerChatbotMessage(
           }
         } else {
           // Contact not found -> Create a new contact
-          const newClassification = (draft as any).owner_contact_role === 'Agent' ? 'Agent' : 'Owner';
+          const newClassification = draft.owner_contact_role === 'Agent' ? 'Agent' : 'Owner';
           const normalizedPhone = ownerPhone ? (normalizePhoneWithCountryCode(ownerPhone, '91') || null) : null;
           const { data: newContact, error: createErr } = await supabaseAdmin()
             .from('contacts')
@@ -562,8 +562,8 @@ export async function processOwnerChatbotMessage(
       if (prop.nearby_highlights && prop.nearby_highlights.length > 0) {
         reply += `*Nearby Highlights:* ${prop.nearby_highlights.join(', ')}\n`;
       }
-      if (ownerContactId && (draft as any).owner_contact_name) {
-        reply += `*Source Referrer/Owner:* ${(draft as any).owner_contact_name} [Mapped as ${listingSource.toUpperCase()}]\n`;
+      if (ownerContactId && draft.owner_contact_name) {
+        reply += `*Source Referrer/Owner:* ${draft.owner_contact_name} [Mapped as ${listingSource.toUpperCase()}]\n`;
       }
 
       reply += `\nView it in your dashboard: ${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/inventory?propertyId=${prop.id}`;
@@ -744,11 +744,11 @@ export async function processOwnerChatbotMessage(
         } else {
           // Resolve referrer if present
           let referrerContactId = null;
-          let referrerNameText = (draft as any).referrer_name || null;
+          let referrerNameText = draft.referrer_name || null;
 
-          if ((draft as any).referrer_name) {
-            const refName = (draft as any).referrer_name.trim();
-            const refPhone = (draft as any).referrer_phone;
+          if (draft.referrer_name) {
+            const refName = draft.referrer_name.trim();
+            const refPhone = draft.referrer_phone;
             let refQuery = supabaseAdmin().from('contacts').select('id, name').eq('account_id', accountId);
             
             if (refPhone) {
