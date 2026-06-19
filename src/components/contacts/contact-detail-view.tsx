@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, createElement } from 'react';
+import { useState, useEffect, useCallback, useMemo, createElement, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
@@ -88,6 +88,13 @@ export function ContactDetailView({
 
   const [currency, setCurrency] = useState('INR');
   const [contact, setContact] = useState<Contact | null>(null);
+  const autoMapAttemptedRef = useRef<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!open) {
+      autoMapAttemptedRef.current = {};
+    }
+  }, [open]);
   const [loading, setLoading] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
@@ -475,8 +482,11 @@ export function ContactDetailView({
       contactId &&
       !editLastInquiredPropertyId &&
       notes.length > 0 &&
-      allProperties.length > 0
+      allProperties.length > 0 &&
+      !autoMapAttemptedRef.current[contactId]
     ) {
+      // Mark as attempted so we don't scan again for this contactId during this drawer session
+      autoMapAttemptedRef.current[contactId] = true;
       // Find matching property in notes
       let matchedProperty: Property | null = null;
       
