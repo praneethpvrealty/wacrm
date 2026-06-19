@@ -32,11 +32,8 @@ export async function GET() {
 
   let client: ImapClient | null = null;
   try {
-    // Dynamically import imapflow to ensure it compiles fine if package is not installed
-    const moduleName = 'imapflow';
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
-    const { ImapFlow } = await import(moduleName);
+    // Use eval import to escape Next.js/Turbopack static analysis warnings for uninstalled modules
+    const { ImapFlow } = await eval('import("imapflow")');
     
     const activeClient: ImapClient = new ImapFlow({
       host,

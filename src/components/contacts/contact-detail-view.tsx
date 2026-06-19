@@ -557,7 +557,7 @@ export function ContactDetailView({
         handleLinkInterestProperty(matchedProperty.id);
       }
     }
-  }, [open, contactId, editLastInquiredPropertyId, notes, allProperties]);
+  }, [open, contactId, editLastInquiredPropertyId, notes, allProperties, handleLinkInterestProperty]);
 
   async function copyPhone() {
     if (!contact) return;
