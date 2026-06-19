@@ -791,9 +791,11 @@ export async function processOwnerChatbotMessage(
       // Fetch all published properties to do auto-matching
       const { data: properties } = await supabaseAdmin()
         .from('properties')
-        .select('id, title, property_code')
+        .select('id, title, property_code, project')
         .eq('account_id', accountId)
         .eq('is_published', true);
+
+      const matchedPropertyMap = new Map<string, { id: string; title: string; property_code?: string | null; project?: string | null }>();
 
       // Check duplicates and save new contacts in bulk
       const toInsert = [];
@@ -840,22 +842,66 @@ export async function processOwnerChatbotMessage(
           if (properties && draft.notes) {
             const notesLower = draft.notes.toLowerCase();
             const matchedProp = properties.find(p => {
-              const codeMatches = p.property_code ? notesLower.includes(p.property_code.toLowerCase()) : false;
-              const titleMatches = notesLower.includes(p.title.toLowerCase());
-              
-              // Project name match fallback (minimum 5 chars)
-              let projectMatches = false;
-              if (!codeMatches && !titleMatches) {
-                const projectKeywords = p.title.replace(/(?:\d+\s*(?:BHK|bhk)|apartment|villa|plot|house|for\s+sale|for\s+rent)/gi, '').trim();
-                if (projectKeywords.length > 5) {
-                  projectMatches = notesLower.includes(projectKeywords.toLowerCase());
+              // 1. Code match (e.g. PROP-1002)
+              if (p.property_code && notesLower.includes(p.property_code.toLowerCase())) {
+                return true;
+              }
+
+              // 2. Title match
+              if (notesLower.includes(p.title.toLowerCase())) {
+                return true;
+              }
+
+              // 3. Full project match (minimum 3 characters)
+              if (p.project && p.project.trim().length >= 3) {
+                const proj = p.project.trim().toLowerCase();
+                if (notesLower.includes(proj)) return true;
+              }
+
+              // 4. First 2 words of project match (e.g. "SJR Blue" for "SJR Blue Waters")
+              if (p.project) {
+                const projectWords = p.project.trim().toLowerCase().split(/\s+/);
+                if (projectWords.length >= 2) {
+                  const firstTwoWords = projectWords.slice(0, 2).join(' ');
+                  if (firstTwoWords.length >= 5 && notesLower.includes(firstTwoWords)) {
+                    return true;
+                  }
                 }
               }
 
-              return codeMatches || titleMatches || projectMatches;
+              // 5. Cleaned title keywords match (ignores prepositions and common specifiers)
+              const stopWords = new Set(['in', 'at', 'to', 'on', 'of', 'a', 'an', 'the', 'with', 'by', 'for', 'and', 'or', 'is', 'are', 'am', 'was', 'were']);
+              const cleanTitle = p.title
+                .toLowerCase()
+                .replace(/(?:\d+\s*(?:bhk|bedroom|bath|bathroom)|apartment|villa|plot|house|for\s+sale|for\s+rent|luxurious|luxury|beautiful|spacious|rent|sale)/gi, ' ')
+                .replace(/[^\w\s]/g, ' ')
+                .trim();
+              
+              const cleanWords = cleanTitle.split(/\s+/).filter(w => w.length > 1 && !stopWords.has(w));
+              if (cleanWords.length >= 2) {
+                const phrase2 = cleanWords.slice(0, 2).join(' ');
+                if (phrase2.length >= 6 && notesLower.includes(phrase2)) {
+                  return true;
+                }
+                if (cleanWords.length >= 3) {
+                  const phrase3 = cleanWords.slice(0, 3).join(' ');
+                  if (phrase3.length >= 8 && notesLower.includes(phrase3)) {
+                    return true;
+                  }
+                }
+              }
+
+              // 6. Fallback project keywords from title
+              const projectKeywords = p.title.replace(/(?:\d+\s*(?:BHK|bhk)|apartment|villa|plot|house|for\s+sale|for\s+rent)/gi, '').trim();
+              if (projectKeywords.length > 5 && notesLower.includes(projectKeywords.toLowerCase())) {
+                return true;
+              }
+
+              return false;
             });
             if (matchedProp) {
               lastInquiredPropertyId = matchedProp.id;
+              matchedPropertyMap.set(normalized || draft.phone!.trim(), matchedProp);
             }
           }
 
@@ -910,6 +956,86 @@ export async function processOwnerChatbotMessage(
         const sendRes = await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
         await saveBotMessage(conversation.id, reply, sendRes.messageId);
         return true;
+      }
+
+      // Auto-tag inserted contacts with matched property/project tags
+      if (inserted && inserted.length > 0) {
+        try {
+          const { data: existingTags } = await supabaseAdmin()
+            .from('tags')
+            .select('id, name')
+            .eq('account_id', accountId);
+
+          const tagsCache = new Map<string, string>();
+          if (existingTags) {
+            existingTags.forEach(t => tagsCache.set(t.name.toLowerCase(), t.id));
+          }
+
+          const tagColors = ['#0EA5E9', '#10B981', '#8B5CF6', '#F59E0B', '#EC4899', '#6366F1', '#EF4444', '#14B8A6'];
+          const tagLinksToInsert = [];
+
+          for (const contact of inserted) {
+            const matchedProp = matchedPropertyMap.get(contact.phone);
+            if (matchedProp) {
+              let tagName = '';
+              if (matchedProp.project && matchedProp.project.trim().length >= 3) {
+                tagName = matchedProp.project.trim();
+              } else if (matchedProp.property_code) {
+                tagName = matchedProp.property_code.trim();
+              } else {
+                tagName = matchedProp.title.replace(/(?:\d+\s*(?:BHK|bhk)|apartment|villa|plot|house|for\s+sale|for\s+rent)/gi, '').trim();
+                if (tagName.length > 20) {
+                  tagName = tagName.substring(0, 20) + '...';
+                }
+              }
+
+              if (tagName) {
+                const lowerName = tagName.toLowerCase();
+                let tagId = tagsCache.get(lowerName);
+
+                if (!tagId) {
+                  const randomColor = tagColors[Math.floor(Math.random() * tagColors.length)];
+                  const { data: newTag, error: createTagErr } = await supabaseAdmin()
+                    .from('tags')
+                    .insert({
+                      account_id: accountId,
+                      user_id: userId,
+                      name: tagName,
+                      color: randomColor
+                    })
+                    .select()
+                    .single();
+
+                  if (!createTagErr && newTag) {
+                    tagId = newTag.id;
+                    tagsCache.set(lowerName, tagId);
+                  } else {
+                    console.error('[chatbot-engine] Failed to create tag for property:', createTagErr);
+                  }
+                }
+
+                if (tagId) {
+                  tagLinksToInsert.push({
+                    contact_id: contact.id,
+                    tag_id: tagId
+                  });
+                }
+              }
+            }
+          }
+
+          if (tagLinksToInsert.length > 0) {
+            const { error: linkTagErr } = await supabaseAdmin()
+              .from('contact_tags')
+              .insert(tagLinksToInsert);
+
+            if (linkTagErr) {
+              console.error('[chatbot-engine] Failed to link tags to contacts:', linkTagErr);
+            }
+          }
+        } catch (tagErr) {
+          console.error('[chatbot-engine] Exception in auto-tagging contacts:', tagErr);
+        }
       }
 
       // Save notes as contact_notes rows for contacts that have notes

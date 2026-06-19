@@ -147,9 +147,21 @@ export function PropertyShareDialog({
       
       // Intelligent auto-selection
       if (tData.length > 0) {
-        const matching = tData.find((t) =>
-          /property|share|detail|send/i.test(t.name)
+        // 1. Try to find a template specifically meant for sharing property details
+        let matching = tData.find((t) =>
+          /share_property|property_detail|property_share/i.test(t.name)
         );
+
+        // 2. Fall back to templates containing property/share/detail, excluding reminders or appointment visits
+        if (!matching) {
+          matching = tData.find((t) => {
+            const name = t.name.toLowerCase();
+            const hasKeywords = /property|share|detail|send/i.test(name);
+            const isReminderOrAppointment = /reminder|visit|appointment|schedule|nudge|followup/i.test(name);
+            return hasKeywords && !isReminderOrAppointment;
+          });
+        }
+
         setSelectedTemplate(matching || tData[0]);
       }
     } catch (err) {

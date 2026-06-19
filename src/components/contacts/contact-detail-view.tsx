@@ -486,18 +486,62 @@ export function ContactDetailView({
 
         // Try to match one of the properties
         const match = allProperties.find((prop) => {
-          // 1. Match by Property Code (e.g. PROP-1002) - strongest match
-          const hasCode = prop.property_code && text.includes(prop.property_code);
-          if (hasCode) return true;
+          const textLower = text.toLowerCase();
+          
+          // 1. Property code match (e.g. PROP-1002) - strongest match
+          if (prop.property_code && textLower.includes(prop.property_code.toLowerCase())) {
+            return true;
+          }
 
-          // 2. Match by Project Name - check if it is explicitly mentioned
-          const hasProject = prop.project && prop.project.trim().length > 4 && text.toLowerCase().includes(prop.project.trim().toLowerCase());
-          if (hasProject) return true;
+          // 2. Title match
+          if (textLower.includes(prop.title.toLowerCase())) {
+            return true;
+          }
 
-          // 3. Match by Property Title (minimum length to avoid common short word matches)
-          const cleanTitle = prop.title.trim();
-          const hasTitle = cleanTitle.length > 10 && text.toLowerCase().includes(cleanTitle.toLowerCase());
-          if (hasTitle) return true;
+          // 3. Full project match (minimum 3 characters)
+          if (prop.project && prop.project.trim().length >= 3) {
+            const proj = prop.project.trim().toLowerCase();
+            if (textLower.includes(proj)) return true;
+          }
+
+          // 4. First 2 words of project match (e.g. "SJR Blue" for "SJR Blue Waters")
+          if (prop.project) {
+            const projectWords = prop.project.trim().toLowerCase().split(/\s+/);
+            if (projectWords.length >= 2) {
+              const firstTwoWords = projectWords.slice(0, 2).join(' ');
+              if (firstTwoWords.length >= 5 && textLower.includes(firstTwoWords)) {
+                return true;
+              }
+            }
+          }
+
+          // 5. Cleaned title keywords match (ignores prepositions and common specifiers)
+          const stopWords = new Set(['in', 'at', 'to', 'on', 'of', 'a', 'an', 'the', 'with', 'by', 'for', 'and', 'or', 'is', 'are', 'am', 'was', 'were']);
+          const cleanTitle = prop.title
+            .toLowerCase()
+            .replace(/(?:\d+\s*(?:bhk|bedroom|bath|bathroom)|apartment|villa|plot|house|for\s+sale|for\s+rent|luxurious|luxury|beautiful|spacious|rent|sale)/gi, ' ')
+            .replace(/[^\w\s]/g, ' ')
+            .trim();
+          
+          const cleanWords = cleanTitle.split(/\s+/).filter(w => w.length > 1 && !stopWords.has(w));
+          if (cleanWords.length >= 2) {
+            const phrase2 = cleanWords.slice(0, 2).join(' ');
+            if (phrase2.length >= 6 && textLower.includes(phrase2)) {
+              return true;
+            }
+            if (cleanWords.length >= 3) {
+              const phrase3 = cleanWords.slice(0, 3).join(' ');
+              if (phrase3.length >= 8 && textLower.includes(phrase3)) {
+                return true;
+              }
+            }
+          }
+
+          // 6. Fallback project keywords from title
+          const projectKeywords = prop.title.replace(/(?:\d+\s*(?:BHK|bhk)|apartment|villa|plot|house|for\s+sale|for\s+rent)/gi, '').trim();
+          if (projectKeywords.length > 5 && textLower.includes(projectKeywords.toLowerCase())) {
+            return true;
+          }
 
           return false;
         });
@@ -653,6 +697,28 @@ export function ContactDetailView({
         throw createConvErr;
       }
       convId = newConv.id;
+    }
+
+    // Check 24-hour customer window to prevent sending freeform text that will fail at Meta
+    let isWithin24Hours = false;
+    if (existingConv) {
+      const { data: lastCustomerMsg } = await supabase
+        .from('messages')
+        .select('created_at')
+        .eq('conversation_id', convId)
+        .eq('sender_type', 'customer')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (lastCustomerMsg) {
+        const lastMsgTime = new Date(lastCustomerMsg.created_at).getTime();
+        isWithin24Hours = (Date.now() - lastMsgTime) < 24 * 60 * 60 * 1000;
+      }
+    }
+
+    if (!isWithin24Hours) {
+      throw new Error('WhatsApp session has expired (over 24 hours). Re-engagement message must be sent via template.');
     }
 
     const messageText = `Here are the complete details for the property "${inquiredProperty.title}" you inquired about:\n\n📍 *Exact Address:* ${inquiredProperty.location}\n🗺️ *Google Maps Link:* ${inquiredProperty.google_map_link || 'Not available'}`;
