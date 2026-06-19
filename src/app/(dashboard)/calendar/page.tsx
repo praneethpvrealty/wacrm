@@ -1175,7 +1175,7 @@ export default function CalendarPage() {
                   {selectedAppt && (
                     <button
                       type="button"
-                      onClick={deleteAppointment}
+                      onClick={() => deleteAppointment()}
                       className="flex items-center gap-1 text-xs text-rose-500 hover:text-rose-400"
                     >
                       <Trash2 className="h-3.5 w-3.5" />

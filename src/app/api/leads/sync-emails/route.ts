@@ -33,9 +33,10 @@ export async function GET() {
   let client: ImapClient | null = null;
   try {
     // Dynamically import imapflow to ensure it compiles fine if package is not installed
+    const moduleName = 'imapflow';
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
-    const { ImapFlow } = await import('imapflow');
+    const { ImapFlow } = await import(moduleName);
     
     const activeClient: ImapClient = new ImapFlow({
       host,
