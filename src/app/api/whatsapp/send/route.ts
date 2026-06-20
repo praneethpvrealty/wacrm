@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption'
-import { supabaseAdmin } from '@/lib/flows/admin-client'
 import {
   sanitizePhoneForMeta,
   isValidE164,
@@ -60,7 +59,6 @@ export async function POST(request: Request) {
       conversation_id,
       message_type,
       content_text,
-      media_url,
       template_name,
       template_language,
       template_params,
@@ -193,8 +191,6 @@ export async function POST(request: Request) {
     // number was registered with/without a trunk 0). If an alternate
     // format succeeds, we persist it back to the contact row so the
     // next send goes through on the first attempt.
-    let waMessageId = ''
-    let workingPhone = sanitizedPhone
 
     // For template sends, load the row so sendTemplateMessage can
     // build header + button components from the template definition.

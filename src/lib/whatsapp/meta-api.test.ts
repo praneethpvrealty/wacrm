@@ -373,7 +373,7 @@ describe("sendTemplateMessage — language fallback retry", () => {
 
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (_url: string, init: RequestInit) => {
+      vi.fn(async () => {
         callCount++;
         return new Response(
           JSON.stringify({

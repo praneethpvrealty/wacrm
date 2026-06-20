@@ -43,11 +43,7 @@ import {
   Maximize2,
   ExternalLink,
   Compass,
-  Ruler,
-  Layers,
   CheckCircle2,
-  Sparkles,
-  Share2,
   Edit,
   Building,
 } from 'lucide-react';

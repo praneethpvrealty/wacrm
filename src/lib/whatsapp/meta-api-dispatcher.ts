@@ -19,7 +19,7 @@ import {
 } from '@/lib/whatsapp/phone-utils'
 
 // Lazy initialize admin client fallback
-let _adminClient: any = null
+let _adminClient: ReturnType<typeof createClient> | null = null
 function defaultAdminClient() {
   if (!_adminClient) {
     _adminClient = createClient(
