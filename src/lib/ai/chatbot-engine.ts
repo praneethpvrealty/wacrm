@@ -411,6 +411,65 @@ export async function processOwnerChatbotMessage(
   const cleanedText = contentText?.trim() || '';
   const lowerText = cleanedText.toLowerCase();
 
+  const isImageMsg = message.type === 'image' && message.image?.id;
+
+  // Concurrency check: If there is no active session yet, and we are either an image message or
+  // a text message that is NOT a property initiator (e.g. location map link or quick correction),
+  // we check if another customer message arrived in the same conversation within the last 15s.
+  // If so, we poll and wait up to 8 seconds for the concurrent initiator thread to parse and insert the session.
+  const isInitiator = !isImageMsg && (
+    cleanedText.length > 15 && 
+    ["bhk", "sqft", "flat", "plot", "villa", "sale", "rent", "layout", "crore", "lakh", "price", "location", "acres", "commercial", "industrial", "built", "structure", "facing"].some(kw => lowerText.includes(kw))
+  );
+
+  const shouldPoll = !propSession && !contactSession && (isImageMsg || !isInitiator) && (isImageMsg || cleanedText);
+
+  if (shouldPoll) {
+    try {
+      const fifteenSecondsAgo = new Date(Date.now() - 15 * 1000).toISOString();
+      const { data: recentMsgs } = await supabaseAdmin()
+        .from('messages')
+        .select('id, created_at')
+        .eq('conversation_id', conversation.id)
+        .eq('sender_type', 'customer')
+        .gt('created_at', fifteenSecondsAgo)
+        .order('created_at', { ascending: false });
+
+      if (recentMsgs && recentMsgs.length > 1) {
+        console.log(`[chatbot-engine] Concurrent messages detected (${recentMsgs.length}). Polling for session creation...`);
+        let pollCount = 0;
+        const maxPolls = 16; // 16 * 500ms = 8 seconds
+        while (pollCount < maxPolls && !propSession && !contactSession) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          
+          const { data: latestProp } = await supabaseAdmin()
+            .from('property_draft_sessions')
+            .select('*')
+            .eq('contact_id', contactRecord.id)
+            .maybeSingle();
+            
+          const { data: latestContact } = await supabaseAdmin()
+            .from('contact_draft_sessions')
+            .select('*')
+            .eq('contact_id', contactRecord.id)
+            .maybeSingle();
+
+          if (latestProp) {
+            propSession = latestProp;
+            console.log(`[chatbot-engine] Concurrently created property session resolved after ${pollCount * 500}ms`);
+          }
+          if (latestContact) {
+            contactSession = latestContact;
+            console.log(`[chatbot-engine] Concurrently created contact session resolved after ${pollCount * 500}ms`);
+          }
+          pollCount++;
+        }
+      }
+    } catch (err) {
+      console.error('[chatbot-engine] Error in concurrency session lookup:', err);
+    }
+  }
+
   // 1.5. Session Expiry Timeout (15 minutes of inactivity)
   const SESSION_TIMEOUT_MS = 15 * 60 * 1000;
   const now = Date.now();
@@ -434,7 +493,6 @@ export async function processOwnerChatbotMessage(
   }
 
   // 1.8. Quick Task Switch / Fresh Ingestion Intercept
-  const isImageMsg = message.type === 'image' && message.image?.id;
   const hasContactKeywords = cleanedText && (
     /is interested in|referred by|magicbricks|99acres|housing\.com/i.test(cleanedText) ||
     (cleanedText.split('\n').length >= 2 && /\b\d{10,15}\b/.test(cleanedText))
