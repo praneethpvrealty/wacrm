@@ -1,21 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { sendTemplateMessage } from '@/lib/whatsapp/meta-api'
-import { decrypt } from '@/lib/whatsapp/encryption'
 import type { SendTimeParams } from '@/lib/whatsapp/template-send-builder'
 import { isMessageTemplate } from '@/lib/whatsapp/template-row-guard'
-import {
-  sanitizePhoneForMeta,
-  isValidE164,
-  phoneVariants,
-  isRecipientNotAllowedError,
-  phonesMatch,
-} from '@/lib/whatsapp/phone-utils'
 import {
   checkRateLimit,
   rateLimitResponse,
   RATE_LIMITS,
 } from '@/lib/rate-limit'
+import { sendWhatsAppMessageAndPersist } from '@/lib/whatsapp/meta-api-dispatcher'
 
 interface BroadcastResult {
   phone: string
@@ -66,80 +58,6 @@ function resolveTemplateBodyText(bodyTemplateText: string, params: string[]) {
   })
 }
 
-async function findOrCreateContactForBroadcast(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
-  accountId: string,
-  userId: string,
-  phone: string
-) {
-  const normalized = phone.replace(/\D/g, '')
-  const phoneSuffix = normalized.length >= 8 ? normalized.slice(-8) : normalized
-
-  const { data: contacts, error } = await supabase
-    .from('contacts')
-    .select('*')
-    .eq('account_id', accountId)
-    .like('phone', `%${phoneSuffix}`)
-
-  if (error) {
-    console.error('[Broadcast] findOrCreateContactForBroadcast error:', error)
-  }
-
-  const existing = contacts?.find((c: { phone: string }) => phonesMatch(c.phone, phone))
-  if (existing) return existing
-
-  const { data: newContact, error: createError } = await supabase
-    .from('contacts')
-    .insert({
-      account_id: accountId,
-      user_id: userId,
-      phone: phone,
-      name: phone,
-    })
-    .select()
-    .single()
-
-  if (createError) {
-    console.error('[Broadcast] Failed to create contact for broadcast:', createError)
-    return null
-  }
-  return newContact
-}
-
-async function findOrCreateConversationForBroadcast(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
-  accountId: string,
-  userId: string,
-  contactId: string
-) {
-  const { data: existing, error } = await supabase
-    .from('conversations')
-    .select('*')
-    .eq('account_id', accountId)
-    .eq('contact_id', contactId)
-    .single()
-
-  if (!error && existing) return existing
-
-  const { data: newConv, error: createError } = await supabase
-    .from('conversations')
-    .insert({
-      account_id: accountId,
-      user_id: userId,
-      contact_id: contactId,
-    })
-    .select()
-    .single()
-
-  if (createError) {
-    console.error('[Broadcast] Failed to create conversation for broadcast:', createError)
-    return null
-  }
-  return newConv
-}
-
 export async function POST(request: Request) {
   try {
     const supabase = await createClient()
@@ -161,10 +79,7 @@ export async function POST(request: Request) {
       return rateLimitResponse(limit)
     }
 
-    // Resolve the caller's account_id. whatsapp_config + templates
-    // + broadcasts are all account-scoped post-multi-user, so the
-    // old `.eq('user_id', user.id)` filters miss every row created
-    // by a teammate.
+    // Resolve the caller's account_id.
     const { data: profile } = await supabase
       .from('profiles')
       .select('account_id')
@@ -187,7 +102,7 @@ export async function POST(request: Request) {
       template_params,
     } = body
 
-    // Normalize to a list of {phone, params} regardless of shape.
+    // Normalize to a list of {phone, params, messageParams} regardless of shape.
     let recipients: NewRecipient[]
     if (Array.isArray(newRecipients) && newRecipients.length > 0) {
       recipients = newRecipients
@@ -218,9 +133,9 @@ export async function POST(request: Request) {
 
     const { data: config, error: configError } = await supabase
       .from('whatsapp_config')
-      .select('*')
+      .select('id')
       .eq('account_id', accountId)
-      .single()
+      .maybeSingle()
 
     if (configError || !config) {
       return NextResponse.json(
@@ -232,13 +147,9 @@ export async function POST(request: Request) {
       )
     }
 
-    const accessToken = decrypt(config.access_token)
-
     // Load the template row once so sendTemplateMessage can build
     // header + button components on each iteration. Loading inside
     // the loop would N+1 against Supabase for every recipient.
-    // Guard against a malformed local row crashing every send in
-    // the loop with the same opaque TypeError — fail loudly once.
     let query = supabase
       .from('message_templates')
       .select('*')
@@ -283,116 +194,39 @@ export async function POST(request: Request) {
     let failedCount = 0
 
     for (const recipient of recipients) {
-      const sanitized = sanitizePhoneForMeta(recipient.phone)
+      const bodyParams = recipient.messageParams?.body || recipient.params || []
+      const resolvedText = templateRow?.body_text
+        ? resolveTemplateBodyText(templateRow.body_text, bodyParams)
+        : `[Template: ${template_name}]`
 
-      if (!isValidE164(sanitized)) {
-        results.push({
-          phone: recipient.phone,
-          status: 'failed',
-          error: 'Invalid phone number format',
-        })
-        failedCount++
-        continue
-      }
+      const result = await sendWhatsAppMessageAndPersist({
+        accountId,
+        userId: user.id,
+        toPhone: recipient.phone,
+        kind: 'template',
+        senderType: 'agent', // Broadcasts logged as agent replies
+        templateName: template_name,
+        templateLanguage: templateRow?.language || template_language || 'en_US',
+        templateParams: recipient.params || [],
+        messageParams: recipient.messageParams || undefined,
+        templateRow: templateRow ?? undefined,
+        text: resolvedText,
+        customDbClient: supabase,
+      })
 
-      // Retry with phone variants on "not in allowed list" so numbers
-      // that differ only in a trunk-prefix 0 still reach recipients.
-      const variants = phoneVariants(sanitized)
-      let sentMessageId: string | null = null
-      let lastError: string | null = null
-
-      for (const variant of variants) {
-        try {
-          console.log(`[Broadcast] Dispatching to ${variant}. Template: ${template_name}, Lang: ${templateRow?.language || template_language || 'en_US'}`)
-          console.log(`[Broadcast] Params: ${JSON.stringify(recipient.params)}, MessageParams: ${JSON.stringify(recipient.messageParams)}`)
-          const result = await sendTemplateMessage({
-            phoneNumberId: config.phone_number_id,
-            accessToken,
-            to: variant,
-            templateName: template_name,
-            language: templateRow?.language || template_language || 'en_US',
-            template: templateRow ?? undefined,
-            messageParams: recipient.messageParams,
-            params: recipient.params ?? [],
-          })
-          sentMessageId = result.messageId
-          lastError = null
-          break
-        } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : 'Unknown error'
-          console.error(`[Broadcast] Failed sending to ${variant}:`, errorMessage)
-          if (!isRecipientNotAllowedError(errorMessage)) {
-            lastError = errorMessage
-            break
-          }
-          lastError = errorMessage
-          // retry with next variant
-        }
-      }
-
-      if (sentMessageId) {
-        // Record successful send to database
-        try {
-          const contact = await findOrCreateContactForBroadcast(
-            supabase,
-            accountId,
-            user.id,
-            recipient.phone
-          )
-          if (contact) {
-            const conversation = await findOrCreateConversationForBroadcast(
-              supabase,
-              accountId,
-              user.id,
-              contact.id
-            )
-            if (conversation) {
-              const bodyParams = recipient.messageParams?.body || recipient.params || []
-              const resolvedText = templateRow?.body_text
-                ? resolveTemplateBodyText(templateRow.body_text, bodyParams)
-                : `[Template: ${template_name}]`
-
-              await supabase.from('messages').insert({
-                conversation_id: conversation.id,
-                sender_type: 'agent',
-                content_type: 'template',
-                content_text: resolvedText,
-                template_name: template_name,
-                message_id: sentMessageId,
-                status: 'sent',
-              })
-
-              // Update conversation
-              await supabase
-                .from('conversations')
-                .update({
-                  last_message_text: resolvedText,
-                  last_message_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
-                })
-                .eq('id', conversation.id)
-            }
-          }
-        } catch (dbErr) {
-          console.error('[Broadcast] Failed to record message/conversation to DB:', dbErr)
-        }
-
+      if (result.success && result.whatsappMessageId) {
         results.push({
           phone: recipient.phone,
           status: 'sent',
-          whatsapp_message_id: sentMessageId,
+          whatsapp_message_id: result.whatsappMessageId,
         })
         sentCount++
       } else {
-        console.error(
-          `Failed to send broadcast to ${recipient.phone}:`,
-          lastError
-        )
+        console.error(`Failed to send broadcast to ${recipient.phone}:`, result.error)
         results.push({
           phone: recipient.phone,
           status: 'failed',
-          error: lastError || 'Unknown error',
+          error: result.error || 'Unknown error',
         })
         failedCount++
       }

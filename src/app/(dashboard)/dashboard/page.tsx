@@ -30,7 +30,7 @@ import { ConversationsChart } from '@/components/dashboard/conversations-chart'
 import { PipelineDonut } from '@/components/dashboard/pipeline-donut'
 import { ResponseTimeChart } from '@/components/dashboard/response-time-chart'
 import { ActivityFeed } from '@/components/dashboard/activity-feed'
-import { getCurrencyIcon } from '@/lib/currency-utils'
+import { getCurrencyIcon, formatCurrency } from '@/lib/currency-utils'
 
 type RangeDays = 7 | 30 | 90
 
@@ -38,28 +38,6 @@ export default function DashboardPage() {
   const [metrics, setMetrics] = useState<MetricsBundle | null>(null)
   const [metricsLoading, setMetricsLoading] = useState(true)
   const [currency, setCurrency] = useState('INR')
-
-  const formatCurrency = useCallback((v: number): string => {
-    if (currency === 'INR') {
-      if (v >= 10000000) {
-        const cr = v / 10000000;
-        return `₹${cr.toFixed(2).replace(/\.00$/, '')} Cr`;
-      } else if (v >= 100000) {
-        const lakhs = v / 100000;
-        return `₹${lakhs.toFixed(2).replace(/\.00$/, '')} Lakhs`;
-      }
-      return new Intl.NumberFormat('en-IN', {
-        style: 'currency',
-        currency: 'INR',
-        maximumFractionDigits: 0,
-      }).format(v);
-    }
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency: currency,
-      maximumFractionDigits: 0,
-    }).format(v)
-  }, [currency]);
 
   useEffect(() => {
     const db = createClient()
@@ -190,7 +168,7 @@ export default function DashboardPage() {
             />
             <MetricCard
               title="Expected Revenue (Brokerage)"
-              value={formatCurrency(metrics.openDealsValue)}
+              value={formatCurrency(metrics.openDealsValue, currency)}
               icon={getCurrencyIcon(currency)}
               subtitle={`${metrics.openDealsCount} open deal${metrics.openDealsCount === 1 ? '' : 's'}`}
             />

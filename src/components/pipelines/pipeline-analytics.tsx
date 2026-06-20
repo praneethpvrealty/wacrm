@@ -14,36 +14,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { getCurrencyIcon } from "@/lib/currency-utils";
+import { getCurrencyIcon, formatCurrency } from "@/lib/currency-utils";
 
 interface PipelineAnalyticsProps {
   stages: PipelineStage[];
   deals: Deal[];
   currency?: string;
-}
-
-function formatCurrency(value: number, currency: string = "INR") {
-  if (currency === "INR") {
-    if (value >= 10000000) {
-      const cr = value / 10000000;
-      return `₹${cr.toFixed(2).replace(/\.00$/, '')} Cr`;
-    } else if (value >= 100000) {
-      const lakhs = value / 100000;
-      return `₹${lakhs.toFixed(2).replace(/\.00$/, '')} Lakhs`;
-    }
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  }
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
 }
 
 /**

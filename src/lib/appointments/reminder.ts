@@ -1,7 +1,6 @@
 import { supabaseAdmin } from '@/lib/automations/admin-client'
-import { sendTemplateMessage } from '@/lib/whatsapp/meta-api'
-import { decrypt } from '@/lib/whatsapp/encryption'
-import { sanitizePhoneForMeta, isValidE164, phoneVariants } from '@/lib/whatsapp/phone-utils'
+import { sanitizePhoneForMeta, isValidE164 } from '@/lib/whatsapp/phone-utils'
+import { sendWhatsAppMessageAndPersist } from '@/lib/whatsapp/meta-api-dispatcher'
 
 export async function checkAndSendAppointmentReminders(): Promise<void> {
   const admin = supabaseAdmin()
@@ -52,47 +51,6 @@ export async function checkAndSendAppointmentReminders(): Promise<void> {
       continue
     }
 
-    // Get WhatsApp configuration for the account
-    const { data: config } = await admin
-      .from('whatsapp_config')
-      .select('*')
-      .eq('account_id', appt.account_id)
-      .maybeSingle()
-
-    if (!config || !config.phone_number_id || !config.access_token) {
-      console.warn(`[Reminder Cron] WhatsApp not configured for account: ${appt.account_id}`)
-      continue
-    }
-
-    let accessToken: string
-    try {
-      accessToken = decrypt(config.access_token)
-    } catch (decryptErr) {
-      console.error(`[Reminder Cron] Failed to decrypt access token for account: ${appt.account_id}`, decryptErr)
-      continue
-    }
-
-    // Check if the template exists in message_templates
-    const { data: templates } = await admin
-      .from('message_templates')
-      .select('*')
-      .eq('account_id', appt.account_id)
-      .eq('name', 'property_visit_reminder')
-      .limit(1)
-
-    const templateRow = templates?.[0]
-    
-    // Format the time parameter nicely in IST timezone
-    const formattedTime = startTimeDate.toLocaleString('en-IN', {
-      timeZone: 'Asia/Kolkata',
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    })
-
     const sanitizedPhone = sanitizePhoneForMeta(contact.phone)
     if (!isValidE164(sanitizedPhone)) {
       console.warn(`[Reminder Cron] Invalid phone format: ${contact.phone}`)
@@ -106,91 +64,50 @@ export async function checkAndSendAppointmentReminders(): Promise<void> {
 
     const accountName = (appt.account as { name: string } | null)?.name || 'our team'
 
-    // Try variants (e.g. adding country code prefix)
-    const variants = phoneVariants(sanitizedPhone)
-    let sentMessageId: string | null = null
-    let lastError: string | null = null
+    // Format the time parameter nicely in IST timezone
+    const formattedTime = startTimeDate.toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    })
 
-    for (const variant of variants) {
-      try {
-        const result = await sendTemplateMessage({
-          phoneNumberId: config.phone_number_id,
-          accessToken,
-          to: variant,
-          templateName: 'property_visit_reminder',
-          language: templateRow?.language || 'en_US',
-          template: templateRow ?? undefined,
-          params: [
-            contact.name || 'Client',
-            appt.property?.title || appt.title || 'Property visit',
-            formattedTime,
-            appt.location || 'Scheduled Location',
-            accountName
-          ]
-        })
-        sentMessageId = result.messageId
-        break
-      } catch (err) {
-        lastError = err instanceof Error ? err.message : String(err)
-      }
-    }
+    const bodyText = `Hi ${contact.name || 'Client'}, this is a friendly reminder for your scheduled property visit for "${appt.property?.title || appt.title || 'Property visit'}" on ${formattedTime}. Location: ${appt.location || 'Scheduled Location'}. Regards, ${accountName}.`
 
-    if (sentMessageId) {
-      console.log(`[Reminder Cron] Successfully sent reminder. Msg ID: ${sentMessageId}`)
+    const result = await sendWhatsAppMessageAndPersist({
+      accountId: appt.account_id,
+      userId: appt.user_id || null,
+      contactId: contact.id,
+      kind: 'template',
+      senderType: 'agent', // reminders logged as sent by agent
+      templateName: 'property_visit_reminder',
+      templateLanguage: 'en_US',
+      templateParams: [
+        contact.name || 'Client',
+        appt.property?.title || appt.title || 'Property visit',
+        formattedTime,
+        appt.location || 'Scheduled Location',
+        accountName
+      ],
+      text: bodyText, // Store formatted preview text in DB
+      customDbClient: admin
+    })
+
+    if (result.success) {
+      console.log(`[Reminder Cron] Successfully sent reminder. Msg ID: ${result.messageId}`)
       
       // Update appointment reminder status
       await admin
         .from('appointments')
         .update(isDue2h ? { reminder_2h_sent: true } : { reminder_24h_sent: true })
         .eq('id', appt.id)
-
-      // Find or create conversation to log in inbox thread
-      try {
-        let { data: conversation } = await admin
-          .from('conversations')
-          .select('id')
-          .eq('account_id', appt.account_id)
-          .eq('contact_id', contact.id)
-          .maybeSingle()
-
-        if (!conversation) {
-          const { data: newConv } = await admin
-            .from('conversations')
-            .insert({
-              account_id: appt.account_id,
-              user_id: appt.user_id,
-              contact_id: contact.id
-            })
-            .select('id')
-            .single()
-          conversation = newConv
-        }
-
-        if (conversation) {
-          const bodyText = `Hi ${contact.name || 'Client'}, this is a friendly reminder for your scheduled property visit for "${appt.property?.title || appt.title || 'Property visit'}" on ${formattedTime}. Location: ${appt.location || 'Scheduled Location'}. Regards, ${accountName}.`
-          
-          await admin.from('messages').insert({
-            conversation_id: conversation.id,
-            sender_type: 'agent',
-            content_type: 'template',
-            content_text: bodyText,
-            template_name: 'property_visit_reminder',
-            message_id: sentMessageId,
-            status: 'sent'
-          })
-
-          await admin.from('conversations').update({
-            last_message_text: bodyText,
-            last_message_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }).eq('id', conversation.id)
-        }
-      } catch (dbErr) {
-        console.error('[Reminder Cron] Failed to log reminder to DB:', dbErr)
-      }
     } else {
-      console.error(`[Reminder Cron] Failed to send reminder to ${contact.phone}. Error:`, lastError)
+      console.error(`[Reminder Cron] Failed to send reminder to ${contact.phone}. Error:`, result.error)
       // Note: we don't mark as sent here so that we can retry on next cron tick if it was a transient error.
     }
   }
 }
+

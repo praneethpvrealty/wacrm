@@ -4,6 +4,7 @@ import { GitBranch } from 'lucide-react'
 import type { PipelineDonutData } from '@/lib/dashboard/types'
 import { EmptyState } from './empty-state'
 import { Skeleton } from './skeleton'
+import { formatCurrencyShort } from '@/lib/currency-utils'
 
 interface PipelineDonutProps {
   data: PipelineDonutData | null
@@ -138,28 +139,4 @@ function arcPath(cx: number, cy: number, r: number, startRad: number, endRad: nu
   return `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}`
 }
 
-function formatCurrencyShort(v: number, currency: string = 'INR'): string {
-  if (currency === 'INR') {
-    if (v >= 10000000) {
-      const cr = v / 10000000;
-      return `₹${cr.toFixed(1).replace(/\.0$/, '')} Cr`;
-    }
-    if (v >= 100000) {
-      const lakhs = v / 100000;
-      return `₹${lakhs.toFixed(1).replace(/\.0$/, '')} L`;
-    }
-    return `₹${v.toLocaleString('en-IN')}`;
-  }
 
-  const symbols: Record<string, string> = {
-    USD: '$',
-    EUR: '€',
-    GBP: '£',
-    AED: 'د.إ',
-  };
-  const sym = symbols[currency] || '';
-
-  if (v >= 1_000_000) return `${sym}${(v / 1_000_000).toFixed(1)}M`
-  if (v >= 1_000) return `${sym}${(v / 1_000).toFixed(1)}k`
-  return `${sym}${v.toFixed(0)}`
-}
