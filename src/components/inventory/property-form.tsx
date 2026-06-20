@@ -198,57 +198,7 @@ export function PropertyForm({
     return Number(((r * 12) / p * 100).toFixed(2));
   }, [price, rentalIncome]);
 
-  const [syncingCatalog, setSyncingCatalog] = useState(false);
-  const [metaCatalogSyncedAt, setMetaCatalogSyncedAt] = useState<string | null>(null);
-  const [metaCatalogError, setMetaCatalogError] = useState<string | null>(null);
 
-  const prevPropertyIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (open && property) {
-      const isDifferentProperty = property.id !== prevPropertyIdRef.current;
-      prevPropertyIdRef.current = property.id;
-
-      if (isDifferentProperty) {
-        setMetaCatalogSyncedAt(property.meta_catalog_synced_at || null);
-        setMetaCatalogError(property.meta_catalog_error || null);
-      } else {
-        if (property.meta_catalog_synced_at) {
-          setMetaCatalogSyncedAt(property.meta_catalog_synced_at);
-        }
-        if (property.meta_catalog_error !== undefined) {
-          setMetaCatalogError(property.meta_catalog_error);
-        }
-      }
-    } else if (!open) {
-      prevPropertyIdRef.current = null;
-    }
-  }, [open, property]);
-
-  const handleSyncCatalog = async () => {
-    if (!property?.id) return;
-    try {
-      setSyncingCatalog(true);
-      const res = await fetch(`/api/properties/${property.id}/sync-catalog`, {
-        method: 'POST',
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to sync to catalog');
-      }
-      toast.success('Successfully synced property listing to Meta Catalog!');
-      setMetaCatalogSyncedAt(data.synced_at);
-      setMetaCatalogError(null);
-      onSaved();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      toast.error(msg);
-      setMetaCatalogError(msg);
-      setMetaCatalogSyncedAt(null);
-    } finally {
-      setSyncingCatalog(false);
-    }
-  };
 
   interface AutoCompleteProject {
     name: string;
@@ -1917,41 +1867,6 @@ export function PropertyForm({
 
                   {/* 10. ACTION FOOTER */}
                   <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 pt-4 mt-6">
-                    <div className="flex items-center gap-2 text-xs">
-                      {metaCatalogSyncedAt ? (
-                        <span className="text-emerald-400 font-medium flex items-center gap-1" title={`Synced on ${new Date(metaCatalogSyncedAt).toLocaleString()}`}>
-                          ✓ Meta Catalog Synced
-                        </span>
-                      ) : metaCatalogError ? (
-                        <span className="text-red-400 font-medium truncate max-w-[200px]" title={metaCatalogError}>
-                          ⚠ Catalog Sync Failed: {metaCatalogError}
-                        </span>
-                      ) : (
-                        <span className="text-slate-500 font-medium">
-                          Not synced to Meta Catalog
-                        </span>
-                      )}
-                      
-                      {canEdit && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          disabled={syncingCatalog}
-                          onClick={handleSyncCatalog}
-                          className="h-7 text-xs text-sky-405 hover:text-sky-350 hover:bg-slate-800/50 flex items-center gap-1 cursor-pointer px-2 rounded"
-                        >
-                          {syncingCatalog ? (
-                            <>
-                              <Loader2 className="size-3 animate-spin text-sky-400" />
-                              Syncing...
-                            </>
-                          ) : (
-                            'Sync Now'
-                          )}
-                        </Button>
-                      )}
-                    </div>
-
                     <div className="flex gap-2 shrink-0 ml-auto">
                       <Button
                         type="button"

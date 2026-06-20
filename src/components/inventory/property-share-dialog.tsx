@@ -843,7 +843,8 @@ export function PropertyShareDialog({
                       setShareMode('catalog');
                       setBroadcastStep('matches');
                     }}
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs h-9 flex items-center gap-1.5 cursor-pointer"
+                    disabled={!metaCatalogSyncedAt || !!metaCatalogError}
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs h-9 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Smartphone className="size-3.5" />
                     Select Contacts & Send Product Card
