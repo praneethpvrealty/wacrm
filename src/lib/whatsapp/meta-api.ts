@@ -1152,6 +1152,9 @@ export async function syncProductToCatalog(
   if (!response.ok) {
     await throwMetaError(response, `Meta Catalog sync failed: ${response.status}`)
   }
+
+  const resJson = await response.json().catch(() => ({}));
+  console.log('[syncProductToCatalog] Meta API Response:', JSON.stringify(resJson, null, 2));
 }
 
 export interface DeleteProductFromCatalogArgs {
