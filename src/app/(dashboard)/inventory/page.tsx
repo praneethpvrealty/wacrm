@@ -57,6 +57,7 @@ export default function InventoryPage() {
   // Modals state
   const [formOpen, setFormOpen] = useState(false);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
+  const [formViewOnly, setFormViewOnly] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Property | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -153,6 +154,7 @@ export default function InventoryPage() {
         }
         if (prop) {
           setSelectedProperty(prop);
+          setFormViewOnly(true);
           setFormOpen(true);
           setHasAutoOpened(true);
         }
@@ -195,11 +197,13 @@ export default function InventoryPage() {
       }
       const fullProperty = await response.json();
       setSelectedProperty(fullProperty);
+      setFormViewOnly(true);
       setFormOpen(true);
     } catch (err) {
       console.error('Failed to load property details:', err);
       // Fallback to list property if detail fetch fails
       setSelectedProperty(property);
+      setFormViewOnly(true);
       setFormOpen(true);
     }
   }
@@ -207,6 +211,7 @@ export default function InventoryPage() {
   // Handle add click
   function handleAddClick() {
     setSelectedProperty(null);
+    setFormViewOnly(false);
     setFormOpen(true);
   }
 
@@ -441,6 +446,7 @@ export default function InventoryPage() {
         onOpenChange={setFormOpen}
         property={selectedProperty}
         onSaved={fetchProperties}
+        viewOnly={formViewOnly}
       />
 
       {/* Flyer Creator Dialog */}

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
+import { useCan } from '@/hooks/use-can';
 import { toast } from 'sonner';
 import type { Property } from '@/types';
 import {
@@ -36,8 +37,21 @@ import {
   MessageSquare,
   Search,
   X,
+  MapPin,
+  BedDouble,
+  Bath,
+  Maximize2,
+  ExternalLink,
+  Compass,
+  Ruler,
+  Layers,
+  CheckCircle2,
+  Sparkles,
+  Share2,
+  Edit,
 } from 'lucide-react';
 import { getMatchingContacts } from '@/lib/matching';
+import { formatCurrency } from '@/lib/currency-utils';
 import type { Contact, MessageTemplate } from '@/types';
 import {
   POPULAR_PROJECTS,
@@ -121,6 +135,7 @@ interface PropertyFormProps {
   property?: Property | null;
   defaultOwnerId?: string | null;
   onSaved: () => void;
+  viewOnly?: boolean;
 }
 
 export function PropertyForm({
@@ -129,11 +144,23 @@ export function PropertyForm({
   property,
   defaultOwnerId = null,
   onSaved,
+  viewOnly = false,
 }: PropertyFormProps) {
   const supabase = createClient();
   const { user, accountId, profile } = useAuth();
+  const canEdit = useCan('send-messages');
   const isEdit = !!property;
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [viewMode, setViewMode] = useState(viewOnly);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+
+  useEffect(() => {
+    if (open) {
+      setViewMode(viewOnly);
+      setActiveImageIndex(0);
+    }
+  }, [open, viewOnly, property]);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -1453,8 +1480,8 @@ export function PropertyForm({
             <DialogHeader className="pb-3">
               <DialogTitle className="text-white flex items-center justify-between">
                 <span>
-                  {isEdit ? 'Edit Property Listing' : 'Add New Property Listing'}
-                  {isEdit && property?.property_code && (
+                  {viewMode ? 'Property Details' : isEdit ? 'Edit Property Listing' : 'Add New Property Listing'}
+                  {property?.property_code && (
                     <span className="ml-2 text-xs font-mono select-all bg-slate-800 border border-slate-700 text-slate-300 px-2 py-0.5 rounded font-normal">
                       {property.property_code}
                     </span>
@@ -1462,7 +1489,7 @@ export function PropertyForm({
                 </span>
               </DialogTitle>
               <DialogDescription className="text-slate-400">
-                Configure listing specifications, location details, and matching preferences.
+                {viewMode ? 'View listing specifications, photos, maps, and inquiries.' : 'Configure listing specifications, location details, and matching preferences.'}
               </DialogDescription>
             </DialogHeader>
 
@@ -1479,7 +1506,390 @@ export function PropertyForm({
           <div className="flex-1 overflow-y-auto min-h-0">
             {/* PROPERTY DETAILS TAB */}
             <TabsContent value="details" className="m-0 px-6 py-4 focus:outline-none">
-              <form onSubmit={handleSubmit} className="space-y-5">
+              {viewMode ? (
+                <div className="space-y-6 animate-fade-in pb-4">
+                  {/* 1. IMAGE CAROUSEL / GALLERY */}
+                  <div className="space-y-2">
+                    {images && images.filter(img => img && img.trim().length > 0).length > 0 ? (
+                      (() => {
+                        const validImages = images.filter(img => img && img.trim().length > 0);
+                        const activeImage = validImages[activeImageIndex] || validImages[0];
+                        return (
+                          <div className="space-y-2">
+                            {/* Main Active Image */}
+                            <div className="relative aspect-[16/9] w-full rounded-xl bg-slate-950 border border-slate-800 overflow-hidden group">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={activeImage}
+                                alt={title}
+                                className="w-full h-full object-cover"
+                              />
+                              <div className="absolute bottom-3 right-3 bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-md text-[10px] font-mono font-bold text-slate-300 border border-slate-800">
+                                {activeImageIndex + 1} / {validImages.length}
+                              </div>
+                            </div>
+                            {/* Thumbnail Row */}
+                            {validImages.length > 1 && (
+                              <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
+                                {validImages.map((img, idx) => (
+                                  <button
+                                    key={idx}
+                                    type="button"
+                                    onClick={() => setActiveImageIndex(idx)}
+                                    className={`relative h-14 w-20 rounded-lg overflow-hidden border-2 shrink-0 bg-slate-950 transition-all ${
+                                      idx === activeImageIndex
+                                        ? 'border-primary shadow-sm'
+                                        : 'border-slate-800 hover:border-slate-700'
+                                    }`}
+                                  >
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={img}
+                                      alt={`${title} thumbnail ${idx + 1}`}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()
+                    ) : (
+                      <div className="relative aspect-[16/9] w-full rounded-xl bg-slate-950/60 border border-dashed border-slate-800 overflow-hidden flex flex-col items-center justify-center text-slate-500 gap-2.5 py-12">
+                        <Building className="size-10 opacity-30 text-slate-400" />
+                        <span className="text-xs font-medium">No images uploaded for this listing.</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 2. CORE HEADER INFO */}
+                  <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 border-b border-slate-800/80 pb-4">
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className="bg-primary/10 text-primary hover:bg-primary/20 border-none font-semibold text-[10px] tracking-wide uppercase px-2 py-0.5 rounded">
+                          {type}
+                        </Badge>
+                        <Badge
+                          className={`border font-semibold text-[10px] tracking-wider uppercase px-2 py-0.5 rounded ${
+                            status === 'Available' ? 'bg-green-500/10 text-green-400 border-green-500/30' :
+                            status === 'Under Contract' ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' :
+                            status === 'Sold' ? 'bg-slate-800 text-slate-400 border-slate-700' :
+                            'bg-red-500/10 text-red-400 border-red-500/30'
+                          }`}
+                        >
+                          {status}
+                        </Badge>
+                        {listingSource === 'agent' && (
+                          <Badge className="bg-sky-500/10 text-sky-400 border border-sky-500/30 font-semibold text-[10px] tracking-wide uppercase px-2 py-0.5 rounded">
+                            Agent Referred
+                          </Badge>
+                        )}
+                      </div>
+                      <h3 className="text-xl font-bold text-white leading-tight pt-1">
+                        {title || 'Untitled Property'}
+                      </h3>
+                      <p className="text-xs text-slate-400 flex items-center gap-1">
+                        <MapPin className="size-3.5 shrink-0 text-slate-500" />
+                        <span>{address || sublocality ? [address, sublocality, city].filter(Boolean).join(', ') : 'No location details provided'}</span>
+                      </p>
+                    </div>
+
+                    <div className="text-left md:text-right shrink-0">
+                      <div className="text-2xl font-black text-white">
+                        {price ? formatCurrency(Number(price), currency) : '--'}
+                      </div>
+                      {price && !isNaN(Number(price)) && Number(price) > 0 && (
+                        <p className="text-[10px] text-primary font-semibold mt-0.5">
+                          {getEquivalentPriceLabel(price)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 3. KEY SPECS GRID */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {hasBedsBaths ? (
+                      <div className="p-3.5 rounded-xl border border-slate-800 bg-slate-950/20 hover:border-slate-700 transition-colors flex flex-col justify-center gap-1">
+                        <div className="flex items-center gap-1.5 text-slate-400">
+                          <BedDouble className="size-4 text-slate-500" />
+                          <span className="text-[10px] font-semibold uppercase tracking-wider">Bedrooms</span>
+                        </div>
+                        <span className="text-sm font-bold text-white">{bedrooms || '--'} Bedrooms</span>
+                      </div>
+                    ) : (
+                      <div className="p-3.5 rounded-xl border border-slate-800 bg-slate-950/20 hover:border-slate-700 transition-colors flex flex-col justify-center gap-1">
+                        <div className="flex items-center gap-1.5 text-slate-400">
+                          <Building className="size-4 text-slate-500" />
+                          <span className="text-[10px] font-semibold uppercase tracking-wider">Project</span>
+                        </div>
+                        <span className="text-sm font-bold text-white truncate" title={project || '--'}>{project || '--'}</span>
+                      </div>
+                    )}
+
+                    {hasBedsBaths ? (
+                      <div className="p-3.5 rounded-xl border border-slate-800 bg-slate-950/20 hover:border-slate-700 transition-colors flex flex-col justify-center gap-1">
+                        <div className="flex items-center gap-1.5 text-slate-400">
+                          <Bath className="size-4 text-slate-500" />
+                          <span className="text-[10px] font-semibold uppercase tracking-wider">Bathrooms</span>
+                        </div>
+                        <span className="text-sm font-bold text-white">{bathrooms || '--'} Bathrooms</span>
+                      </div>
+                    ) : (
+                      <div className="p-3.5 rounded-xl border border-slate-800 bg-slate-950/20 hover:border-slate-700 transition-colors flex flex-col justify-center gap-1">
+                        <div className="flex items-center gap-1.5 text-slate-400">
+                          <MapPin className="size-4 text-slate-500" />
+                          <span className="text-[10px] font-semibold uppercase tracking-wider">Locality</span>
+                        </div>
+                        <span className="text-sm font-bold text-white truncate" title={sublocality || '--'}>{sublocality || '--'}</span>
+                      </div>
+                    )}
+
+                    <div className="p-3.5 rounded-xl border border-slate-800 bg-slate-950/20 hover:border-slate-700 transition-colors flex flex-col justify-center gap-1">
+                      <div className="flex items-center gap-1.5 text-slate-400">
+                        <Maximize2 className="size-4 text-slate-500" />
+                        <span className="text-[10px] font-semibold uppercase tracking-wider">Area</span>
+                      </div>
+                      <span className="text-sm font-bold text-white truncate">
+                        {hasCommercialFields || type.includes('Land') || type.includes('Plot')
+                          ? landArea
+                            ? `${Number(landArea).toLocaleString('en-IN')} ${landAreaUnit}`
+                            : '--'
+                          : areaSqft
+                            ? `${Number(areaSqft).toLocaleString('en-IN')} ${areaUnit}`
+                            : '--'}
+                      </span>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl border border-slate-800 bg-slate-950/20 hover:border-slate-700 transition-colors flex flex-col justify-center gap-1">
+                      <div className="flex items-center gap-1.5 text-slate-400">
+                        <Compass className="size-4 text-slate-500" />
+                        <span className="text-[10px] font-semibold uppercase tracking-wider">Facing</span>
+                      </div>
+                      <span className="text-sm font-bold text-white truncate">{facingDirection || 'Any Facing'}</span>
+                    </div>
+                  </div>
+
+                  {/* 4. GOOGLE MAPS DEEP LINK CARD */}
+                  <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 rounded-lg bg-primary/10 text-primary shrink-0">
+                        <MapPin className="size-5" />
+                      </div>
+                      <div>
+                        <h5 className="font-semibold text-white text-sm">Google Maps Location</h5>
+                        <p className="text-xs text-slate-400 mt-0.5 max-w-xs md:max-w-md truncate" title={googleMapLink || address || property?.location}>
+                          {googleMapLink ? 'Click below to launch maps' : address || property?.location || 'No coordinates added'}
+                        </p>
+                      </div>
+                    </div>
+                    {googleMapLink ? (
+                      <a
+                        href={googleMapLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary hover:bg-primary/95 text-primary-foreground font-semibold px-4 py-2 text-xs transition-colors shrink-0"
+                      >
+                        <span>Open in Google Maps</span>
+                        <ExternalLink className="size-3.5" />
+                      </a>
+                    ) : (
+                      <span className="text-xs text-slate-500 font-medium select-none bg-slate-900 border border-slate-850 px-3 py-1.5 rounded-lg">
+                        No Map Link Available
+                      </span>
+                    )}
+                  </div>
+
+                  {/* 5. ABOUT DESCRIPTION */}
+                  {description && (
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">About this property</h4>
+                      <div className="text-slate-300 text-sm whitespace-pre-wrap leading-relaxed bg-slate-950/15 p-4 rounded-xl border border-slate-850">
+                        {description}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 6. EXTENDED SPECS AND METADATA */}
+                  {(superBuiltArea || frontage || depth || dimensions || roadWidth || landZone || idealFor || rentalIncome) && (
+                    <div className="space-y-2.5">
+                      <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Listing Metadata</h4>
+                      <div className="rounded-xl border border-slate-800 bg-slate-950/10 overflow-hidden text-xs">
+                        <div className="grid grid-cols-2 divide-x divide-slate-850 border-b border-slate-850 bg-slate-950/20">
+                          {superBuiltArea && (
+                            <div className="p-3 flex justify-between gap-2">
+                              <span className="text-slate-450 font-medium">Super Built Area</span>
+                              <span className="font-bold text-white">{Number(superBuiltArea).toLocaleString('en-IN')} Sq.Ft.</span>
+                            </div>
+                          )}
+                          {dimensions && (
+                            <div className="p-3 flex justify-between gap-2">
+                              <span className="text-slate-450 font-medium">Dimensions</span>
+                              <span className="font-bold text-white">{dimensions}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 divide-x divide-slate-850 border-b border-slate-850 bg-slate-950/20">
+                          {frontage && (
+                            <div className="p-3 flex justify-between gap-2">
+                              <span className="text-slate-450 font-medium">Frontage</span>
+                              <span className="font-bold text-white">{frontage} Feet</span>
+                            </div>
+                          )}
+                          {depth && (
+                            <div className="p-3 flex justify-between gap-2">
+                              <span className="text-slate-450 font-medium">Depth</span>
+                              <span className="font-bold text-white">{depth} Feet</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 divide-x divide-slate-850 border-b border-slate-850 bg-slate-950/20">
+                          {roadWidth && (
+                            <div className="p-3 flex justify-between gap-2">
+                              <span className="text-slate-450 font-medium">Road Width</span>
+                              <span className="font-bold text-white">{roadWidth} {roadWidthUnit}</span>
+                            </div>
+                          )}
+                          {landZone && (
+                            <div className="p-3 flex justify-between gap-2">
+                              <span className="text-slate-450 font-medium">Land Zone</span>
+                              <span className="font-bold text-white">{landZone}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 divide-x divide-slate-850 bg-slate-950/20">
+                          {idealFor && (
+                            <div className="p-3 flex justify-between gap-2">
+                              <span className="text-slate-450 font-medium">Ideal For</span>
+                              <span className="font-bold text-white truncate max-w-[150px]" title={idealFor}>{idealFor}</span>
+                            </div>
+                          )}
+                          {rentalIncome && (
+                            <div className="p-3 flex justify-between gap-2">
+                              <span className="text-slate-450 font-medium">Rental Income</span>
+                              <span className="font-bold text-emerald-400">
+                                {formatCurrency(Number(rentalIncome), currency)}
+                                {roiValue !== null && <span className="text-[10px] text-primary font-semibold ml-1.5">({roiValue}% Yield)</span>}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 7. NEARBY LANDMARKS */}
+                  {nearbyHighlights && nearbyHighlights.length > 0 && (
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Nearby Landmarks</h4>
+                      <div className="flex flex-wrap gap-1.5">
+                        {nearbyHighlights.map((hl, idx) => {
+                          const highlightIcons: Record<string, string> = {
+                            'School': '🏫',
+                            'Hospital': '🏥',
+                            'Metro Station': '🚇',
+                            'Mall': '🛍️',
+                            'Airport': '✈️',
+                            'Highway': '🛣️',
+                            'Railway Station': '🚉',
+                            'Bus Stop': '🚏',
+                            'Park': '🌳',
+                            'Supermarket': '🛒',
+                            'Bank / ATM': '🏦',
+                          };
+                          return (
+                            <Badge
+                              key={idx}
+                              variant="outline"
+                              className="bg-slate-950/30 border-slate-800 text-xs text-slate-200 font-medium px-3 py-1 rounded-full flex items-center gap-1.5"
+                            >
+                              <span>{highlightIcons[hl] || '📍'}</span>
+                              <span>{hl}</span>
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 8. AMENITIES & FEATURES */}
+                  {features && features.length > 0 && (
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Amenities & Features</h4>
+                      <div className="grid grid-cols-2 gap-2 bg-slate-950/15 p-4 rounded-xl border border-slate-850">
+                        {features.map((feature, idx) => (
+                          <div key={idx} className="flex items-center gap-2 text-xs font-medium text-slate-200">
+                            <CheckCircle2 className="size-4 text-emerald-400 shrink-0" />
+                            <span>{feature}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 9. OWNER DETAILS */}
+                  {(() => {
+                    const owner = property?.owner || contacts.find((c) => c.id === ownerContactId);
+                    if (!owner) return null;
+                    return (
+                      <div className="space-y-2">
+                        <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Owner Contact Info</h4>
+                        <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/20 flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-slate-800/80 border border-slate-700 flex items-center justify-center text-sm font-semibold text-slate-200">
+                              👤
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-white text-sm">{owner.name || 'Unnamed Owner'}</span>
+                                <Badge className="bg-slate-950 text-slate-400 border border-slate-800 text-[9px] px-1.5 py-0">
+                                  {owner.classification || 'Owner'}
+                                </Badge>
+                              </div>
+                              <p className="text-xs font-mono text-slate-400 mt-0.5">{owner.phone}</p>
+                            </div>
+                          </div>
+                          <a
+                            href={`https://wa.me/${owner.phone.replace(/[^0-9]/g, '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-800 bg-slate-950 hover:bg-slate-900 text-slate-200 font-semibold px-3 py-1.5 text-xs transition-colors shrink-0"
+                          >
+                            <span>WhatsApp</span>
+                            <span className="text-emerald-400">●</span>
+                          </a>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* 10. ACTION FOOTER */}
+                  <div className="flex justify-end gap-2 border-t border-slate-800 pt-4 mt-6">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => onOpenChange(false)}
+                      className="border-slate-700 hover:bg-slate-800 text-slate-350"
+                    >
+                      Close Details
+                    </Button>
+                    {canEdit && (
+                      <Button
+                        type="button"
+                        onClick={() => setViewMode(false)}
+                        className="bg-primary hover:bg-primary/95 text-primary-foreground font-semibold flex items-center gap-1.5"
+                      >
+                        <Edit className="size-4" />
+                        Edit Listing
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={handleSubmit} className="space-y-5">
                 {/* Main Info */}
                 <div className="grid grid-cols-2 gap-4">
                   {isEdit && property?.property_code && (
@@ -2481,7 +2891,8 @@ export function PropertyForm({
                   </Button>
                 </div>
               </form>
-            </TabsContent>
+            )}
+          </TabsContent>
 
             {/* MATCHING CONTACTS TAB */}
             <TabsContent value="matches" className="m-0 px-6 py-4 focus:outline-none flex flex-col flex-1 min-h-0">
