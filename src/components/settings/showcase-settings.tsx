@@ -27,6 +27,7 @@ export function ShowcaseSettingsPanel() {
   const [whatsappTemplate, setWhatsappTemplate] = useState(
     'Hi! I am interested in your property "{title}" in {location}. Please share details.'
   );
+  const [metaPixelId, setMetaPixelId] = useState('');
 
 
   useEffect(() => {
@@ -52,6 +53,7 @@ export function ShowcaseSettingsPanel() {
           setWebsiteUrl(data.website_url || 'https://www.aryavartaventures.com');
           setContactPhone(data.contact_phone || '');
           setWhatsappTemplate(data.whatsapp_message_template || '');
+          setMetaPixelId(data.meta_pixel_id || '');
 
         }
       } catch (err) {
@@ -76,6 +78,7 @@ export function ShowcaseSettingsPanel() {
         website_url: websiteUrl.trim(),
         contact_phone: contactPhone.trim(),
         whatsapp_message_template: whatsappTemplate.trim(),
+        meta_pixel_id: metaPixelId.trim() || null,
         updated_at: new Date().toISOString(),
       };
 
@@ -314,6 +317,25 @@ export function ShowcaseSettingsPanel() {
             </div>
             <p className="text-[11px] text-slate-400">
               The prefilled text message that opens when visitors click &quot;Inquire via WhatsApp&quot;. Use <code className="bg-slate-950 px-1 py-0.5 rounded text-primary">{`{title}`}</code> and <code className="bg-slate-950 px-1 py-0.5 rounded text-primary">{`{location}`}</code> as dynamic placeholders.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="metaPixelId" className="text-slate-350 font-medium">
+              Meta Pixel ID / Dataset ID (Optional)
+            </Label>
+            <div className="relative">
+              <Globe className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" />
+              <Input
+                id="metaPixelId"
+                value={metaPixelId}
+                onChange={(e) => setMetaPixelId(e.target.value)}
+                placeholder="e.g. 1856890568341240"
+                className="pl-10 bg-slate-950 border-slate-800 text-white placeholder:text-slate-650 focus:border-primary focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Paste your Meta Pixel ID or Dataset ID from Events Manager here. Fires ViewContent and Lead events to track listing views and conversions.
             </p>
           </div>
 

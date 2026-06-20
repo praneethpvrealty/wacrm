@@ -625,6 +625,7 @@ export interface ShowcaseSettings {
   whatsapp_message_template: string;
   flyer_ai_provider?: 'google' | 'huggingface';
   currency?: string;
+  meta_pixel_id?: string | null;
   created_at: string;
   updated_at: string;
 }
