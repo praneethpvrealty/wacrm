@@ -64,6 +64,8 @@ export async function POST(request: Request) {
       template_params,
       template_message_params,
       reply_to_message_id,
+      product_catalog_id,
+      product_retailer_id,
     } = body
 
     if (!conversation_id || !message_type) {
@@ -83,6 +85,13 @@ export async function POST(request: Request) {
     if (message_type === 'template' && !template_name) {
       return NextResponse.json(
         { error: 'template_name is required for template messages' },
+        { status: 400 }
+      )
+    }
+
+    if (message_type === 'product' && !product_retailer_id) {
+      return NextResponse.json(
+        { error: 'product_retailer_id is required for product messages' },
         { status: 400 }
       )
     }
@@ -242,7 +251,7 @@ export async function POST(request: Request) {
       userId: user.id,
       contactId: contact.id,
       conversationId: conversation.id,
-      kind: message_type === 'template' ? 'template' : 'text',
+      kind: message_type === 'template' ? 'template' : message_type === 'product' ? 'product' : 'text',
       senderType: 'agent',
       text: content_text,
       templateName: template_name,
@@ -250,6 +259,8 @@ export async function POST(request: Request) {
       templateParams: template_params,
       messageParams: template_message_params ?? undefined,
       templateRow: templateRow ?? undefined,
+      productCatalogId: product_catalog_id || config.catalog_id,
+      productRetailerId: product_retailer_id,
       contextMessageId,
       customDbClient: supabase,
     })

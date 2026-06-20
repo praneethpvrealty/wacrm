@@ -100,6 +100,10 @@ export async function POST(request: Request) {
       template_name,
       template_language,
       template_params,
+      broadcast_type = 'template',
+      product_catalog_id,
+      product_retailer_id,
+      content_text,
     } = body
 
     // Normalize to a list of {phone, params, messageParams} regardless of shape.
@@ -124,16 +128,23 @@ export async function POST(request: Request) {
       )
     }
 
-    if (!template_name) {
+    if (broadcast_type === 'template' && !template_name) {
       return NextResponse.json(
-        { error: 'template_name is required' },
+        { error: 'template_name is required for template broadcasts' },
+        { status: 400 }
+      )
+    }
+
+    if (broadcast_type === 'product' && !product_retailer_id) {
+      return NextResponse.json(
+        { error: 'product_retailer_id is required for product broadcasts' },
         { status: 400 }
       )
     }
 
     const { data: config, error: configError } = await supabase
       .from('whatsapp_config')
-      .select('id')
+      .select('id, catalog_id')
       .eq('account_id', accountId)
       .maybeSingle()
 
@@ -147,72 +158,91 @@ export async function POST(request: Request) {
       )
     }
 
-    // Load the template row once so sendTemplateMessage can build
-    // header + button components on each iteration. Loading inside
-    // the loop would N+1 against Supabase for every recipient.
-    let query = supabase
-      .from('message_templates')
-      .select('*')
-      .eq('account_id', accountId)
-      .eq('name', template_name)
-
-    if (template_language) {
-      query = query.eq('language', template_language)
-    } else {
-      query = query.eq('language', 'en_US')
-    }
-
-    const { data: rawTemplates } = await query.limit(1)
-    let rawTemplateRow = rawTemplates && rawTemplates.length > 0 ? rawTemplates[0] : null
-
-    // Fallback: If not found, try to find the template in any language
-    if (!rawTemplateRow) {
-      const { data: fallbackTemplates } = await supabase
+    let templateRow: MessageTemplate | null = null
+    if (broadcast_type === 'template' && template_name) {
+      // Load the template row once so sendTemplateMessage can build
+      // header + button components on each iteration. Loading inside
+      // the loop would N+1 against Supabase for every recipient.
+      let query = supabase
         .from('message_templates')
         .select('*')
         .eq('account_id', accountId)
         .eq('name', template_name)
-        .limit(1)
-      if (fallbackTemplates && fallbackTemplates.length > 0) {
-        rawTemplateRow = fallbackTemplates[0]
-      }
-    }
 
-    if (rawTemplateRow && !isMessageTemplate(rawTemplateRow)) {
-      return NextResponse.json(
-        {
-          error:
-            'Template row is malformed locally — run "Sync from Meta" in Settings to repair it before broadcasting.',
-        },
-        { status: 500 },
-      )
+      if (template_language) {
+        query = query.eq('language', template_language)
+      } else {
+        query = query.eq('language', 'en_US')
+      }
+
+      const { data: rawTemplates } = await query.limit(1)
+      let rawTemplateRow = rawTemplates && rawTemplates.length > 0 ? rawTemplates[0] : null
+
+      // Fallback: If not found, try to find the template in any language
+      if (!rawTemplateRow) {
+        const { data: fallbackTemplates } = await supabase
+          .from('message_templates')
+          .select('*')
+          .eq('account_id', accountId)
+          .eq('name', template_name)
+          .limit(1)
+        if (fallbackTemplates && fallbackTemplates.length > 0) {
+          rawTemplateRow = fallbackTemplates[0]
+        }
+      }
+
+      if (rawTemplateRow && !isMessageTemplate(rawTemplateRow)) {
+        return NextResponse.json(
+          {
+            error:
+              'Template row is malformed locally — run "Sync from Meta" in Settings to repair it before broadcasting.',
+          },
+          { status: 500 },
+        )
+      }
+      templateRow = rawTemplateRow ?? null
     }
-    const templateRow = rawTemplateRow ?? null
 
     const results: BroadcastResult[] = []
     let sentCount = 0
     let failedCount = 0
 
     for (const recipient of recipients) {
-      const bodyParams = recipient.messageParams?.body || recipient.params || []
-      const resolvedText = templateRow?.body_text
-        ? resolveTemplateBodyText(templateRow.body_text, bodyParams)
-        : `[Template: ${template_name}]`
+      let result
+      if (broadcast_type === 'template' && template_name) {
+        const bodyParams = recipient.messageParams?.body || recipient.params || []
+        const resolvedText = templateRow?.body_text
+          ? resolveTemplateBodyText(templateRow.body_text, bodyParams)
+          : `[Template: ${template_name}]`
 
-      const result = await sendWhatsAppMessageAndPersist({
-        accountId,
-        userId: user.id,
-        toPhone: recipient.phone,
-        kind: 'template',
-        senderType: 'agent', // Broadcasts logged as agent replies
-        templateName: template_name,
-        templateLanguage: templateRow?.language || template_language || 'en_US',
-        templateParams: recipient.params || [],
-        messageParams: recipient.messageParams || undefined,
-        templateRow: templateRow ?? undefined,
-        text: resolvedText,
-        customDbClient: supabase,
-      })
+        result = await sendWhatsAppMessageAndPersist({
+          accountId,
+          userId: user.id,
+          toPhone: recipient.phone,
+          kind: 'template',
+          senderType: 'agent', // Broadcasts logged as agent replies
+          templateName: template_name,
+          templateLanguage: templateRow?.language || template_language || 'en_US',
+          templateParams: recipient.params || [],
+          messageParams: recipient.messageParams || undefined,
+          templateRow: templateRow ?? undefined,
+          text: resolvedText,
+          customDbClient: supabase,
+        })
+      } else {
+        const defaultText = content_text || `*New Listing Available*\n\n${property_retailer_id}`
+        result = await sendWhatsAppMessageAndPersist({
+          accountId,
+          userId: user.id,
+          toPhone: recipient.phone,
+          kind: 'product',
+          senderType: 'agent',
+          productCatalogId: product_catalog_id || config.catalog_id,
+          productRetailerId: product_retailer_id,
+          text: defaultText,
+          customDbClient: supabase,
+        })
+      }
 
       if (result.success && result.whatsappMessageId) {
         results.push({

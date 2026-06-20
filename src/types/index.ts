@@ -238,6 +238,8 @@ export interface WhatsAppConfig {
   subscribed_apps_at?: string;
   /** Last error from /register; cleared on success. */
   last_registration_error?: string;
+  catalog_id?: string;
+  auto_sync_catalog?: boolean;
 }
 
 // Raw Meta status enum. We persist this verbatim from Meta (sync + webhook)
@@ -606,6 +608,8 @@ export interface Property {
   } | null;
   created_at: string;
   updated_at: string;
+  meta_catalog_synced_at?: string | null;
+  meta_catalog_error?: string | null;
 }
 
 // ============================================================

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireRole, toErrorResponse } from "@/lib/auth/account";
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from "@/lib/rate-limit";
+import { autoSyncPropertyCatalogIfNeeded } from "@/lib/whatsapp/catalog-sync-helper";
 
 const MAX_LIMIT = 100;
 const DEFAULT_LIMIT = 25;
@@ -229,6 +230,12 @@ export async function POST(request: Request) {
         { error: "Failed to create property" },
         { status: 500 }
       );
+    }
+
+    if (data && data.id) {
+      autoSyncPropertyCatalogIfNeeded(ctx.supabase, data.id, ctx.accountId).catch((err) => {
+        console.error("[POST /api/properties] Auto-sync background error:", err);
+      });
     }
 
     return NextResponse.json(data, { status: 201 });

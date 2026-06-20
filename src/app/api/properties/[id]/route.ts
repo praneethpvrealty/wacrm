@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireRole, toErrorResponse } from "@/lib/auth/account";
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from "@/lib/rate-limit";
+import { autoSyncPropertyCatalogIfNeeded } from "@/lib/whatsapp/catalog-sync-helper";
 
 // GET /api/properties/[id]
 // Returns a single property with full relations (owner + interested_contacts)
@@ -312,6 +313,12 @@ export async function PUT(
         { error: "Failed to update property" },
         { status: 500 }
       );
+    }
+
+    if (data && data.id) {
+      autoSyncPropertyCatalogIfNeeded(ctx.supabase, data.id, ctx.accountId).catch((err) => {
+        console.error("[PUT /api/properties/[id]] Auto-sync background error:", err);
+      });
     }
 
     return NextResponse.json(data);

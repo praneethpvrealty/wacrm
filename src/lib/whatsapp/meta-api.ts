@@ -1080,3 +1080,196 @@ export async function downloadMedia(
   const buffer = Buffer.from(await response.arrayBuffer())
   return { buffer, contentType }
 }
+
+// ============================================================
+// Commerce Catalog Sync & Product Messaging (Option 2)
+// ============================================================
+
+export interface SyncProductToCatalogArgs {
+  catalogId: string
+  accessToken: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  property: any
+}
+
+/**
+ * Synchronize a property listing with the Meta Commerce Catalog.
+ * Uses the Graph API Catalog batch endpoint with allow_upsert: true.
+ */
+export async function syncProductToCatalog(
+  args: SyncProductToCatalogArgs
+): Promise<void> {
+  const { catalogId, accessToken, property } = args
+  const url = `${META_API_BASE}/${catalogId}/batch`
+
+  const price = Number(property.price) || 0
+  const title = property.title || 'Property Listing'
+
+  const descriptionParts: string[] = []
+  if (property.property_code) descriptionParts.push(`Code: ${property.property_code}`)
+  if (property.location) descriptionParts.push(`Location: ${property.location}`)
+  if (property.description) descriptionParts.push(property.description)
+  const description = descriptionParts.join('\n').substring(0, 900) || 'Property details'
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://wacrm.tech'
+  const productUrl = `${siteUrl}/?property_id=${property.id}`
+  const heroImage = (Array.isArray(property.images) ? property.images : [])
+    .map((img: string) => img.trim())
+    .find((img: string) => img.length > 0) || `${siteUrl}/placeholder.png`
+
+  const retailerId = property.property_code || property.id
+
+  const body = {
+    allow_upsert: true,
+    requests: [
+      {
+        method: 'UPDATE',
+        retailer_id: retailerId,
+        data: {
+          title: title.substring(0, 140),
+          description,
+          image_url: heroImage,
+          price,
+          currency: 'INR',
+          availability: 'in stock',
+          condition: 'new',
+          url: productUrl,
+          brand: 'waCRM Properties',
+        },
+      },
+    ],
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(body),
+  })
+
+  if (!response.ok) {
+    await throwMetaError(response, `Meta Catalog sync failed: ${response.status}`)
+  }
+}
+
+export interface DeleteProductFromCatalogArgs {
+  catalogId: string
+  accessToken: string
+  retailerId: string
+}
+
+/**
+ * Delete a product listing from the Meta Commerce Catalog.
+ */
+export async function deleteProductFromCatalog(
+  args: DeleteProductFromCatalogArgs
+): Promise<void> {
+  const { catalogId, accessToken, retailerId } = args
+  const url = `${META_API_BASE}/${catalogId}/batch`
+
+  const body = {
+    requests: [
+      {
+        method: 'DELETE',
+        retailer_id: retailerId,
+      },
+    ],
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(body),
+  })
+
+  if (!response.ok) {
+    await throwMetaError(response, `Meta Catalog delete failed: ${response.status}`)
+  }
+}
+
+export interface SendProductMessageArgs {
+  phoneNumberId: string
+  accessToken: string
+  to: string
+  catalogId: string
+  productRetailerId: string
+  bodyText?: string
+  footerText?: string
+  contextMessageId?: string
+}
+
+/**
+ * Send an interactive single product message.
+ * When the customer taps, it opens the native Meta catalog overlay.
+ */
+export async function sendProductMessage(
+  args: SendProductMessageArgs
+): Promise<MetaSendResult> {
+  const {
+    phoneNumberId,
+    accessToken,
+    to,
+    catalogId,
+    productRetailerId,
+    bodyText,
+    footerText,
+    contextMessageId,
+  } = args
+
+  const action = {
+    catalog_id: catalogId,
+    product_retailer_id: productRetailerId,
+  }
+
+  const interactive: Record<string, unknown> = {
+    type: 'product',
+    action,
+  }
+  if (bodyText) {
+    interactive.body = {
+      text: bodyText.length > INTERACTIVE_LIMITS.bodyMaxLength
+        ? bodyText.substring(0, INTERACTIVE_LIMITS.bodyMaxLength - 4) + '...'
+        : bodyText,
+    }
+  }
+  if (footerText) {
+    interactive.footer = {
+      text: footerText.length > INTERACTIVE_LIMITS.footerMaxLength
+        ? footerText.substring(0, INTERACTIVE_LIMITS.footerMaxLength - 4) + '...'
+        : footerText,
+    }
+  }
+
+  const body: Record<string, unknown> = {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to,
+    type: 'interactive',
+    interactive,
+  }
+  if (contextMessageId) {
+    body.context = { message_id: contextMessageId }
+  }
+
+  const url = `${META_API_BASE}/${phoneNumberId}/messages`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(body),
+  })
+
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API product message failed: ${response.status}`)
+  }
+  const data = await response.json()
+  return { messageId: data.messages[0].id }
+}
+

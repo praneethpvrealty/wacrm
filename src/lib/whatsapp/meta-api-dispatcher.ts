@@ -5,6 +5,7 @@ import {
   sendMediaMessage,
   sendInteractiveButtons,
   sendInteractiveList,
+  sendProductMessage,
   type MediaKind,
   type InteractiveButton,
   type InteractiveListSection,
@@ -36,7 +37,7 @@ export interface SendWhatsAppAndPersistArgs {
   contactId?: string | null
   conversationId?: string | null
   toPhone?: string | null
-  kind: 'text' | 'template' | 'media' | 'interactive'
+  kind: 'text' | 'template' | 'media' | 'interactive' | 'product'
   senderType: 'user' | 'bot' | 'agent'
   text?: string | null
   templateName?: string | null
@@ -57,6 +58,8 @@ export interface SendWhatsAppAndPersistArgs {
   interactiveSections?: InteractiveListSection[] | null
   headerText?: string | null
   footerText?: string | null
+  productCatalogId?: string | null
+  productRetailerId?: string | null
   contextMessageId?: string | null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   customDbClient?: any
@@ -243,6 +246,22 @@ export async function sendWhatsAppMessageAndPersist(
             return resultList.messageId
           }
 
+        case 'product':
+          if (!args.productCatalogId || !args.productRetailerId) {
+            throw new Error('productCatalogId and productRetailerId are required')
+          }
+          const resultProd = await sendProductMessage({
+            phoneNumberId,
+            accessToken,
+            to: phone,
+            catalogId: args.productCatalogId,
+            productRetailerId: args.productRetailerId,
+            bodyText: args.text || undefined,
+            footerText: args.footerText || undefined,
+            contextMessageId: args.contextMessageId || undefined,
+          })
+          return resultProd.messageId
+
         case 'text':
         default:
           if (!args.text) throw new Error('text content is required')
@@ -289,7 +308,7 @@ export async function sendWhatsAppMessageAndPersist(
         ? 'template'
         : args.kind === 'media'
         ? args.mediaKind || 'document'
-        : args.kind === 'interactive'
+        : args.kind === 'interactive' || args.kind === 'product'
         ? 'interactive'
         : 'text'
 
@@ -300,6 +319,8 @@ export async function sendWhatsAppMessageAndPersist(
         ? args.mediaCaption || null
         : args.kind === 'interactive'
         ? args.interactiveBody || null
+        : args.kind === 'product'
+        ? args.text || '[Product Listing]'
         : args.text || null // Fallback to provided text
 
     const template_name = args.kind === 'template' ? args.templateName : null
@@ -333,6 +354,8 @@ export async function sendWhatsAppMessageAndPersist(
         ? args.mediaCaption?.trim() || `[${args.mediaKind}]`
         : args.kind === 'interactive'
         ? args.interactiveBody || '[interactive]'
+        : args.kind === 'product'
+        ? args.text || '[Product Listing]'
         : args.text || ''
 
     await db

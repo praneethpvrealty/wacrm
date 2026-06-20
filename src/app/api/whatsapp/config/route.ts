@@ -87,7 +87,7 @@ export async function GET() {
 
     const { data: config, error: configError } = await supabase
       .from('whatsapp_config')
-      .select('phone_number_id, access_token, status')
+      .select('phone_number_id, access_token, status, catalog_id, auto_sync_catalog')
       .eq('account_id', accountId)
       .maybeSingle()
 
@@ -131,11 +131,12 @@ export async function GET() {
 
     // Validate credentials against Meta
     try {
-      const phoneInfo = await verifyPhoneNumber({
-        phoneNumberId: config.phone_number_id,
-        accessToken,
+      return NextResponse.json({
+        connected: true,
+        phone_info: phoneInfo,
+        catalog_id: config.catalog_id || null,
+        auto_sync_catalog: config.auto_sync_catalog || false,
       })
-      return NextResponse.json({ connected: true, phone_info: phoneInfo })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown Meta API error'
       console.error('[whatsapp/config GET] Meta API verification failed:', message)
@@ -144,6 +145,8 @@ export async function GET() {
           connected: false,
           reason: 'meta_api_error',
           message: `Meta API rejected the credentials: ${message}`,
+          catalog_id: config.catalog_id || null,
+          auto_sync_catalog: config.auto_sync_catalog || false,
         },
         { status: 200 }
       )
@@ -185,7 +188,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { phone_number_id, waba_id, access_token, verify_token, pin } = body
+    const { phone_number_id, waba_id, access_token, verify_token, pin, catalog_id, auto_sync_catalog } = body
 
     if (!access_token || !phone_number_id) {
       return NextResponse.json(
@@ -363,6 +366,8 @@ export async function POST(request: Request) {
       subscribed_apps_at: subscribedAppsAt ?? null,
       last_registration_error: registrationError,
       updated_at: new Date().toISOString(),
+      catalog_id: catalog_id || null,
+      auto_sync_catalog: typeof auto_sync_catalog === 'boolean' ? auto_sync_catalog : false,
     }
 
     if (existing) {
@@ -418,6 +423,8 @@ export async function POST(request: Request) {
       saved: true,
       registered: true,
       phone_info: phoneInfo,
+      catalog_id: catalog_id || null,
+      auto_sync_catalog: typeof auto_sync_catalog === 'boolean' ? auto_sync_catalog : false,
     })
   } catch (error) {
     console.error('Error in WhatsApp config POST:', error)

@@ -84,6 +84,28 @@ export function PropertyShareDialog({
   const [freshClassification, setFreshClassification] = useState<'Buyer' | 'Agent'>('Buyer');
   const [addingFresh, setAddingFresh] = useState(false);
   const [currency, setCurrency] = useState('INR');
+  const [catalogId, setCatalogId] = useState<string | null>(null);
+  const [shareMode, setShareMode] = useState<'template' | 'catalog'>('template');
+  const [syncingCatalog, setSyncingCatalog] = useState(false);
+  const [metaCatalogSyncedAt, setMetaCatalogSyncedAt] = useState<string | null>(null);
+  const [metaCatalogError, setMetaCatalogError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open && accountId) {
+      supabase
+        .from('whatsapp_config')
+        .select('catalog_id')
+        .eq('account_id', accountId)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.catalog_id) {
+            setCatalogId(data.catalog_id);
+          } else {
+            setCatalogId(null);
+          }
+        });
+    }
+  }, [open, accountId, supabase]);
 
   // Currency Formatter
   const formattedPrice = useMemo(() => {
@@ -144,7 +166,7 @@ export function PropertyShareDialog({
       if (error) throw error;
       const tData = data || [];
       setTemplates(tData);
-      
+
       // Intelligent auto-selection
       if (tData.length > 0) {
         // 1. Try to find a template specifically meant for sharing property details
@@ -178,6 +200,8 @@ export function PropertyShareDialog({
     if (open) {
       if (!wasOpenRef.current && property) {
         wasOpenRef.current = true;
+        setMetaCatalogSyncedAt(property.meta_catalog_synced_at || null);
+        setMetaCatalogError(property.meta_catalog_error || null);
         fetchContacts();
         fetchTemplates();
         // Load currency settings from showcase_settings
@@ -285,7 +309,7 @@ export function PropertyShareDialog({
     setAddingFresh(true);
     try {
       const normalizedPhone = normalizePhoneWithCountryCode(freshPhone.trim());
-      
+
       const newContactRecord = {
         name: freshName.trim() || null,
         phone: normalizedPhone || freshPhone.trim(),
@@ -309,7 +333,7 @@ export function PropertyShareDialog({
         setContacts((prev) => [data, ...prev]);
         // Automatically select the contact
         setSelectedContactIds((prev) => [...prev, data.id]);
-        
+
         // Reset form
         setFreshName('');
         setFreshPhone('');
@@ -349,7 +373,7 @@ export function PropertyShareDialog({
 
       placeholders.forEach((placeholder, idx) => {
         const key = placeholder.replace(/^\{\{|\}\}$/g, '');
-        
+
         let guessedType: 'field' | 'static' = 'static';
         let guessedValue = 'custom';
         let resolved = false;
@@ -526,8 +550,8 @@ export function PropertyShareDialog({
           messageParams.headerMediaUrl = propertyImage;
         }
 
-        const hasTextHeaderVar = selectedTemplate.header_type === 'text' && 
-          selectedTemplate.header_content && 
+        const hasTextHeaderVar = selectedTemplate.header_type === 'text' &&
+          selectedTemplate.header_content &&
           /\{\{\d+\}\}/.test(selectedTemplate.header_content);
 
         if (hasTextHeaderVar) {
@@ -596,6 +620,69 @@ export function PropertyShareDialog({
     }
   }
 
+  // Execute catalog product sharing request
+  async function handleSendCatalogBroadcast() {
+    if (!catalogId || selectedContactIds.length === 0 || !property) return;
+    setSendingBroadcast(true);
+    setBroadcastStep('sending');
+
+    try {
+      const selectedContacts = contacts.filter((c) => selectedContactIds.includes(c.id));
+      const recipientsPayload = selectedContacts.map((contact) => ({
+        phone: contact.phone,
+      }));
+
+      const bodyText = `🏠 *${property.title}*\n💰 Price: ${formattedPrice}\n📍 Location: ${property.sublocality || property.location}`;
+
+      const response = await fetch('/api/whatsapp/broadcast', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          recipients: recipientsPayload,
+          broadcast_type: 'product',
+          product_catalog_id: catalogId,
+          product_retailer_id: property.property_code || property.id,
+          content_text: bodyText,
+        }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Catalog sending failed');
+      }
+
+      const resData = await response.json();
+
+      const resultsMap = selectedContacts.map((c) => {
+        const matchResult = resData.results?.find(
+          (r: { phone: string; status?: 'sent' | 'failed' | null; error?: string | null }) =>
+            r.phone === c.phone ||
+            r.phone.includes(c.phone) ||
+            c.phone.includes(r.phone)
+        );
+        return {
+          name: c.name || 'Unknown',
+          phone: c.phone,
+          status: (matchResult?.status || 'failed') as 'sent' | 'failed',
+          error: matchResult?.error || (matchResult?.status === 'failed' ? 'Delivery failure' : undefined),
+        };
+      });
+
+      setBroadcastResults(resultsMap);
+      setBroadcastStep('results');
+      toast.success(`Dispatched WhatsApp catalog product messages successfully.`);
+      if (onSaved) onSaved();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      toast.error(errorMessage || 'Failed to send catalog product messages');
+      setBroadcastStep('matches');
+    } finally {
+      setSendingBroadcast(false);
+    }
+  }
+
   if (!property) return null;
 
   return (
@@ -609,7 +696,9 @@ export function PropertyShareDialog({
           <DialogDescription className="text-slate-400 text-xs">
             {broadcastStep === 'link'
               ? `Share public showcasing details of "${property.title}" directly.`
-              : `Send WhatsApp details of "${property.title}" using verified message templates.`
+              : shareMode === 'catalog'
+                ? `Send interactive catalog product messages for "${property.title}" to your contacts.`
+                : `Send WhatsApp details of "${property.title}" using verified message templates.`
             }
           </DialogDescription>
         </DialogHeader>
@@ -676,7 +765,10 @@ export function PropertyShareDialog({
               </p>
               <div className="flex justify-end">
                 <Button
-                  onClick={() => setBroadcastStep('matches')}
+                  onClick={() => {
+                    setShareMode('template');
+                    setBroadcastStep('matches');
+                  }}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 flex items-center gap-1.5 cursor-pointer"
                 >
                   <Users className="size-3.5" />
@@ -684,6 +776,81 @@ export function PropertyShareDialog({
                 </Button>
               </div>
             </div>
+
+            {catalogId && (
+              <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                    🛍️ Share as WhatsApp Product Card
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px]">
+                      {metaCatalogSyncedAt && !metaCatalogError ? (
+                        <span className="text-emerald-400 font-medium">● Synced to Catalog</span>
+                      ) : metaCatalogError ? (
+                        <span className="text-red-400 font-medium" title={metaCatalogError}>● Sync Failed</span>
+                      ) : (
+                        <span className="text-amber-400 font-medium">● Not Synced</span>
+                      )}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      onClick={async () => {
+                        if (syncingCatalog) return;
+                        setSyncingCatalog(true);
+                        try {
+                          const res = await fetch(`/api/properties/${property.id}/sync-catalog`, {
+                            method: 'POST',
+                          });
+                          const data = await res.json();
+                          if (!res.ok) {
+                            throw new Error(data.error || 'Failed to sync to catalog');
+                          }
+                          toast.success('Successfully synced property details to Meta Catalog.');
+                          setMetaCatalogSyncedAt(data.synced_at || new Date().toISOString());
+                          setMetaCatalogError(null);
+                          if (onSaved) onSaved();
+                        } catch (err: unknown) {
+                          const msg = (err instanceof Error ? err.message : 'Sync failed');
+                          toast.error(msg);
+                          setMetaCatalogError(msg);
+                          setMetaCatalogSyncedAt(null);
+                        } finally {
+                          setSyncingCatalog(false);
+                        }
+                      }}
+                      disabled={syncingCatalog}
+                      className="h-7 border-slate-800 hover:bg-slate-850 text-xs px-2.5"
+                    >
+                      {syncingCatalog ? (
+                        <>
+                          <Loader2 className="size-3 animate-spin mr-1" />
+                          Syncing
+                        </>
+                      ) : (
+                        'Sync Now'
+                      )}
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Send this property as an interactive catalog product card directly inside WhatsApp chat. This provides a direct shopping experience with inline image, details, and price.
+                </p>
+                <div className="flex justify-end">
+                  <Button
+                    onClick={() => {
+                      setShareMode('catalog');
+                      setBroadcastStep('matches');
+                    }}
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs h-9 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Smartphone className="size-3.5" />
+                    Select Contacts & Send Product Card
+                  </Button>
+                </div>
+              </div>
+            )}
 
             <div className="border-t border-slate-800 pt-3.5 flex justify-end">
               <Button
@@ -880,11 +1047,10 @@ export function PropertyShareDialog({
                     <div
                       key={c.id}
                       onClick={() => toggleContactSelection(c.id)}
-                      className={`flex items-start gap-3.5 p-3 rounded-xl border cursor-pointer transition-all ${
-                        isSelected
+                      className={`flex items-start gap-3.5 p-3 rounded-xl border cursor-pointer transition-all ${isSelected
                           ? 'bg-primary/5 border-primary/45 ring-1 ring-primary/10'
                           : 'bg-slate-900/50 border-slate-800 hover:border-slate-750'
-                      }`}
+                        }`}
                     >
                       <button
                         type="button"
@@ -897,23 +1063,21 @@ export function PropertyShareDialog({
                           <div className="flex items-center gap-2 min-w-0">
                             <h4 className="text-xs font-bold text-white truncate">{c.name || 'Unnamed'}</h4>
                             <span
-                              className={`inline-flex items-center rounded px-1.5 py-0.2 text-[9px] font-bold shrink-0 ${
-                                c.classification === 'Buyer'
+                              className={`inline-flex items-center rounded px-1.5 py-0.2 text-[9px] font-bold shrink-0 ${c.classification === 'Buyer'
                                   ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                                   : 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
-                              }`}
+                                }`}
                             >
                               {c.classification}
                             </span>
                           </div>
                           <Badge
-                            className={`rounded px-1.5 py-0.5 text-[9px] font-bold shrink-0 ${
-                              score >= 70
+                            className={`rounded px-1.5 py-0.5 text-[9px] font-bold shrink-0 ${score >= 70
                                 ? 'bg-green-500/10 text-green-400 border border-green-500/20'
                                 : score >= 30
                                   ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                                   : 'bg-slate-800 text-slate-400'
-                            }`}
+                              }`}
                           >
                             {score}% Match
                           </Badge>
@@ -954,41 +1118,63 @@ export function PropertyShareDialog({
               >
                 <ArrowLeft className="size-3.5" /> Back
               </Button>
-              
+
               <div className="flex items-center gap-2">
-                {selectedTemplate && (
-                  <span className="hidden md:inline text-[11px] text-slate-400 italic max-w-[200px] truncate mr-1.5" title={`Template: ${selectedTemplate.name}`}>
-                    Template: {selectedTemplate.name}
-                  </span>
+                {shareMode === 'catalog' ? (
+                  <Button
+                    type="button"
+                    disabled={selectedContactIds.length === 0 || sendingBroadcast}
+                    onClick={handleSendCatalogBroadcast}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 flex items-center gap-1.5"
+                  >
+                    {sendingBroadcast ? (
+                      <>
+                        <Loader2 className="size-3.5 animate-spin mr-1" /> Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="size-3.5" />
+                        Send Product Card ({selectedContactIds.length})
+                      </>
+                    )}
+                  </Button>
+                ) : (
+                  <>
+                    {selectedTemplate && (
+                      <span className="hidden md:inline text-[11px] text-slate-400 italic max-w-[200px] truncate mr-1.5" title={`Template: ${selectedTemplate.name}`}>
+                        Template: {selectedTemplate.name}
+                      </span>
+                    )}
+
+                    <Button
+                      type="button"
+                      disabled={selectedContactIds.length === 0 || !selectedTemplate}
+                      variant="outline"
+                      onClick={() => setBroadcastStep('configure')}
+                      className="border-slate-805 hover:bg-slate-800 text-slate-300 text-xs h-9 flex items-center gap-1"
+                    >
+                      Configure & Review
+                    </Button>
+
+                    <Button
+                      type="button"
+                      disabled={selectedContactIds.length === 0 || !selectedTemplate || sendingBroadcast}
+                      onClick={handleSendBroadcast}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 flex items-center gap-1.5"
+                    >
+                      {sendingBroadcast ? (
+                        <>
+                          <Loader2 className="size-3.5 animate-spin mr-1" /> Sending...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="size-3.5" />
+                          Send Directly ({selectedContactIds.length})
+                        </>
+                      )}
+                    </Button>
+                  </>
                 )}
-                
-                <Button
-                  type="button"
-                  disabled={selectedContactIds.length === 0 || !selectedTemplate}
-                  variant="outline"
-                  onClick={() => setBroadcastStep('configure')}
-                  className="border-slate-805 hover:bg-slate-800 text-slate-300 text-xs h-9 flex items-center gap-1"
-                >
-                  Configure & Review
-                </Button>
-                
-                <Button
-                  type="button"
-                  disabled={selectedContactIds.length === 0 || !selectedTemplate || sendingBroadcast}
-                  onClick={handleSendBroadcast}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 flex items-center gap-1.5"
-                >
-                  {sendingBroadcast ? (
-                    <>
-                      <Loader2 className="size-3.5 animate-spin mr-1" /> Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="size-3.5" />
-                      Send Directly ({selectedContactIds.length})
-                    </>
-                  )}
-                </Button>
               </div>
             </div>
           </div>
@@ -1052,11 +1238,10 @@ export function PropertyShareDialog({
                       <div
                         key={idx}
                         onClick={() => setSelectedBroadcastImage(imgUrl)}
-                        className={`relative size-14 rounded-lg overflow-hidden border-2 cursor-pointer shrink-0 transition-all ${
-                          selectedBroadcastImage === imgUrl
+                        className={`relative size-14 rounded-lg overflow-hidden border-2 cursor-pointer shrink-0 transition-all ${selectedBroadcastImage === imgUrl
                             ? 'border-primary ring-2 ring-primary/20 scale-95'
                             : 'border-slate-800 hover:border-slate-700'
-                        }`}
+                          }`}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
@@ -1172,7 +1357,7 @@ export function PropertyShareDialog({
                               else if (mapping.value === 'email') val = `[Recipient Email]`;
                               else if (mapping.value === 'company') val = `[Recipient Company]`;
                             } else {
-                               if (mapping.value === 'title') val = property.title || `[Title]`;
+                              if (mapping.value === 'title') val = property.title || `[Title]`;
                               else if (mapping.value === 'price') val = formattedPrice || `[Price]`;
                               else if (mapping.value === 'location') {
                                 const locVal = property.sublocality || property.location || `[Location]`;

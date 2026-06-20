@@ -18,6 +18,7 @@ import {
   getMediaUrl,
   sendInteractiveButtons
 } from '@/lib/whatsapp/meta-api';
+import { autoSyncPropertyCatalogIfNeeded } from '@/lib/whatsapp/catalog-sync-helper';
 
 // Lazy initialize supabase admin client
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -662,6 +663,12 @@ export async function processOwnerChatbotMessage(
         .from('property_draft_sessions')
         .delete()
         .eq('id', propSession.id);
+
+      if (prop && prop.id) {
+        autoSyncPropertyCatalogIfNeeded(supabaseAdmin(), prop.id, accountId).catch((err) => {
+          console.error('[chatbot-engine] Auto-sync background error:', err);
+        });
+      }
 
       let reply = `✅ *Property listing created successfully!*\n\n` +
         `*Code:* ${prop.property_code}\n` +

@@ -58,6 +58,8 @@ export function WhatsAppConfig() {
   const [accessToken, setAccessToken] = useState('');
   const [verifyToken, setVerifyToken] = useState('');
   const [pin, setPin] = useState('');
+  const [catalogId, setCatalogId] = useState('');
+  const [autoSyncCatalog, setAutoSyncCatalog] = useState(false);
   const [tokenEdited, setTokenEdited] = useState(false);
 
   // True once /register has succeeded on Meta's side (timestamp set
@@ -110,6 +112,8 @@ export function WhatsAppConfig() {
         setAccessToken(MASKED_TOKEN);
         setVerifyToken('');
         setPin('');
+        setCatalogId(data.catalog_id || '');
+        setAutoSyncCatalog(data.auto_sync_catalog || false);
         setTokenEdited(false);
       } else {
         setConfig(null);
@@ -118,6 +122,8 @@ export function WhatsAppConfig() {
         setAccessToken('');
         setVerifyToken('');
         setPin('');
+        setCatalogId('');
+        setAutoSyncCatalog(false);
         setTokenEdited(false);
       }
       // Clear any stale probe result when reloading the row.
@@ -133,6 +139,8 @@ export function WhatsAppConfig() {
             setConnectionStatus('connected');
             setResetReason(null);
             setStatusMessage('');
+            if (payload.catalog_id !== undefined) setCatalogId(payload.catalog_id || '');
+            if (payload.auto_sync_catalog !== undefined) setAutoSyncCatalog(payload.auto_sync_catalog || false);
           } else {
             setConnectionStatus('disconnected');
             setResetReason(payload.needs_reset ? 'token_corrupted' : payload.reason === 'meta_api_error' ? 'meta_api_error' : null);
@@ -190,10 +198,9 @@ export function WhatsAppConfig() {
         phone_number_id: phoneNumberId.trim(),
         waba_id: wabaId.trim() || null,
         verify_token: verifyToken.trim() || null,
-        // Optional — only sent when the user filled it in. The server
-        // requires it on first save or when changing numbers; for a
-        // simple token rotation, leaving it blank skips re-register.
         pin: pin.trim() || null,
+        catalog_id: catalogId.trim() || null,
+        auto_sync_catalog: autoSyncCatalog,
       };
 
       if (tokenEdited && accessToken !== MASKED_TOKEN && accessToken.trim()) {
@@ -331,6 +338,8 @@ export function WhatsAppConfig() {
       setWabaId('');
       setAccessToken('');
       setVerifyToken('');
+      setCatalogId('');
+      setAutoSyncCatalog(false);
       setTokenEdited(false);
       setConnectionStatus('disconnected');
       setResetReason(null);
@@ -600,6 +609,34 @@ export function WhatsAppConfig() {
                 A custom string you create. Must match the token you set in Meta webhook settings.
               </p>
             </div>
+
+            <div className="space-y-2">
+              <Label className="text-slate-300">Meta Commerce Catalog ID (Optional)</Label>
+              <Input
+                placeholder="e.g. 100234567890999"
+                value={catalogId}
+                onChange={(e) => setCatalogId(e.target.value)}
+                className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+              />
+              <p className="text-xs text-slate-500">
+                Required for sending property listings directly as WhatsApp Product cards. Find this in Facebook Commerce Manager.
+              </p>
+            </div>
+
+            {catalogId.trim() && (
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="auto-sync-catalog"
+                  checked={autoSyncCatalog}
+                  onChange={(e) => setAutoSyncCatalog(e.target.checked)}
+                  className="rounded border-slate-700 bg-slate-800 text-primary focus:ring-0 focus:ring-offset-0 h-4 w-4 cursor-pointer"
+                />
+                <Label htmlFor="auto-sync-catalog" className="text-slate-350 text-xs font-semibold cursor-pointer select-none">
+                  Auto-sync properties to Meta Catalog on creation/update
+                </Label>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label className="text-slate-300">
