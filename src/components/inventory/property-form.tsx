@@ -202,10 +202,26 @@ export function PropertyForm({
   const [metaCatalogSyncedAt, setMetaCatalogSyncedAt] = useState<string | null>(null);
   const [metaCatalogError, setMetaCatalogError] = useState<string | null>(null);
 
+  const prevPropertyIdRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (open) {
-      setMetaCatalogSyncedAt(property?.meta_catalog_synced_at || null);
-      setMetaCatalogError(property?.meta_catalog_error || null);
+    if (open && property) {
+      const isDifferentProperty = property.id !== prevPropertyIdRef.current;
+      prevPropertyIdRef.current = property.id;
+
+      if (isDifferentProperty) {
+        setMetaCatalogSyncedAt(property.meta_catalog_synced_at || null);
+        setMetaCatalogError(property.meta_catalog_error || null);
+      } else {
+        if (property.meta_catalog_synced_at) {
+          setMetaCatalogSyncedAt(property.meta_catalog_synced_at);
+        }
+        if (property.meta_catalog_error !== undefined) {
+          setMetaCatalogError(property.meta_catalog_error);
+        }
+      }
+    } else if (!open) {
+      prevPropertyIdRef.current = null;
     }
   }, [open, property]);
 
