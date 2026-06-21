@@ -373,6 +373,7 @@ export async function processOwnerChatbotMessage(
     id: string; 
     type: string; 
     image?: { id: string; mime_type: string };
+    document?: { id: string; mime_type: string; filename?: string };
     interactive?: {
       type: 'button_reply' | 'list_reply';
       button_reply?: { id: string; title: string };
