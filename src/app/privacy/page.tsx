@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Shield, ArrowLeft, Mail, Trash2 } from 'lucide-react';
+import { Shield, ArrowLeft, Trash2 } from 'lucide-react';
 import { BRANDING } from '@/config/branding';
 
 export const metadata: Metadata = {
@@ -82,7 +82,7 @@ export default function PrivacyPage() {
                 <h3 className="text-base font-black text-white">Data Deletion Instructions</h3>
               </div>
               <p className="text-slate-300">
-                According to Meta's developer policies, we provide a clean path for users to request the deletion of their personal data stored within our application.
+                According to Meta&apos;s developer policies, we provide a clean path for users to request the deletion of their personal data stored within our application.
               </p>
               <p className="text-slate-300">
                 If you want to delete your activities or request data erasure for your contact details, phone numbers, or metadata, you can do so at any time by following these steps:

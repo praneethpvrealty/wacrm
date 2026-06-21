@@ -59,7 +59,7 @@ export default function TermsPage() {
                 When submitting property inquiries, request forms, or contacting real estate agents via our integrated WhatsApp message triggers, you agree to provide true, accurate, and current information. 
               </p>
               <p>
-                You acknowledge that messaging services, replies, and notifications are processed over third-party channels (including Meta's WhatsApp Business Platform) and are subject to standard network availability and carrier charges.
+                You acknowledge that messaging services, replies, and notifications are processed over third-party channels (including Meta&apos;s WhatsApp Business Platform) and are subject to standard network availability and carrier charges.
               </p>
             </section>
 

@@ -2,13 +2,14 @@ import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { supabaseAdmin } from '@/lib/automations/admin-client';
 import { ShowcaseView } from '@/components/showcase/showcase-view';
+import { MarketingLanding } from '@/components/landing/marketing-landing';
 import type { Property } from '@/types';
 import { BRANDING } from '@/config/branding';
 
 export const metadata: Metadata = {
-  title: `${BRANDING.name} — Premium Real Estate & Land Listings`,
+  title: `${BRANDING.name} — AI-Powered WhatsApp CRM & Property Portals`,
   description:
-    'Browse our handpicked collection of high-end villa plots, lands, apartments, and commercial spaces. Inquire directly via WhatsApp or submit a request.',
+    'ConvoReal is a premium WhatsApp-first CRM for real estate agents and agencies. Auto-capture leads, manage inventories, match properties, and run campaigns.',
   robots: {
     index: true,
     follow: true,
@@ -59,6 +60,11 @@ export default async function RootPage({ searchParams }: PageProps) {
 
   const ref = resolvedParams.ref || resolvedParams.account_id || resolvedParams.agent_id;
   const initialPropertyId = resolvedParams.property_id;
+
+  // If there is no subdomain and no showcase query parameters, serve the product landing page
+  if (!subdomain && !ref && !initialPropertyId) {
+    return <MarketingLanding />;
+  }
 
   // 1. If property_id is specified in the URL, try resolving its account_id first (scoped to subdomain account if resolved)
   let targetProperty: Property | null = null;
