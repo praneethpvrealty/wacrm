@@ -1,3 +1,3 @@
 {
-  "ignoreCommand": "git diff HEAD^ HEAD --quiet ./ -- ':!go-ingress' ':!docs' ':!Dockerfile.worker'"
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . ':!go-ingress' ':!docs' ':!Dockerfile.worker'"
 }
