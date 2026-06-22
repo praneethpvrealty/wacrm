@@ -194,7 +194,7 @@ const SEEDED_PROJECTS = CORE_PROJECTS.map((proj, idx) => {
 export async function POST() {
   try {
     // 1. Authorize user (requires 'viewer' role or higher to trigger synchronization)
-    const ctx = await requireRole("viewer");
+    await requireRole("viewer");
 
     console.log(`[Sync Projects] Triggering ingestion of ${SEEDED_PROJECTS.length} offline seeds...`);
 
