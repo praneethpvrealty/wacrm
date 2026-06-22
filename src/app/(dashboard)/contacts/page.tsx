@@ -44,6 +44,10 @@ import {
   ChevronRight,
   MessageSquare,
   Smartphone,
+  X,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from 'lucide-react';
 import { ContactForm } from '@/components/contacts/contact-form';
 import { ContactDetailView } from '@/components/contacts/contact-detail-view';
@@ -261,6 +265,7 @@ export default function ContactsPage() {
   const [filterArea, setFilterArea] = useState<string>('All');
   // All unique areas across all contacts for the area filter dropdown
   const [allAreas, setAllAreas] = useState<string[]>([]);
+  const [sortBy, setSortBy] = useState<string>('created_desc');
 
   // Modals
   const [formOpen, setFormOpen] = useState(false);
@@ -326,8 +331,24 @@ export default function ContactsPage() {
       .from('contacts')
       .select('*', { count: 'exact' })
       .eq('account_id', accountId)
-      .eq('status', activeTab)
-      .order('created_at', { ascending: false });
+      .eq('status', activeTab);
+
+    // Apply sorting logic
+    if (sortBy === 'name_asc') {
+      query = query.order('name', { ascending: true, nullsFirst: false });
+    } else if (sortBy === 'name_desc') {
+      query = query.order('name', { ascending: false, nullsFirst: false });
+    } else if (sortBy === 'last_contacted_desc') {
+      query = query.order('last_contacted_at', { ascending: false, nullsFirst: false });
+    } else if (sortBy === 'last_contacted_asc') {
+      query = query.order('last_contacted_at', { ascending: true, nullsFirst: false });
+    } else if (sortBy === 'max_budget_desc') {
+      query = query.order('max_budget', { ascending: false, nullsFirst: false });
+    } else if (sortBy === 'max_budget_asc') {
+      query = query.order('max_budget', { ascending: true, nullsFirst: false });
+    } else {
+      query = query.order('created_at', { ascending: false });
+    }
 
     if (filterClassification !== 'All') {
       query = query.eq('classification', filterClassification);
@@ -452,6 +473,7 @@ export default function ContactsPage() {
     filterMinBudget,
     filterMaxBudget,
     filterArea,
+    sortBy,
   ]);
 
   // Load-once-on-mount-ish data fetches. Each setter inside runs
@@ -687,8 +709,21 @@ export default function ContactsPage() {
                 setPage(0);
               }}
               placeholder="Search by name, phone, or email..."
-              className="pl-8 bg-slate-900 border-slate-700 text-white placeholder:text-slate-500"
+              className="pl-8 pr-10 bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus-visible:ring-1"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('');
+                  setPage(0);
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white hover:bg-slate-800 p-1 rounded-md transition-all cursor-pointer"
+                title="Clear search"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
           </div>
 
           {/* Classification Filter */}
@@ -802,8 +837,30 @@ export default function ContactsPage() {
             </Select>
           )}
 
+          {/* Sort By Dropdown */}
+          <Select
+            value={sortBy}
+            onValueChange={(val) => {
+              setSortBy(val ?? 'created_desc');
+              setPage(0);
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-[160px] bg-slate-900 border-slate-700 text-white">
+              <SelectValue placeholder="Sort By" />
+            </SelectTrigger>
+            <SelectContent className="bg-slate-900 border-slate-700 text-slate-200">
+              <SelectItem value="created_desc">Newest Created</SelectItem>
+              <SelectItem value="name_asc">Name (A - Z)</SelectItem>
+              <SelectItem value="name_desc">Name (Z - A)</SelectItem>
+              <SelectItem value="last_contacted_desc">Last Contacted (Recent)</SelectItem>
+              <SelectItem value="last_contacted_asc">Last Contacted (Oldest)</SelectItem>
+              <SelectItem value="max_budget_desc">Max Budget (Highest)</SelectItem>
+              <SelectItem value="max_budget_asc">Max Budget (Lowest)</SelectItem>
+            </SelectContent>
+          </Select>
+
           {/* Clear Filters Button */}
-          {(filterClassification !== 'All' || filterTag !== 'All' || filterMinBudget !== 'All' || filterMaxBudget !== 'All' || filterArea !== 'All' || search.trim() !== '') && (
+          {(filterClassification !== 'All' || filterTag !== 'All' || filterMinBudget !== 'All' || filterMaxBudget !== 'All' || filterArea !== 'All' || search.trim() !== '' || sortBy !== 'created_desc') && (
             <Button
               variant="ghost"
               size="sm"
@@ -814,6 +871,7 @@ export default function ContactsPage() {
                 setFilterMaxBudget('All');
                 setFilterArea('All');
                 setSearch('');
+                setSortBy('created_desc');
                 setPage(0);
               }}
               className="text-slate-400 hover:text-white text-xs border border-dashed border-slate-700 hover:border-slate-500 rounded-md px-2.5"
@@ -865,14 +923,65 @@ export default function ContactsPage() {
         <Table>
           <TableHeader>
             <TableRow className="border-slate-800 hover:bg-transparent">
-              <TableHead className="text-slate-400 text-xs">Name</TableHead>
-              <TableHead className="text-slate-400 text-xs">Classification</TableHead>
-              <TableHead className="text-slate-400 text-xs">Phone</TableHead>
-              <TableHead className="text-slate-400 text-xs">Tags</TableHead>
-              <TableHead className="text-slate-400 text-xs">Last Contacted</TableHead>
-              <TableHead className="text-slate-400 text-xs">Areas of Interest</TableHead>
-              <TableHead className="text-slate-400 text-xs">Property Category Interests</TableHead>
-              <TableHead className="text-slate-400 text-xs">Max Budget</TableHead>
+              <TableHead 
+                className="text-slate-400 text-xs font-semibold cursor-pointer hover:text-white select-none transition-colors group"
+                onClick={() => {
+                  setSortBy(sortBy === 'name_asc' ? 'name_desc' : 'name_asc');
+                  setPage(0);
+                }}
+              >
+                <div className="flex items-center gap-1">
+                  Name
+                  {sortBy === 'name_asc' ? (
+                    <ArrowUp className="size-3.5 text-primary shrink-0 animate-in fade-in zoom-in duration-200" />
+                  ) : sortBy === 'name_desc' ? (
+                    <ArrowDown className="size-3.5 text-primary shrink-0 animate-in fade-in zoom-in duration-200" />
+                  ) : (
+                    <ArrowUpDown className="size-3.5 text-slate-600 group-hover:text-slate-400 shrink-0 opacity-0 group-hover:opacity-100 transition-all duration-200" />
+                  )}
+                </div>
+              </TableHead>
+              <TableHead className="text-slate-400 text-xs select-none">Classification</TableHead>
+              <TableHead className="text-slate-400 text-xs select-none">Phone</TableHead>
+              <TableHead className="text-slate-400 text-xs select-none">Tags</TableHead>
+              <TableHead 
+                className="text-slate-400 text-xs font-semibold cursor-pointer hover:text-white select-none transition-colors group"
+                onClick={() => {
+                  setSortBy(sortBy === 'last_contacted_desc' ? 'last_contacted_asc' : 'last_contacted_desc');
+                  setPage(0);
+                }}
+              >
+                <div className="flex items-center gap-1">
+                  Last Contacted
+                  {sortBy === 'last_contacted_desc' ? (
+                    <ArrowDown className="size-3.5 text-primary shrink-0 animate-in fade-in zoom-in duration-200" />
+                  ) : sortBy === 'last_contacted_asc' ? (
+                    <ArrowUp className="size-3.5 text-primary shrink-0 animate-in fade-in zoom-in duration-200" />
+                  ) : (
+                    <ArrowUpDown className="size-3.5 text-slate-600 group-hover:text-slate-400 shrink-0 opacity-0 group-hover:opacity-100 transition-all duration-200" />
+                  )}
+                </div>
+              </TableHead>
+              <TableHead className="text-slate-400 text-xs select-none">Areas of Interest</TableHead>
+              <TableHead className="text-slate-400 text-xs select-none">Property Category Interests</TableHead>
+              <TableHead 
+                className="text-slate-400 text-xs font-semibold cursor-pointer hover:text-white select-none transition-colors group"
+                onClick={() => {
+                  setSortBy(sortBy === 'max_budget_desc' ? 'max_budget_asc' : 'max_budget_desc');
+                  setPage(0);
+                }}
+              >
+                <div className="flex items-center gap-1">
+                  Max Budget
+                  {sortBy === 'max_budget_desc' ? (
+                    <ArrowDown className="size-3.5 text-primary shrink-0 animate-in fade-in zoom-in duration-200" />
+                  ) : sortBy === 'max_budget_asc' ? (
+                    <ArrowUp className="size-3.5 text-primary shrink-0 animate-in fade-in zoom-in duration-200" />
+                  ) : (
+                    <ArrowUpDown className="size-3.5 text-slate-600 group-hover:text-slate-400 shrink-0 opacity-0 group-hover:opacity-100 transition-all duration-200" />
+                  )}
+                </div>
+              </TableHead>
               <TableHead className="text-slate-400 w-12" />
             </TableRow>
           </TableHeader>

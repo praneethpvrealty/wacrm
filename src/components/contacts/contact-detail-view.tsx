@@ -42,6 +42,7 @@ import {
 import { getCurrencyIcon } from '@/lib/currency-utils';
 import { ScheduleDialog } from '@/components/calendar/schedule-dialog';
 import { PropertyShareDialog } from '@/components/inventory/property-share-dialog';
+import { SearchablePropertySelect } from '@/components/ui/searchable-property-select';
 
 const SUGGESTED_AREAS = ['Whitefield', 'Koramangala', 'Not specific', 'East Bangalore', 'Indiranagar', 'Jayanagar'];
 
@@ -1365,18 +1366,12 @@ export function ContactDetailView({
 
                   <div className="space-y-1.5">
                     <Label className="text-slate-400 text-xs">Shown Interest / Inquired Property</Label>
-                    <select
-                      value={editLastInquiredPropertyId || ''}
-                      onChange={(e) => setEditLastInquiredPropertyId(e.target.value || null)}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-white focus:border-primary focus:outline-none"
-                    >
-                      <option value="">None</option>
-                      {allProperties.map((prop) => (
-                        <option key={prop.id} value={prop.id}>
-                          {prop.property_code ? `[${prop.property_code}] ` : ''}{prop.title}
-                        </option>
-                      ))}
-                    </select>
+                    <SearchablePropertySelect
+                      properties={allProperties}
+                      value={editLastInquiredPropertyId}
+                      onChange={setEditLastInquiredPropertyId}
+                      placeholder="Select inquired property..."
+                    />
                   </div>
                   {editClassification === 'Agent' && (
                     <div className="space-y-1.5">
@@ -1652,19 +1647,12 @@ export function ContactDetailView({
                         <Label htmlFor="detail-interest-property" className="text-xs font-semibold text-slate-350">
                           Assign Shown Interest / Inquired Property
                         </Label>
-                        <select
-                          id="detail-interest-property"
-                          value={editLastInquiredPropertyId || ''}
-                          onChange={(e) => handleLinkInterestProperty(e.target.value || null)}
-                          className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-white focus:border-primary focus:outline-none font-medium"
-                        >
-                          <option value="">No Property Selected</option>
-                          {allProperties.map((prop) => (
-                            <option key={prop.id} value={prop.id}>
-                              {prop.property_code ? `[${prop.property_code}] ` : ''}{prop.title}
-                            </option>
-                          ))}
-                        </select>
+                        <SearchablePropertySelect
+                          properties={allProperties}
+                          value={editLastInquiredPropertyId}
+                          onChange={handleLinkInterestProperty}
+                          placeholder="No Property Selected"
+                        />
                         <p className="text-[10px] text-slate-500 mt-0.5">
                           Linking a property associates this contact as an Interested Lead for that listing.
                         </p>

@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import type { SendTimeParams } from '@/lib/whatsapp/template-send-builder'
+import {
+  truncateParametersToBudget,
+  sanitizeParamText,
+  type SendTimeParams,
+} from '@/lib/whatsapp/template-send-builder'
 import { isMessageTemplate } from '@/lib/whatsapp/template-row-guard'
 import {
   checkRateLimit,
@@ -211,7 +215,34 @@ export async function POST(request: Request) {
     for (const recipient of recipients) {
       let result
       if (broadcast_type === 'template' && template_name) {
-        const bodyParams = recipient.messageParams?.body || recipient.params || []
+        let bodyParams = recipient.messageParams?.body || recipient.params || []
+        if (templateRow?.body_text) {
+          bodyParams = truncateParametersToBudget(templateRow.body_text, bodyParams)
+        }
+
+        // Apply truncation to header text variable if present
+        if (templateRow && templateRow.header_type === 'text' && recipient.messageParams?.headerText) {
+          const staticHeader = (templateRow.header_content ?? '').replace(/\{\{(\d+)\}\}/g, '')
+          const staticHeaderLength = staticHeader.length
+          const headerBudget = Math.max(0, 60 - staticHeaderLength)
+          let val = sanitizeParamText(recipient.messageParams.headerText)
+          if (val.length > headerBudget) {
+            if (headerBudget >= 3) {
+              val = val.slice(0, headerBudget - 3) + '...'
+            } else {
+              val = val.slice(0, headerBudget)
+            }
+          }
+          recipient.messageParams.headerText = val
+        }
+
+        // Update the recipient object with the truncated parameters so they are sent to Meta
+        if (recipient.messageParams) {
+          recipient.messageParams.body = bodyParams
+        } else {
+          recipient.params = bodyParams
+        }
+
         const resolvedText = templateRow?.body_text
           ? resolveTemplateBodyText(templateRow.body_text, bodyParams)
           : `[Template: ${template_name}]`

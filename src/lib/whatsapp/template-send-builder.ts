@@ -82,6 +82,60 @@ export function sanitizeParamText(text: string | null | undefined): string {
     .trim();
 }
 
+/**
+ * Truncates template parameter values to ensure the final resolved body text
+ * (static text + dynamic parameters) does not exceed Meta's 1024-character limit.
+ * It iteratively reduces the length of the longest parameter using ellipsis ('...')
+ * until the total length is within budget.
+ */
+export function truncateParametersToBudget(
+  templateBodyText: string,
+  params: string[],
+  maxTotalLength: number = 1024
+): string[] {
+  const staticText = (templateBodyText || '').replace(/\{\{(\d+)\}\}/g, '');
+  const staticLength = staticText.length;
+  
+  const variableBudget = Math.max(0, maxTotalLength - staticLength);
+  
+  const currentParams = params.map(p => sanitizeParamText(p));
+  let totalLength = currentParams.reduce((sum, p) => sum + p.length, 0);
+  
+  if (totalLength <= variableBudget) {
+    return currentParams;
+  }
+  
+  while (totalLength > variableBudget) {
+    let longestIdx = 0;
+    let maxLength = -1;
+    for (let i = 0; i < currentParams.length; i++) {
+      if (currentParams[i].length > maxLength) {
+        maxLength = currentParams[i].length;
+        longestIdx = i;
+      }
+    }
+    
+    if (maxLength <= 0) {
+      break;
+    }
+    
+    const excess = totalLength - variableBudget;
+    const targetLength = Math.max(0, currentParams[longestIdx].length - excess);
+    
+    const originalLength = currentParams[longestIdx].length;
+    let truncatedValue = '';
+    if (targetLength >= 3 && originalLength > targetLength) {
+      truncatedValue = currentParams[longestIdx].slice(0, targetLength - 3) + '...';
+    } else {
+      truncatedValue = currentParams[longestIdx].slice(0, targetLength);
+    }
+    totalLength -= (originalLength - truncatedValue.length);
+    currentParams[longestIdx] = truncatedValue;
+  }
+  
+  return currentParams;
+}
+
 function buildHeaderComponent(
   template: MessageTemplate,
   params: SendTimeParams,
@@ -101,9 +155,24 @@ function buildHeaderComponent(
         'Header text variable {{1}} requires a value — pass headerText.',
       );
     }
+
+    // Header variable limit: total header text length <= 60 characters
+    const staticHeader = (template.header_content ?? '').replace(/\{\{(\d+)\}\}/g, '');
+    const staticHeaderLength = staticHeader.length;
+    const headerBudget = Math.max(0, 60 - staticHeaderLength);
+    
+    let sanitizedVal = sanitizeParamText(value);
+    if (sanitizedVal.length > headerBudget) {
+      if (headerBudget >= 3) {
+        sanitizedVal = sanitizedVal.slice(0, headerBudget - 3) + '...';
+      } else {
+        sanitizedVal = sanitizedVal.slice(0, headerBudget);
+      }
+    }
+
     return {
       type: 'header',
-      parameters: [{ type: 'text', text: sanitizeParamText(value) }],
+      parameters: [{ type: 'text', text: sanitizedVal }],
     };
   }
 
@@ -154,9 +223,10 @@ function buildBodyComponent(
   // Trim to the variable count — extra values are dropped silently so
   // a legacy caller that passes too many doesn't error out.
   const values = body.slice(0, varCount);
+  const truncatedValues = truncateParametersToBudget(template.body_text, values);
   return {
     type: 'body',
-    parameters: values.map((text) => ({ type: 'text', text: sanitizeParamText(text) })),
+    parameters: truncatedValues.map((text) => ({ type: 'text', text: sanitizeParamText(text) })),
   };
 }
 

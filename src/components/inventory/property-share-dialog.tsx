@@ -89,6 +89,29 @@ export function PropertyShareDialog({
   const [syncingCatalog, setSyncingCatalog] = useState(false);
   const [metaCatalogSyncedAt, setMetaCatalogSyncedAt] = useState<string | null>(null);
   const [metaCatalogError, setMetaCatalogError] = useState<string | null>(null);
+  const [indexingTimeLeft, setIndexingTimeLeft] = useState<number>(0);
+
+  useEffect(() => {
+    if (!metaCatalogSyncedAt) {
+      setIndexingTimeLeft(0);
+      return;
+    }
+
+    const calculateTimeLeft = () => {
+      const syncedTime = new Date(metaCatalogSyncedAt).getTime();
+      const elapsed = (Date.now() - syncedTime) / 1000;
+      const cooldown = 90; // 90 seconds indexing cooldown for Meta Catalog
+      if (elapsed < cooldown) {
+        setIndexingTimeLeft(Math.ceil(cooldown - elapsed));
+      } else {
+        setIndexingTimeLeft(0);
+      }
+    };
+
+    calculateTimeLeft();
+    const interval = setInterval(calculateTimeLeft, 1000);
+    return () => clearInterval(interval);
+  }, [metaCatalogSyncedAt]);
 
   useEffect(() => {
     if (open && accountId) {
@@ -193,47 +216,62 @@ export function PropertyShareDialog({
     }
   }, [supabase]);
 
-  const wasOpenRef = useRef(false);
-
-  // Reset dialog states when closed/opened
+  // Reset dialog states only when open changes from false to true
   useEffect(() => {
     if (open) {
-      if (!wasOpenRef.current && property) {
-        wasOpenRef.current = true;
+      setBroadcastStep(preSelectedContactId ? 'matches' : 'link');
+      setSearchQuery('');
+      setCopiedLink(false);
+      setSelectedContactIds(preSelectedContactId ? [preSelectedContactId] : []);
+      setSelectedTemplate(null);
+      setVariableMappings({});
+      setCustomVariableValues({});
+      setBroadcastResults([]);
+      setShowAddFresh(false);
+      setFreshName('');
+      setFreshPhone('');
+      setFreshClassification('Buyer');
+      setContacts([]); // Clear contacts so we don't show stale cached list
+    }
+  }, [open, preSelectedContactId]);
+
+  // Track what was last fetched to prevent duplicate/infinite fetching
+  const lastFetchedRef = useRef<{ accountId: string | null; propertyId: string | null }>({
+    accountId: null,
+    propertyId: null,
+  });
+
+  // Fetch contacts and templates when open and accountId is available
+  useEffect(() => {
+    if (open && accountId && property) {
+      const propertyId = property.id;
+      if (
+        lastFetchedRef.current.accountId !== accountId ||
+        lastFetchedRef.current.propertyId !== propertyId
+      ) {
+        lastFetchedRef.current = { accountId, propertyId };
         setMetaCatalogSyncedAt(property.meta_catalog_synced_at || null);
         setMetaCatalogError(property.meta_catalog_error || null);
         fetchContacts();
         fetchTemplates();
+
         // Load currency settings from showcase_settings
-        if (accountId) {
-          supabase
-            .from('showcase_settings')
-            .select('currency')
-            .eq('account_id', accountId)
-            .maybeSingle()
-            .then(({ data }) => {
-              if (data?.currency) {
-                setCurrency(data.currency);
-              }
-            });
-        }
-        setBroadcastStep(preSelectedContactId ? 'matches' : 'link');
-        setSearchQuery('');
-        setCopiedLink(false);
-        setSelectedContactIds(preSelectedContactId ? [preSelectedContactId] : []);
-        setSelectedTemplate(null);
-        setVariableMappings({});
-        setCustomVariableValues({});
-        setBroadcastResults([]);
-        setShowAddFresh(false);
-        setFreshName('');
-        setFreshPhone('');
-        setFreshClassification('Buyer');
+        supabase
+          .from('showcase_settings')
+          .select('currency')
+          .eq('account_id', accountId)
+          .maybeSingle()
+          .then(({ data }) => {
+            if (data?.currency) {
+              setCurrency(data.currency);
+            }
+          });
       }
-    } else {
-      wasOpenRef.current = false;
+    } else if (!open) {
+      // Clear cache when closed
+      lastFetchedRef.current = { accountId: null, propertyId: null };
     }
-  }, [open, property, fetchContacts, fetchTemplates, accountId, supabase, preSelectedContactId]);
+  }, [open, accountId, property, fetchContacts, fetchTemplates, supabase]);
 
   // Get matching contacts from list
   const matchedContacts = useMemo(() => {
@@ -786,7 +824,11 @@ export function PropertyShareDialog({
                   <div className="flex items-center gap-2">
                     <span className="text-[11px]">
                       {metaCatalogSyncedAt && !metaCatalogError ? (
-                        <span className="text-emerald-400 font-medium">● Synced to Catalog</span>
+                        indexingTimeLeft > 0 ? (
+                          <span className="text-amber-400 font-medium">● Indexing in Progress</span>
+                        ) : (
+                          <span className="text-emerald-400 font-medium">● Synced to Catalog</span>
+                        )
                       ) : metaCatalogError ? (
                         <span className="text-red-400 font-medium" title={metaCatalogError}>● Sync Failed</span>
                       ) : (
@@ -837,17 +879,27 @@ export function PropertyShareDialog({
                 <p className="text-xs text-slate-400">
                   Send this property as an interactive catalog product card directly inside WhatsApp chat. This provides a direct shopping experience with inline image, details, and price.
                 </p>
+
+                {indexingTimeLeft > 0 && (
+                  <div className="bg-amber-500/10 border border-amber-500/25 rounded-lg p-2.5 text-[11px] text-amber-400 flex items-center gap-2">
+                    <Loader2 className="size-3.5 animate-spin text-amber-400 shrink-0" />
+                    <div>
+                      Meta Catalog is indexing the product. Ready to share in <strong className="font-mono">{indexingTimeLeft}s</strong>.
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex justify-end">
                   <Button
                     onClick={() => {
                       setShareMode('catalog');
                       setBroadcastStep('matches');
                     }}
-                    disabled={!metaCatalogSyncedAt || !!metaCatalogError}
+                    disabled={!metaCatalogSyncedAt || !!metaCatalogError || indexingTimeLeft > 0}
                     className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs h-9 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Smartphone className="size-3.5" />
-                    Select Contacts & Send Product Card
+                    {indexingTimeLeft > 0 ? `Indexing (${indexingTimeLeft}s)` : 'Select Contacts & Send Product Card'}
                   </Button>
                 </div>
               </div>
@@ -1124,7 +1176,7 @@ export function PropertyShareDialog({
                 {shareMode === 'catalog' ? (
                   <Button
                     type="button"
-                    disabled={selectedContactIds.length === 0 || sendingBroadcast}
+                    disabled={selectedContactIds.length === 0 || sendingBroadcast || indexingTimeLeft > 0}
                     onClick={handleSendCatalogBroadcast}
                     className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 flex items-center gap-1.5"
                   >
@@ -1135,7 +1187,9 @@ export function PropertyShareDialog({
                     ) : (
                       <>
                         <Send className="size-3.5" />
-                        Send Product Card ({selectedContactIds.length})
+                        {indexingTimeLeft > 0
+                          ? `Indexing (${indexingTimeLeft}s)`
+                          : `Send Product Card (${selectedContactIds.length})`}
                       </>
                     )}
                   </Button>

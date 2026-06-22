@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSendComponents, sanitizeParamText } from './template-send-builder';
+import { buildSendComponents, sanitizeParamText, truncateParametersToBudget } from './template-send-builder';
 import type { MessageTemplate } from '@/types';
 
 function row(overrides: Partial<MessageTemplate> = {}): MessageTemplate {
@@ -295,5 +295,67 @@ describe('sanitizeParamText', () => {
         ]
       }
     ]);
+  });
+});
+
+describe('truncateParametersToBudget and Send-time Truncation', () => {
+  it('should not truncate if parameters fit within the budget', () => {
+    const params = ['John', 'ORD-42'];
+    const result = truncateParametersToBudget('Hi {{1}}, order {{2}}.', params);
+    expect(result).toEqual(['John', 'ORD-42']);
+  });
+
+  it('should truncate the longest parameters to fit budget using ellipsis', () => {
+    const bodyText = 'Details: {{1}} and {{2}}'; // static text length is 13
+    // budget is 1024 - 13 = 1011
+    // Let's pass a budget of 40 for testing purposes
+    const longText = 'a'.repeat(50);
+    const shortText = 'b'.repeat(5);
+    const result = truncateParametersToBudget(bodyText, [longText, shortText], 40);
+    
+    // total budget is 40. static text length is 13.
+    // variable budget = 27.
+    // longText (50) is truncated. shortText (5) fits.
+    // target length for longText = 27 - 5 = 22.
+    // Since targetLength 22 >= 3, it should be sliced to 19 + '...'
+    expect(result[0].length).toBe(22);
+    expect(result[0]).toBe('a'.repeat(19) + '...');
+    expect(result[1]).toBe(shortText);
+  });
+
+  it('should truncate header text variable to fit 60 character limit', () => {
+    const components = buildSendComponents(
+      row({ header_type: 'text', header_content: 'Welcome {{1}} to our services!' }), // static length = 22
+      // budget for header variable = 60 - 22 = 38
+      { headerText: 'a'.repeat(50) }
+    );
+    
+    expect(components).toEqual([
+      {
+        type: 'header',
+        parameters: [
+          { type: 'text', text: 'a'.repeat(35) + '...' } // 35 + 3 = 38 chars
+        ]
+      }
+    ]);
+  });
+
+  it('should truncate body variables to fit 1024 character limit in buildSendComponents', () => {
+    const bodyText = 'Hi {{1}}, here are the details: {{2}}'; // static length = 32
+    // budget = 1024 - 32 = 992
+    const name = 'John'; // length 4
+    const superLongDetails = 'd'.repeat(1200);
+    
+    const components = buildSendComponents(
+      row({ body_text: bodyText }),
+      { body: [name, superLongDetails] }
+    );
+
+    const bodyComponent = components.find(c => c.type === 'body');
+    const params = (bodyComponent as { parameters: Array<{ type: string; text: string }> }).parameters;
+    expect(params[0].text).toBe(name);
+    // details should be truncated to: budget (992) - name length (4) = 988 chars
+    expect(params[1].text.length).toBe(988);
+    expect(params[1].text.endsWith('...')).toBe(true);
   });
 });
