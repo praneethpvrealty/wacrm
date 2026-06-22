@@ -1,9 +1,37 @@
+export const CATEGORY_SUBTYPES: Record<string, string[]> = {
+  Residential: [
+    "Flat/ Apartment",
+    "Residential House",
+    "Villa",
+    "Builder Floor Apartment",
+    "Residential Land/ Plot",
+    "Penthouse",
+    "Studio Apartment",
+  ],
+  Commercial: [
+    "Commercial Office Space",
+    "Office in IT Park/ SEZ",
+    "Commercial Shop",
+    "Commercial Showroom",
+    "Commercial Land",
+    "Warehouse/ Godown",
+    "Industrial Land",
+    "Industrial Building",
+    "Industrial Shed",
+  ],
+  Agricultural: [
+    "Agricultural Land",
+    "Farm House",
+  ],
+};
+
 export interface ParsedQuery {
   minPrice: number | null;
   maxPrice: number | null;
   types: string[];
   remainingSearch: string;
 }
+
 
 export function parsePropertyQuery(searchQuery: string): ParsedQuery {
   const q = searchQuery.toLowerCase().trim();

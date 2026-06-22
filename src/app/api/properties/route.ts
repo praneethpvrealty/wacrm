@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireRole, toErrorResponse } from "@/lib/auth/account";
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from "@/lib/rate-limit";
 import { autoSyncPropertyCatalogIfNeeded } from "@/lib/whatsapp/catalog-sync-helper";
+import { CATEGORY_SUBTYPES } from "@/lib/search-parser";
 
 const MAX_LIMIT = 100;
 const DEFAULT_LIMIT = 25;
@@ -46,7 +47,11 @@ export async function GET(request: Request) {
     }
 
     if (type) {
-      query = query.eq("type", type);
+      if (type in CATEGORY_SUBTYPES) {
+        query = query.in("type", CATEGORY_SUBTYPES[type]);
+      } else {
+        query = query.eq("type", type);
+      }
     }
 
     if (status) {

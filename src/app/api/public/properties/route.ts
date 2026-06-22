@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/automations/admin-client";
+import { CATEGORY_SUBTYPES } from "@/lib/search-parser";
 
 const MAX_LIMIT = 50;
 const DEFAULT_LIMIT = 12;
@@ -54,7 +55,13 @@ export async function GET(request: Request) {
       .order("created_at", { ascending: false })
       .range(from, to);
 
-    if (type) query = query.eq("type", type);
+    if (type) {
+      if (type in CATEGORY_SUBTYPES) {
+        query = query.in("type", CATEGORY_SUBTYPES[type]);
+      } else {
+        query = query.eq("type", type);
+      }
+    }
     if (location) query = query.ilike("location", `%${location}%`);
     if (minPrice) {
       const min = Number(minPrice);
