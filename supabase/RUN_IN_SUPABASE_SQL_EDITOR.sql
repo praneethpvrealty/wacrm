@@ -2241,10 +2241,21 @@ CREATE TABLE IF NOT EXISTS email_sync_configs (
   is_active BOOLEAN DEFAULT TRUE NOT NULL,
   auto_reply_enabled BOOLEAN DEFAULT FALSE NOT NULL,
   auto_reply_text TEXT,
+  
+  -- Verification capture columns for self-served email setup
+  last_verification_code TEXT,
+  last_verification_link TEXT,
+  last_verification_at TIMESTAMPTZ,
+  
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(account_id)
 );
+
+-- Ensure columns exist if table was already created
+ALTER TABLE email_sync_configs ADD COLUMN IF NOT EXISTS last_verification_code TEXT;
+ALTER TABLE email_sync_configs ADD COLUMN IF NOT EXISTS last_verification_link TEXT;
+ALTER TABLE email_sync_configs ADD COLUMN IF NOT EXISTS last_verification_at TIMESTAMPTZ;
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE email_sync_configs ENABLE ROW LEVEL SECURITY;
