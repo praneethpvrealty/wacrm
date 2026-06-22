@@ -174,6 +174,15 @@ export function PropertyList({
               <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 max-w-[calc(100%-4rem)]">
                 <Badge
                   className={`border font-semibold text-[10px] tracking-wider uppercase px-2 py-0.5 rounded-full ${
+                    property.listing_type === 'Rent'
+                      ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                      : 'bg-primary/20 text-primary border-primary/30'
+                  }`}
+                >
+                  {property.listing_type === 'Rent' ? 'For Rent' : 'For Sale'}
+                </Badge>
+                <Badge
+                  className={`border font-semibold text-[10px] tracking-wider uppercase px-2 py-0.5 rounded-full ${
                     statusColors[property.status] || 'bg-slate-800 text-slate-300 border-slate-700'
                   }`}
                 >
@@ -241,7 +250,16 @@ export function PropertyList({
 
                 <div className="flex items-center justify-between mb-4">
                   <div className="text-lg font-black text-white">
-                    {formatPrice(property.price)}
+                    {property.listing_type === 'Rent' ? (
+                      <span className="flex flex-col">
+                        <span>{formatPrice(property.rent_per_month || 0)}/mo</span>
+                        {property.maintenance && property.maintenance > 0 ? (
+                          <span className="text-[10px] text-slate-400 font-medium">+ {formatPrice(property.maintenance)} Maint.</span>
+                        ) : null}
+                      </span>
+                    ) : (
+                      formatPrice(property.price)
+                    )}
                   </div>
                   {property.owner && (
                     <div className="text-xs text-slate-400 flex items-center gap-1 bg-slate-800/40 px-2 py-0.5 rounded border border-slate-800" title={`${property.owner.name} (${property.owner.phone})`}>
@@ -364,6 +382,21 @@ export function PropertyList({
                         {property.roi ? (
                           <div>
                             ROI (Yield): <span className="text-primary font-semibold">{property.roi}%</span>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {/* Rental details for Rent listings */}
+                    {property.listing_type === 'Rent' && (property.advance || property.gst) ? (
+                      <div className="flex justify-between flex-wrap gap-y-2 border-t border-slate-800/45 pt-1.5 text-[10px]">
+                        {property.advance ? (
+                          <div>
+                            Deposit: <span className="text-slate-200">{formatPrice(property.advance)}</span>
+                          </div>
+                        ) : null}
+                        {property.gst ? (
+                          <div>
+                            GST: <span className="text-slate-200">{formatPrice(property.gst)}</span>
                           </div>
                         ) : null}
                       </div>

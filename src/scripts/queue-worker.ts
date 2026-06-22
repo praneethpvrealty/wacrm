@@ -55,7 +55,7 @@ async function startWorker() {
       if (result) {
         const [, payloadStr] = result;
         
-        let body: any;
+        let body: Parameters<typeof processWebhook>[0];
         try {
           body = JSON.parse(payloadStr);
         } catch (parseErr) {
@@ -74,7 +74,7 @@ async function startWorker() {
         
         let success = false;
         const maxAttempts = 3;
-        let lastError: any = null;
+        let lastError: unknown = null;
 
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
           try {

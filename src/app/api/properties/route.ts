@@ -22,6 +22,7 @@ export async function GET(request: Request) {
     const status = searchParams.get("status")?.trim() || "";
     const isPublished = searchParams.get("is_published");
     const listingSource = searchParams.get("listing_source")?.trim() || "";
+    const listingType = searchParams.get("listing_type")?.trim() || "";
     const minPrice = searchParams.get("min_price");
     const maxPrice = searchParams.get("max_price");
     const sort = (ALLOWED_SORT_FIELDS.includes(searchParams.get("sort") as SortField)
@@ -58,6 +59,10 @@ export async function GET(request: Request) {
 
     if (listingSource) {
       query = query.eq("listing_source", listingSource);
+    }
+
+    if (listingType) {
+      query = query.eq("listing_type", listingType);
     }
 
     if (minPrice !== null && minPrice !== "") {
@@ -148,6 +153,12 @@ export async function POST(request: Request) {
       rental_income,
       roi,
       listing_source,
+      // rental fields
+      listing_type,
+      rent_per_month,
+      maintenance,
+      advance,
+      gst,
     } = body;
 
     // Validation
@@ -158,7 +169,13 @@ export async function POST(request: Request) {
       );
     }
 
-    if (typeof price !== "number" || price < 0) {
+    const parsedListingType = listing_type === "Rent" ? "Rent" : "Sale";
+    let parsedPrice = price;
+    if (parsedListingType === "Rent" && (parsedPrice === undefined || parsedPrice === null)) {
+      parsedPrice = rent_per_month || 0;
+    }
+
+    if (typeof parsedPrice !== "number" || parsedPrice < 0) {
       return NextResponse.json(
         { error: "'price' is required and must be a non-negative number" },
         { status: 400 }
@@ -186,7 +203,7 @@ export async function POST(request: Request) {
       user_id: ctx.userId,
       title: title.trim(),
       description: typeof description === "string" ? description.trim() : null,
-      price,
+      price: parsedPrice,
       location: location.trim(),
       type: type.trim(),
       status: validStatus,
@@ -216,6 +233,11 @@ export async function POST(request: Request) {
       rental_income: typeof rental_income === "number" ? rental_income : null,
       roi: typeof roi === "number" ? roi : null,
       listing_source: listing_source === "agent" ? "agent" : "owner",
+      listing_type: parsedListingType,
+      rent_per_month: typeof rent_per_month === "number" ? rent_per_month : null,
+      maintenance: typeof maintenance === "number" ? maintenance : null,
+      advance: typeof advance === "number" ? advance : null,
+      gst: typeof gst === "number" ? gst : null,
     };
 
     const { data, error } = await ctx.supabase

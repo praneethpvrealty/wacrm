@@ -86,7 +86,12 @@ PV Realty`;
         images: [],
         owner_contact_name: null,
         owner_contact_phone: null,
-        owner_contact_role: null
+        owner_contact_role: null,
+        listing_type: null,
+        rent_per_month: null,
+        maintenance: null,
+        advance: null,
+        gst: null
       };
 
       const updated = await updateListingDraft(

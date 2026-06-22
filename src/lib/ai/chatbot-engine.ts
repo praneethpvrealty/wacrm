@@ -124,9 +124,17 @@ function validateDraft(draft: ParsedPropertyDraft): {
   if (!draft.title || draft.title.trim().length === 0) {
     missingFields.push('Title');
   }
-  if (!draft.price || draft.price <= 0) {
-    missingFields.push('Price');
+  
+  if (draft.listing_type === 'Rent') {
+    if (!draft.rent_per_month || draft.rent_per_month <= 0) {
+      missingFields.push('Rent');
+    }
+  } else {
+    if (!draft.price || draft.price <= 0) {
+      missingFields.push('Price');
+    }
   }
+  
   if (!draft.location || draft.location.trim().length === 0) {
     missingFields.push('Location');
   }
@@ -143,19 +151,40 @@ function formatDraftPreviewMessage(
   nextStatus: string,
   missingFields: string[]
 ): string {
+  const isCommOrLand = draft.type ? (
+    draft.type.toLowerCase().includes('commercial') ||
+    draft.type.toLowerCase().includes('industrial') ||
+    draft.type.toLowerCase().includes('warehouse') ||
+    draft.type.toLowerCase().includes('godown') ||
+    draft.type.toLowerCase().includes('agricultural') ||
+    draft.type.toLowerCase().includes('land') ||
+    draft.type.toLowerCase().includes('plot')
+  ) : false;
+
+  const isRent = draft.listing_type === 'Rent';
+
   let reply = `${header}\n\n` +
-    `*Title:* ${draft.title || '❓ _Missing_'}\n` +
-    `*Price:* ${draft.price ? '₹' + draft.price.toLocaleString('en-IN') : '❓ _Missing_'}\n` +
-    `*Location:* ${draft.location || '❓ _Missing_'}\n` +
+    `*Title:* ${draft.title || '❓ _Missing_'}\n`;
+
+  if (isRent) {
+    reply += `*Rent:* ${draft.rent_per_month ? '₹' + draft.rent_per_month.toLocaleString('en-IN') + '/month' : '❓ _Missing_'}\n` +
+             `*Maintenance:* ${draft.maintenance ? '₹' + draft.maintenance.toLocaleString('en-IN') + '/month' : '_Not specified_'}\n` +
+             `*Advance:* ${draft.advance ? '₹' + draft.advance.toLocaleString('en-IN') : '_Not specified_'}\n` +
+             `*GST:* ${draft.gst ? (draft.gst <= 100 ? draft.gst + '%' : '₹' + draft.gst.toLocaleString('en-IN')) : '_Not specified_'}\n`;
+  } else {
+    reply += `*Price:* ${draft.price ? '₹' + draft.price.toLocaleString('en-IN') : '❓ _Missing_'}\n`;
+  }
+
+  reply += `*Location:* ${draft.location || '❓ _Missing_'}\n` +
     `*Type:* ${draft.type || '❓ _Missing_'}\n` +
     `*Area:* ${draft.area_sqft ? draft.area_sqft + ' Sq.Ft.' : '_Not specified_'}\n` +
     (draft.land_area ? `*Land Area:* ${draft.land_area} ${draft.land_area_unit || 'Sq.Ft.'}\n` : '') +
-    `*Beds/Baths:* ${draft.bedrooms ? draft.bedrooms + ' BHK' : '_Not specified_'} / ${draft.bathrooms ? draft.bathrooms + ' Bath' : '_Not specified_'}\n`;
+    (isCommOrLand ? '' : `*Beds/Baths:* ${draft.bedrooms ? draft.bedrooms + ' BHK' : '_Not specified_'} / ${draft.bathrooms ? draft.bathrooms + ' Bath' : '_Not specified_'}\n`);
 
-  if (draft.rental_income) {
+  if (!isRent && draft.rental_income) {
     reply += `*Rent:* ₹${draft.rental_income.toLocaleString('en-IN')}/month\n`;
   }
-  if (draft.roi) {
+  if (!isRent && draft.roi) {
     reply += `*ROI (Yield):* ${draft.roi}%\n`;
   }
   if (draft.google_map_link) {
@@ -627,7 +656,7 @@ export async function processOwnerChatbotMessage(
           user_id: userId,
           title: draft.title!.trim(),
           description: draft.description || `Ingested automatically via WhatsApp chatbot.`,
-          price: draft.price,
+          price: draft.listing_type === 'Rent' ? (draft.rent_per_month || 0) : (draft.price || 0),
           location: draft.location!.trim(),
           type: draft.type || 'Others',
           status: 'Available',
@@ -649,7 +678,12 @@ export async function processOwnerChatbotMessage(
           land_area: draft.land_area,
           land_area_unit: draft.land_area_unit || 'Sq.Ft.',
           owner_contact_id: ownerContactId,
-          listing_source: listingSource
+          listing_source: listingSource,
+          listing_type: draft.listing_type || 'Sale',
+          rent_per_month: draft.rent_per_month,
+          maintenance: draft.maintenance,
+          advance: draft.advance,
+          gst: draft.gst
         })
         .select()
         .single();
@@ -1351,6 +1385,11 @@ export async function processOwnerChatbotMessage(
                     owner_contact_name: latestDraft.owner_contact_name || parsedDraft.owner_contact_name,
                     owner_contact_phone: latestDraft.owner_contact_phone || parsedDraft.owner_contact_phone,
                     owner_contact_role: latestDraft.owner_contact_role || parsedDraft.owner_contact_role,
+                    listing_type: latestDraft.listing_type || parsedDraft.listing_type,
+                    rent_per_month: latestDraft.rent_per_month || parsedDraft.rent_per_month,
+                    maintenance: latestDraft.maintenance || parsedDraft.maintenance,
+                    advance: latestDraft.advance || parsedDraft.advance,
+                    gst: latestDraft.gst || parsedDraft.gst,
                     features: Array.from(new Set([...(latestDraft.features || []), ...(parsedDraft.features || [])])),
                     nearby_highlights: Array.from(new Set([...(latestDraft.nearby_highlights || []), ...(parsedDraft.nearby_highlights || [])])),
                     images: Array.from(new Set([...(latestDraft.images || []), ...(parsedDraft.images || [])]))

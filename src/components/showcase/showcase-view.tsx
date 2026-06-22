@@ -62,6 +62,7 @@ export function ShowcaseView({
 }: ShowcaseViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState('All');
+  const [selectedListingType, setSelectedListingType] = useState<'All' | 'Sale' | 'Rent'>('All');
   const [minBeds, setMinBeds] = useState('All');
   const [sortBy, setSortBy] = useState('newest');
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
@@ -446,6 +447,11 @@ export function ShowcaseView({
       result = result.filter((p) => p.type === selectedType);
     }
 
+    // Filter by listing type
+    if (selectedListingType !== 'All') {
+      result = result.filter((p) => (p.listing_type || 'Sale') === selectedListingType);
+    }
+
     // Filter by beds
     if (minBeds !== 'All') {
       const beds = parseInt(minBeds, 10);
@@ -476,7 +482,7 @@ export function ShowcaseView({
     }
 
     return result;
-  }, [properties, selectedType, minBeds, searchQuery, sortBy]);
+  }, [properties, selectedType, selectedListingType, minBeds, searchQuery, sortBy]);
 
   // Form submission handler
   const handleInquirySubmit = async (e: React.FormEvent) => {
@@ -705,7 +711,7 @@ export function ShowcaseView({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
             
             {/* Search Input */}
-            <div className="relative lg:col-span-5">
+            <div className="relative lg:col-span-4">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" />
               <Input
                 value={searchQuery}
@@ -715,8 +721,22 @@ export function ShowcaseView({
               />
             </div>
 
+            {/* Listing Type Filter */}
+            <div className="relative lg:col-span-2 flex items-center gap-2">
+              <Filter className="size-4 text-slate-500 shrink-0" />
+              <select
+                value={selectedListingType}
+                onChange={(e) => setSelectedListingType(e.target.value as 'All' | 'Sale' | 'Rent')}
+                className="bg-slate-950 border border-slate-800 rounded-lg text-slate-350 text-sm p-2 w-full focus:outline-none focus:border-primary"
+              >
+                <option value="All">All Listings</option>
+                <option value="Sale">For Sale</option>
+                <option value="Rent">For Rent</option>
+              </select>
+            </div>
+
             {/* Bedroom Filter */}
-            <div className="relative lg:col-span-3 flex items-center gap-2">
+            <div className="relative lg:col-span-2 flex items-center gap-2">
               <Filter className="size-4 text-slate-500 shrink-0" />
               <select
                 value={minBeds}
@@ -983,9 +1003,15 @@ export function ShowcaseView({
                       {/* Price & Primary CTA */}
                       <div className="flex items-center justify-between mt-2 pt-2 gap-2">
                         <div className="flex flex-col">
-                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Price</span>
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                            {property.listing_type === 'Rent' ? 'Rent' : 'Price'}
+                          </span>
                           <span className="text-lg font-black text-white leading-tight">
-                            {formatPrice(property.price)}
+                            {property.listing_type === 'Rent' ? (
+                              <span>{formatPrice(property.rent_per_month || 0)}/mo</span>
+                            ) : (
+                              formatPrice(property.price)
+                            )}
                           </span>
                         </div>
 
@@ -1146,12 +1172,31 @@ export function ShowcaseView({
                 </div>
 
                 {/* Price Box */}
-                <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-xl flex items-center justify-between gap-4">
+                <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div className="flex flex-col">
-                    <span className="text-[10px] text-slate-550 font-bold uppercase tracking-wider">Price</span>
-                    <span className="text-2xl font-black text-white leading-tight">
-                      {formatPrice(selectedProperty.price)}
+                    <span className="text-[10px] text-slate-550 font-bold uppercase tracking-wider">
+                      {selectedProperty.listing_type === 'Rent' ? 'Rent' : 'Price'}
                     </span>
+                    <span className="text-2xl font-black text-white leading-tight">
+                      {selectedProperty.listing_type === 'Rent' ? (
+                        <span>{formatPrice(selectedProperty.rent_per_month || 0)}/mo</span>
+                      ) : (
+                        formatPrice(selectedProperty.price)
+                      )}
+                    </span>
+                    {selectedProperty.listing_type === 'Rent' && (selectedProperty.maintenance || selectedProperty.advance || selectedProperty.gst) ? (
+                      <div className="text-[11px] text-slate-400 mt-1 flex flex-wrap gap-x-3 gap-y-1 font-medium">
+                        {selectedProperty.maintenance && selectedProperty.maintenance > 0 ? (
+                          <span>Maint: {formatPrice(selectedProperty.maintenance)}</span>
+                        ) : null}
+                        {selectedProperty.advance && selectedProperty.advance > 0 ? (
+                          <span>Deposit: {formatPrice(selectedProperty.advance)}</span>
+                        ) : null}
+                        {selectedProperty.gst && selectedProperty.gst > 0 ? (
+                          <span>GST: {formatPrice(selectedProperty.gst)}</span>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                   {(displayPhone || selectedProperty.agent_details?.phone) && (
                     <a

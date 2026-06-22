@@ -206,7 +206,7 @@ async function handleStatusUpdate(status: {
     console.error(`[webhook] Status FAILED for message ${status.id} to recipient ${status.recipient_id}. Errors:`, JSON.stringify(status.errors, null, 2))
   }
 
-  const updatePayload: Record<string, any> = { status: status.status }
+  const updatePayload: Record<string, unknown> = { status: status.status }
 
   if (status.status === 'failed' && status.errors && status.errors.length > 0) {
     const errorDetails = status.errors

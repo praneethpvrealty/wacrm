@@ -162,6 +162,11 @@ export function PropertyForm({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState(''); // Whole rupee amount (INR)
+  const [listingType, setListingType] = useState<'Sale' | 'Rent'>('Sale');
+  const [rentPerMonth, setRentPerMonth] = useState('');
+  const [maintenance, setMaintenance] = useState('');
+  const [advance, setAdvance] = useState('');
+  const [gst, setGst] = useState('');
   const [type, setType] = useState('Flat/ Apartment');
   const [status, setStatus] = useState('Available');
   const [bedrooms, setBedrooms] = useState('');
@@ -886,6 +891,11 @@ export function PropertyForm({
         setTitle(property.title);
         setDescription(property.description ?? '');
         setPrice(property.price !== null && property.price !== undefined ? String(property.price) : '');
+        setListingType(property.listing_type ?? 'Sale');
+        setRentPerMonth(property.rent_per_month !== null && property.rent_per_month !== undefined ? String(property.rent_per_month) : '');
+        setMaintenance(property.maintenance !== null && property.maintenance !== undefined ? String(property.maintenance) : '');
+        setAdvance(property.advance !== null && property.advance !== undefined ? String(property.advance) : '');
+        setGst(property.gst !== null && property.gst !== undefined ? String(property.gst) : '');
         setRentalIncome(property.rental_income !== null && property.rental_income !== undefined ? String(property.rental_income) : '');
         setType(property.type);
         setStatus(property.status);
@@ -967,6 +977,11 @@ export function PropertyForm({
         setTitle('');
         setDescription('');
         setPrice('');
+        setListingType('Sale');
+        setRentPerMonth('');
+        setMaintenance('');
+        setAdvance('');
+        setGst('');
         setRentalIncome('');
         setType('Flat/ Apartment');
         setStatus('Available');
@@ -1279,9 +1294,30 @@ export function PropertyForm({
       return;
     }
 
-    if (!price.trim() || isNaN(Number(price)) || Number(price) < 0) {
-      toast.error('Price must be a valid non-negative number');
-      return;
+    const isRent = listingType === 'Rent';
+
+    if (isRent) {
+      if (!rentPerMonth.trim() || isNaN(Number(rentPerMonth)) || Number(rentPerMonth) < 0) {
+        toast.error('Rent per month must be a valid non-negative number');
+        return;
+      }
+      if (maintenance && (isNaN(Number(maintenance)) || Number(maintenance) < 0)) {
+        toast.error('Maintenance must be a valid non-negative number');
+        return;
+      }
+      if (advance && (isNaN(Number(advance)) || Number(advance) < 0)) {
+        toast.error('Advance must be a valid non-negative number');
+        return;
+      }
+      if (gst && (isNaN(Number(gst)) || Number(gst) < 0)) {
+        toast.error('GST must be a valid non-negative number');
+        return;
+      }
+    } else {
+      if (!price.trim() || isNaN(Number(price)) || Number(price) < 0) {
+        toast.error('Price must be a valid non-negative number');
+        return;
+      }
     }
 
     let finalSublocality = sublocality.trim();
@@ -1304,9 +1340,13 @@ export function PropertyForm({
     try {
       if (!user || !accountId) throw new Error('Not authenticated or account not loaded');
 
-      const parsedPrice = Number(price);
-      const parsedBedrooms = bedrooms.trim() !== '' ? Number(bedrooms) : null;
-      const parsedBathrooms = bathrooms.trim() !== '' ? Number(bathrooms) : null;
+      const parsedPrice = isRent ? (Number(rentPerMonth) || 0) : Number(price);
+      const parsedRentPerMonth = isRent ? Number(rentPerMonth) : null;
+      const parsedMaintenance = isRent && maintenance.trim() !== '' ? Number(maintenance) : null;
+      const parsedAdvance = isRent && advance.trim() !== '' ? Number(advance) : null;
+      const parsedGst = isRent && gst.trim() !== '' ? Number(gst) : null;
+      const parsedBedrooms = hasBedsBaths && bedrooms.trim() !== '' ? Number(bedrooms) : null;
+      const parsedBathrooms = hasBedsBaths && bathrooms.trim() !== '' ? Number(bathrooms) : null;
       const parsedAreaSqft = areaSqft.trim() !== '' ? Number(areaSqft) : null;
       const parsedLandArea = (isLand || !isApartment) && landArea.trim() !== '' ? Number(landArea) : null;
       const parsedSuperBuiltArea = superBuiltArea.trim() !== '' ? Number(superBuiltArea) : null;
@@ -1336,6 +1376,11 @@ export function PropertyForm({
         title: title.trim(),
         description: description.trim() || null,
         price: parsedPrice,
+        listing_type: listingType,
+        rent_per_month: parsedRentPerMonth,
+        maintenance: parsedMaintenance,
+        advance: parsedAdvance,
+        gst: parsedGst,
         location: fullLocation,
         type,
         status: isEdit ? status : "Available", // Force Available for additions
@@ -1566,7 +1611,14 @@ export function PropertyForm({
                   <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 border-b border-slate-800/80 pb-4">
                     <div className="space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Badge className="bg-primary/10 text-primary hover:bg-primary/20 border-none font-semibold text-[10px] tracking-wide uppercase px-2 py-0.5 rounded">
+                        <Badge className={`hover:opacity-90 border-none font-semibold text-[10px] tracking-wide uppercase px-2 py-0.5 rounded ${
+                          listingType === 'Rent' 
+                            ? 'bg-blue-500/10 text-blue-400' 
+                            : 'bg-primary/10 text-primary'
+                        }`}>
+                          {listingType === 'Rent' ? 'For Rent' : 'For Sale'}
+                        </Badge>
+                        <Badge className="bg-slate-800/80 text-slate-300 border-none font-semibold text-[10px] tracking-wide uppercase px-2 py-0.5 rounded">
                           {type}
                         </Badge>
                         <Badge
@@ -1595,13 +1647,41 @@ export function PropertyForm({
                     </div>
 
                     <div className="text-left md:text-right shrink-0">
-                      <div className="text-2xl font-black text-white">
-                        {price ? formatCurrency(Number(price), currency) : '--'}
-                      </div>
-                      {price && !isNaN(Number(price)) && Number(price) > 0 && (
-                        <p className="text-[10px] text-primary font-semibold mt-0.5">
-                          {getEquivalentPriceLabel(price)}
-                        </p>
+                      {listingType === 'Rent' ? (
+                        <>
+                          <div className="text-2xl font-black text-white">
+                            {rentPerMonth ? `${formatCurrency(Number(rentPerMonth), currency)}/mo` : '--'}
+                          </div>
+                          {rentPerMonth && !isNaN(Number(rentPerMonth)) && Number(rentPerMonth) > 0 && (
+                            <p className="text-[10px] text-primary font-semibold mt-0.5">
+                              {getEquivalentPriceLabel(rentPerMonth)}
+                            </p>
+                          )}
+                          {(maintenance || advance || gst) && (
+                            <div className="text-[10px] text-slate-400 mt-1 space-y-0.5 font-medium">
+                              {maintenance && Number(maintenance) > 0 && (
+                                <div>Maint: {formatCurrency(Number(maintenance), currency)}</div>
+                              )}
+                              {advance && Number(advance) > 0 && (
+                                <div>Deposit: {formatCurrency(Number(advance), currency)}</div>
+                              )}
+                              {gst && Number(gst) > 0 && (
+                                <div>GST: {formatCurrency(Number(gst), currency)}</div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-2xl font-black text-white">
+                            {price ? formatCurrency(Number(price), currency) : '--'}
+                          </div>
+                          {price && !isNaN(Number(price)) && Number(price) > 0 && (
+                            <p className="text-[10px] text-primary font-semibold mt-0.5">
+                              {getEquivalentPriceLabel(price)}
+                            </p>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
@@ -1918,25 +1998,121 @@ export function PropertyForm({
                     />
                   </div>
 
-                  <div className="space-y-1.5">
-                    <Label htmlFor="prop-price" className="text-slate-300">
-                      Price (INR) <span className="text-red-400">*</span>
+                  <div className="space-y-1.5 animate-fade-in">
+                    <Label htmlFor="prop-listing-type" className="text-slate-300">
+                      Listing Type
                     </Label>
-                    <Input
-                      id="prop-price"
-                      type="number"
-                      value={price}
-                      onChange={(e) => setPrice(e.target.value)}
-                      placeholder="e.g. 12000000"
-                      className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
-                      required
-                    />
-                    {price && !isNaN(Number(price)) && Number(price) > 0 && (
-                      <p className="text-[11px] text-primary font-semibold mt-0.5">
-                        {getEquivalentPriceLabel(price)}
-                      </p>
-                    )}
+                    <select
+                      id="prop-listing-type"
+                      value={listingType}
+                      onChange={(e) => setListingType(e.target.value as 'Sale' | 'Rent')}
+                      className="flex h-9 w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-1 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-slate-950 font-medium"
+                    >
+                      <option value="Sale">For Sale</option>
+                      <option value="Rent">For Rent</option>
+                    </select>
                   </div>
+
+                  {listingType === 'Sale' ? (
+                    <div className="space-y-1.5 animate-fade-in">
+                      <Label htmlFor="prop-price" className="text-slate-300">
+                        Price (INR) <span className="text-red-400">*</span>
+                      </Label>
+                      <Input
+                        id="prop-price"
+                        type="number"
+                        value={price}
+                        onChange={(e) => setPrice(e.target.value)}
+                        placeholder="e.g. 12000000"
+                        className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                        required
+                      />
+                      {price && !isNaN(Number(price)) && Number(price) > 0 && (
+                        <p className="text-[11px] text-primary font-semibold mt-0.5">
+                          {getEquivalentPriceLabel(price)}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4 col-span-2 p-4 rounded-lg border border-slate-800 bg-slate-950/20 animate-fade-in">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="prop-rent" className="text-slate-300">
+                          Rent per month (INR) <span className="text-red-400">*</span>
+                        </Label>
+                        <Input
+                          id="prop-rent"
+                          type="number"
+                          value={rentPerMonth}
+                          onChange={(e) => setRentPerMonth(e.target.value)}
+                          placeholder="e.g. 45000"
+                          className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                          required
+                        />
+                        {rentPerMonth && !isNaN(Number(rentPerMonth)) && Number(rentPerMonth) > 0 && (
+                          <p className="text-[11px] text-primary font-semibold mt-0.5">
+                            {getEquivalentPriceLabel(rentPerMonth)}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label htmlFor="prop-maintenance" className="text-slate-300">
+                          Maintenance (INR)
+                        </Label>
+                        <Input
+                          id="prop-maintenance"
+                          type="number"
+                          value={maintenance}
+                          onChange={(e) => setMaintenance(e.target.value)}
+                          placeholder="e.g. 5000"
+                          className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                        />
+                        {maintenance && !isNaN(Number(maintenance)) && Number(maintenance) > 0 && (
+                          <p className="text-[11px] text-primary font-semibold mt-0.5">
+                            {getEquivalentPriceLabel(maintenance)}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label htmlFor="prop-advance" className="text-slate-300">
+                          Advance (Deposit) (INR)
+                        </Label>
+                        <Input
+                          id="prop-advance"
+                          type="number"
+                          value={advance}
+                          onChange={(e) => setAdvance(e.target.value)}
+                          placeholder="e.g. 200000"
+                          className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                        />
+                        {advance && !isNaN(Number(advance)) && Number(advance) > 0 && (
+                          <p className="text-[11px] text-primary font-semibold mt-0.5">
+                            {getEquivalentPriceLabel(advance)}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label htmlFor="prop-gst" className="text-slate-300">
+                          GST (INR)
+                        </Label>
+                        <Input
+                          id="prop-gst"
+                          type="number"
+                          value={gst}
+                          onChange={(e) => setGst(e.target.value)}
+                          placeholder="e.g. 1800"
+                          className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                        />
+                        {gst && !isNaN(Number(gst)) && Number(gst) > 0 && (
+                          <p className="text-[11px] text-primary font-semibold mt-0.5">
+                            {getEquivalentPriceLabel(gst)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="space-y-1.5">
                     <Label htmlFor="prop-type" className="text-slate-300">

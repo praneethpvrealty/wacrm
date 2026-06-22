@@ -113,6 +113,12 @@ export async function PUT(
       rental_income,
       roi,
       listing_source,
+      // rental fields
+      listing_type,
+      rent_per_month,
+      maintenance,
+      advance,
+      gst,
     } = body;
 
     // Validate only if passed
@@ -274,6 +280,26 @@ export async function PUT(
 
     if (listing_source !== undefined) {
       updateData.listing_source = listing_source === "agent" ? "agent" : "owner";
+    }
+
+    if (listing_type !== undefined) {
+      updateData.listing_type = listing_type === "Rent" ? "Rent" : "Sale";
+    }
+
+    if (rent_per_month !== undefined) {
+      updateData.rent_per_month = typeof rent_per_month === "number" ? rent_per_month : null;
+    }
+
+    if (maintenance !== undefined) {
+      updateData.maintenance = typeof maintenance === "number" ? maintenance : null;
+    }
+
+    if (advance !== undefined) {
+      updateData.advance = typeof advance === "number" ? advance : null;
+    }
+
+    if (gst !== undefined) {
+      updateData.gst = typeof gst === "number" ? gst : null;
     }
 
     // Verify it exists in this account before updating (defensive check)

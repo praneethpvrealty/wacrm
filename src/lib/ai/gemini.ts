@@ -243,6 +243,11 @@ export interface ParsedPropertyDraft {
   owner_contact_name: string | null;
   owner_contact_phone: string | null;
   owner_contact_role: string | null;
+  listing_type: "Sale" | "Rent" | null;
+  rent_per_month: number | null;
+  maintenance: number | null;
+  advance: number | null;
+  gst: number | null;
 }
 
 /**
@@ -401,10 +406,15 @@ export async function parseListingFromImageOrText(
     "  \"google_map_link\": \"Google Map link URL if present in text/image (e.g., 'https://maps.app.goo.gl/...' or 'https://google.com/maps/...') or null\",\n" +
     "  \"owner_contact_name\": \"Contact person's name, or sender's name or listing agent/owner name mentioned or null\",\n" +
     "  \"owner_contact_phone\": \"Contact person's phone number mentioned (numeric digits only) or null\",\n" +
-    "  \"owner_contact_role\": \"Role of the contact person mentioned (must be 'Agent' or 'Owner' or null)\"\n" +
+    "  \"owner_contact_role\": \"Role of the contact person mentioned (must be 'Agent' or 'Owner' or null)\",\n" +
+    "  \"listing_type\": \"Transaction type ('Sale' or 'Rent'). Set to 'Rent' if terms like 'for rent', 'rent per month', 'advance/deposit', 'lease' are used. Default is 'Sale'\",\n" +
+    "  \"rent_per_month\": Numeric monthly rent in INR (e.g. 'rent 40k' -> 40000) or null,\n" +
+    "  \"maintenance\": Numeric monthly maintenance charges in INR or null,\n" +
+    "  \"advance\": Numeric security deposit / advance in INR (e.g. 'advance 2.5 L' -> 250000) or null,\n" +
+    "  \"gst\": Numeric GST percentage (e.g. '18% GST' -> 18) or flat GST amount in INR or null\n" +
     "}\n\n" +
     "Important parsing rules:\n" +
-    "1. For Price and Rental Income: Convert terms like 'Crore', 'Cr', 'Lakhs', 'L' to standard numeric integer values (e.g., '80 Lakhs' -> 8000000, '1.5 Cr' -> 15000000, '2.5 L' -> 250000).\n" +
+    "1. For Price, Rent, Advance/Deposit: Convert terms like 'Crore', 'Cr', 'Lakhs', 'L', 'k' to standard numeric integer values (e.g., '80 Lakhs' -> 8000000, '1.5 Cr' -> 15000000, '2.5 L' -> 250000, '25k' -> 25000).\n" +
     "2. For Location/Sublocality: Infer the sublocality / layout name (e.g. HSR Layout, Koramangala) if mentioned.\n" +
     "3. For vacant land/plot without building details (e.g., no bedrooms/bathrooms/apartment mention), map 'type' intelligently based on keywords to 'Residential Land/ Plot', 'Commercial Land', 'Industrial Land', or 'Agricultural Land'. For example, commercial plots go to 'Commercial Land'.\n" +
     "4. Set any fields that cannot be found or reasonably inferred to null.\n" +
@@ -466,7 +476,12 @@ export async function parseListingFromImageOrText(
       images: [],
       owner_contact_name: parsed.owner_contact_name || null,
       owner_contact_phone: parsed.owner_contact_phone || null,
-      owner_contact_role: parsed.owner_contact_role || null
+      owner_contact_role: parsed.owner_contact_role || null,
+      listing_type: parsed.listing_type || "Sale",
+      rent_per_month: parsed.rent_per_month || null,
+      maintenance: parsed.maintenance || null,
+      advance: parsed.advance || null,
+      gst: parsed.gst || null
     };
   } catch (err) {
     console.error("[Gemini AI] Error parsing listing details:", err);
@@ -485,9 +500,10 @@ export async function updateListingDraft(
     "You are an expert real estate data updater. You are given a current property draft JSON object and a natural language instruction from the user.\n" +
     "Your job is to apply the updates requested by the user and return the complete updated JSON object matching the exact structure.\n" +
     "Do not change any other fields unless requested by the user.\n" +
-    "Convert terms like 'Crore', 'Cr', 'Lakhs', 'L' to standard numeric integer values for the price and rental_income fields. Extracted Google Map links should be placed in 'google_map_link' field.\n" +
+    "Convert terms like 'Crore', 'Cr', 'Lakhs', 'L', 'k' to standard numeric integer values for the price, rent_per_month, advance, and rental_income fields. Extracted Google Map links should be placed in 'google_map_link' field.\n" +
     "Handle updates to amenities (features) and nearby highlights (nearby_highlights) intelligently (e.g. if the user says 'add Gym to amenities', add 'Gym' to the features array; if they say 'add HSR Metro to landmarks', add 'HSR Metro' to the nearby_highlights array).\n" +
     "Handle updates to listing/owner contact details intelligently (e.g. if the user says 'contact name is Ramesh' or 'owner phone is 9876543210', update owner_contact_name or owner_contact_phone respectively).\n" +
+    "Include fields for rental vertical updates: listing_type ('Sale' or 'Rent'), rent_per_month, maintenance, advance, and gst.\n" +
     "Output MUST be valid JSON.";
 
   const prompt = `Current Draft:\n${JSON.stringify(currentDraft, null, 2)}\n\nUser Update Request:\n"${updateRequest}"\n\nApply these updates and return the updated JSON.`;

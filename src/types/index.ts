@@ -570,6 +570,11 @@ export interface Property {
   location: string;
   type: string;
   status: string;
+  listing_type?: 'Sale' | 'Rent';
+  rent_per_month?: number | null;
+  maintenance?: number | null;
+  advance?: number | null;
+  gst?: number | null;
   bedrooms?: number;
   bathrooms?: number;
   area_sqft?: number;
