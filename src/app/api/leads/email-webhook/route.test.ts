@@ -5,7 +5,8 @@ import {
   resolvePhoneNumberFromUrl,
   resolveHousingPhone,
   decodeQuotedPrintable,
-  decodeMimeSubject
+  decodeMimeSubject,
+  parseMimeEmail
 } from './route';
 
 describe('Email Webhook Lead Parsing', () => {
@@ -166,6 +167,34 @@ describe('Email Webhook Lead Parsing', () => {
       expect(res.name).toBe('Pavan');
       expect(res.phone).toBe('+91-9700364876');
       expect(res.email).toBe('srivirinchi.kadiyala@gmail.com');
+    });
+  });
+
+  describe('parseMimeEmail', () => {
+    it('should parse raw multipart MIME emails with boundary', () => {
+      const rawEmail = `
+Received: from mail.example.com
+Content-Type: multipart/alternative; boundary="boundary-123"
+Subject: =?UTF-8?Q?Test_Subject?=
+
+--boundary-123
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: quoted-printable
+
+Hello plain text.
+
+--boundary-123
+Content-Type: text/html; charset=UTF-8
+Content-Transfer-Encoding: quoted-printable
+
+<h1>Hello HTML</h1>
+
+--boundary-123--
+      `.trim();
+      
+      const parsed = parseMimeEmail(rawEmail);
+      expect(parsed.text.trim()).toBe('Hello plain text.');
+      expect(parsed.html.trim()).toBe('<h1>Hello HTML</h1>');
     });
   });
 });

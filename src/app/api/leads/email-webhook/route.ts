@@ -38,6 +38,76 @@ export function decodeMimeSubject(str: string): string {
     });
 }
 
+// Parses raw MIME emails into clean HTML and plain text bodies without headers/boundaries
+export function parseMimeEmail(raw: string): { html: string; text: string } {
+  const headerSeparator = raw.indexOf('\r\n\r\n');
+  const separatorLength = headerSeparator !== -1 ? 4 : 2;
+  const separatorPos = headerSeparator !== -1 ? headerSeparator : raw.indexOf('\n\n');
+  
+  if (separatorPos === -1) {
+    return { html: '', text: raw };
+  }
+  
+  const headersPart = raw.slice(0, separatorPos);
+  const bodyPart = raw.slice(separatorPos + separatorLength);
+  
+  const boundaryMatch = headersPart.match(/boundary=(?:"([^"]+)"|([^;\s]+))/i);
+  const boundary = boundaryMatch ? (boundaryMatch[1] || boundaryMatch[2]) : null;
+  
+  if (!boundary) {
+    let body = bodyPart;
+    const transferEncoding = headersPart.match(/Content-Transfer-Encoding:\s*([^\s;]+)/i)?.[1]?.toLowerCase();
+    if (transferEncoding === 'quoted-printable') {
+      body = decodeQuotedPrintable(body);
+    } else if (transferEncoding === 'base64') {
+      try {
+        body = Buffer.from(body.replace(/\s/g, ''), 'base64').toString('utf8');
+      } catch {}
+    }
+    
+    const isHtml = /Content-Type:\s*text\/html/i.test(headersPart);
+    return {
+      html: isHtml ? body : '',
+      text: isHtml ? '' : body
+    };
+  }
+  
+  const parts = bodyPart.split(`--${boundary}`);
+  let html = '';
+  let text = '';
+  
+  for (const part of parts) {
+    const trimmedPart = part.trim();
+    if (!trimmedPart || trimmedPart === '--') continue;
+    
+    const partSeparator = trimmedPart.indexOf('\r\n\r\n');
+    const partSepLen = partSeparator !== -1 ? 4 : 2;
+    const partSepPos = partSeparator !== -1 ? partSeparator : trimmedPart.indexOf('\n\n');
+    
+    if (partSepPos === -1) continue;
+    
+    const partHeaders = trimmedPart.slice(0, partSepPos);
+    let partBody = trimmedPart.slice(partSepPos + partSepLen);
+    
+    const partEncoding = partHeaders.match(/Content-Transfer-Encoding:\s*([^\s;]+)/i)?.[1]?.toLowerCase();
+    if (partEncoding === 'quoted-printable') {
+      partBody = decodeQuotedPrintable(partBody);
+    } else if (partEncoding === 'base64') {
+      try {
+        partBody = Buffer.from(partBody.replace(/\s/g, ''), 'base64').toString('utf8');
+      } catch {}
+    }
+    
+    if (/Content-Type:\s*text\/html/i.test(partHeaders)) {
+      html = partBody;
+    } else if (/Content-Type:\s*text\/plain/i.test(partHeaders)) {
+      text = partBody;
+    }
+  }
+  
+  return { html, text };
+}
+
 // Helper to parse budget strings (e.g., "1.5 Cr", "80 Lakhs", "50 L")
 function parseBudgetToINR(text: string): number | null {
   const clean = text.toLowerCase().replace(/,/g, '').trim();
@@ -314,18 +384,41 @@ export async function POST(request: Request) {
 
     const payload = await request.json();
     
-    // Decode MIME QP/Base64 subject
-    const subject = decodeMimeSubject(payload.subject || '');
+    // Determine if the payload text/html contains raw MIME email headers
+    let rawText = payload.text || payload.html || '';
     
-    // Decode Quoted-Printable body and html if they contain soft line breaks
-    let bodyText = payload.text || payload.html || '';
-    if (/=\r?\n/.test(bodyText)) {
-      bodyText = decodeQuotedPrintable(bodyText);
-    }
+    // If the payload appears to be a raw MIME email (contains headers like Content-Type/Received)
+    const isMimeEmail = /Content-Type:/i.test(rawText) || /MIME-Version:/i.test(rawText) || /Received:/i.test(rawText);
     
-    let htmlContent = payload.html || '';
-    if (/=\r?\n/.test(htmlContent)) {
-      htmlContent = decodeQuotedPrintable(htmlContent);
+    let subject = payload.subject || '';
+    let bodyText = '';
+    let htmlContent = '';
+    
+    if (isMimeEmail) {
+      console.log('[lead-webhook] Raw MIME email detected. Parsing multipart MIME structure...');
+      const parsedMime = parseMimeEmail(rawText);
+      htmlContent = parsedMime.html;
+      bodyText = parsedMime.text || parsedMime.html; // Fallback to HTML body if plain text is empty
+      
+      // Extract subject from MIME headers if missing or MIME-encoded
+      const subjectMatch = rawText.match(/Subject:\s*([^\r\n]+)/i);
+      if (subjectMatch && (!subject || subject.includes('=?'))) {
+        subject = decodeMimeSubject(subjectMatch[1].trim());
+      } else {
+        subject = decodeMimeSubject(subject);
+      }
+    } else {
+      subject = decodeMimeSubject(payload.subject || '');
+      bodyText = payload.text || payload.html || '';
+      htmlContent = payload.html || '';
+      
+      // Decode Quoted-Printable body and html if they contain soft line breaks
+      if (/=\r?\n/.test(bodyText)) {
+        bodyText = decodeQuotedPrintable(bodyText);
+      }
+      if (/=\r?\n/.test(htmlContent)) {
+        htmlContent = decodeQuotedPrintable(htmlContent);
+      }
     }
 
     if (!bodyText) {
@@ -541,11 +634,25 @@ export async function POST(request: Request) {
       });
     }
 
+    // Resolve user_id associated with the account to satisfy contacts NOT NULL constraint
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('user_id')
+      .eq('account_id', accountId)
+      .limit(1)
+      .maybeSingle();
+
+    if (!profile) {
+      return NextResponse.json({ error: 'No user found for this account' }, { status: 422 });
+    }
+    const userId = profile.user_id;
+
     // 4. Insert new buyer contact
     const { data: newContact, error: insertErr } = await supabase
       .from('contacts')
       .insert({
         account_id: accountId,
+        user_id: userId,
         name: parsed.name,
         phone: normalizedPhoneNum,
         email: parsed.email || null,
