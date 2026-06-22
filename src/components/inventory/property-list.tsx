@@ -263,7 +263,9 @@ export function PropertyList({
                   </div>
                   {property.owner && (
                     <div className="text-xs text-slate-400 flex items-center gap-1 bg-slate-800/40 px-2 py-0.5 rounded border border-slate-800" title={`${property.owner.name} (${property.owner.phone})`}>
-                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Owner:</span>
+                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                        {property.owner.classification || 'Owner'}:
+                      </span>
                       <span className="text-slate-350 font-semibold">{property.owner.name || 'Unnamed'}</span>
                     </div>
                   )}
