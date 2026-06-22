@@ -3,7 +3,9 @@ import {
   parsePortalLead,
   extractHousingUrls,
   resolvePhoneNumberFromUrl,
-  resolveHousingPhone
+  resolveHousingPhone,
+  decodeQuotedPrintable,
+  decodeMimeSubject
 } from './route';
 
 describe('Email Webhook Lead Parsing', () => {
@@ -133,6 +135,20 @@ describe('Email Webhook Lead Parsing', () => {
 
       const phone = await resolveHousingPhone(html, '');
       expect(phone).toBe('918887776665');
+    });
+  });
+
+  describe('MIME & QP Decoders', () => {
+    it('should decode MIME UTF-8 Q-encoded subject headers', () => {
+      const input = '=?UTF-8?Q?=28Gmail_Forwarding_confirmation_=E2=80=93_Receive_mail_from?=';
+      const decoded = decodeMimeSubject(input);
+      expect(decoded).toContain('Gmail Forwarding confirmation');
+    });
+
+    it('should decode Quoted-Printable body text with soft breaks', () => {
+      const input = 'Confirmation code: =\r\n12345678\r\nTo confirm, click: https://mail.google.com/mail/f-=3D12345';
+      const decoded = decodeQuotedPrintable(input);
+      expect(decoded).toBe('Confirmation code: 12345678\r\nTo confirm, click: https://mail.google.com/mail/f=12345');
     });
   });
 });

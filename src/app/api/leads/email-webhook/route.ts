@@ -15,6 +15,29 @@ function getAdminClient(): SupabaseClient {
   return _adminClient;
 }
 
+// Decodes Quoted-Printable (QP) strings commonly found in email bodies/headers
+export function decodeQuotedPrintable(str: string): string {
+  return str
+    .replace(/=\r?\n/g, '') // Remove soft line breaks
+    .replace(/=([0-9A-F]{2})/gi, (match, hex) => String.fromCharCode(parseInt(hex, 16)));
+}
+
+// Decodes MIME encoded subjects (Q-encoded UTF-8 or B-encoded Base64)
+export function decodeMimeSubject(str: string): string {
+  if (!str.includes('=?')) return str;
+  return str
+    .replace(/=\?UTF-8\?Q\?([^?]+)\?=/gi, (match, p1) => {
+      return decodeQuotedPrintable(p1.replace(/_/g, ' '));
+    })
+    .replace(/=\?UTF-8\?B\?([^?]+)\?=/gi, (match, p1) => {
+      try {
+        return Buffer.from(p1, 'base64').toString('utf8');
+      } catch {
+        return match;
+      }
+    });
+}
+
 // Helper to parse budget strings (e.g., "1.5 Cr", "80 Lakhs", "50 L")
 function parseBudgetToINR(text: string): number | null {
   const clean = text.toLowerCase().replace(/,/g, '').trim();
@@ -248,9 +271,20 @@ export async function POST(request: Request) {
     }
 
     const payload = await request.json();
-    const subject = payload.subject || '';
-    const bodyText = payload.text || payload.html || '';
-    const htmlContent = payload.html || '';
+    
+    // Decode MIME QP/Base64 subject
+    const subject = decodeMimeSubject(payload.subject || '');
+    
+    // Decode Quoted-Printable body and html if they contain soft line breaks
+    let bodyText = payload.text || payload.html || '';
+    if (/=\r?\n/.test(bodyText)) {
+      bodyText = decodeQuotedPrintable(bodyText);
+    }
+    
+    let htmlContent = payload.html || '';
+    if (/=\r?\n/.test(htmlContent)) {
+      htmlContent = decodeQuotedPrintable(htmlContent);
+    }
 
     if (!bodyText) {
       return NextResponse.json({ error: 'Empty email body text' }, { status: 400 });
@@ -260,7 +294,11 @@ export async function POST(request: Request) {
     const isVerificationEmail = /forwarding.*confirm/i.test(subject) || 
                                  /verification/i.test(subject) || 
                                  /confirm.*forward/i.test(subject) ||
-                                 /google.*forward/i.test(subject);
+                                 /google.*forward/i.test(subject) ||
+                                 /forwarding.*confirm/i.test(bodyText) ||
+                                 /confirm.*forward/i.test(bodyText) ||
+                                 /confirmation\s*code/i.test(bodyText) ||
+                                 /automatically\s*forward/i.test(bodyText);
     if (isVerificationEmail) {
       console.log(`[lead-webhook] Forwarding verification email received. Subject: ${subject}`);
       
