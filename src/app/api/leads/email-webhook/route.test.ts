@@ -148,7 +148,24 @@ describe('Email Webhook Lead Parsing', () => {
     it('should decode Quoted-Printable body text with soft breaks', () => {
       const input = 'Confirmation code: =\r\n12345678\r\nTo confirm, click: https://mail.google.com/mail/f-=3D12345';
       const decoded = decodeQuotedPrintable(input);
-      expect(decoded).toBe('Confirmation code: 12345678\r\nTo confirm, click: https://mail.google.com/mail/f=12345');
+      expect(decoded).toBe('Confirmation code: 12345678\r\nTo confirm, click: https://mail.google.com/mail/f-=12345');
+    });
+  });
+
+  describe('99acres Fallback Parsing', () => {
+    it('should parse 99acres email in block format without labels', () => {
+      const subject = 'Fwd: Property Advertisement Response on 99acres';
+      const body = `
+        Details of the response
+        Pavan
+        srivirinchi.kadiyala@gmail.com
+        +91-9700364876 (Verified)
+      `;
+      const res = parsePortalLead(subject, body, '');
+      expect(res.source).toBe('99acres');
+      expect(res.name).toBe('Pavan');
+      expect(res.phone).toBe('+91-9700364876');
+      expect(res.email).toBe('srivirinchi.kadiyala@gmail.com');
     });
   });
 });

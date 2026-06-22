@@ -246,6 +246,48 @@ export function parsePortalLead(subject: string, bodyText: string, html: string)
     if (reqMatch) requirementText = reqMatch[1].trim();
   }
 
+  // Generic Block-Format Fallback: If name, email, or phone are still missing, 
+  // try to find adjacent lines around the email address line (common in table/card layouts without explicit labels)
+  if (!phone || !email || !name || name === 'Portal Lead') {
+    const lines = bodyText.split('\n').map(l => l.trim()).filter(Boolean);
+    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+    const emailIndex = lines.findIndex(l => emailRegex.test(l));
+    
+    if (emailIndex !== -1) {
+      const candidateEmail = lines[emailIndex].match(emailRegex)?.[0];
+      
+      // Candidate Name: Line immediately before the email address (excluding generic words)
+      let candidateName = '';
+      if (emailIndex > 0) {
+        const prevLine = lines[emailIndex - 1];
+        if (!/details|response|dear|hello|hi|sourcing|ingest|message|subject/i.test(prevLine)) {
+          candidateName = prevLine;
+        }
+      }
+      
+      // Candidate Phone: Line immediately after the email address
+      let candidatePhone = '';
+      if (emailIndex < lines.length - 1) {
+        const nextLine = lines[emailIndex + 1];
+        // Match line containing at least 7 digits (e.g. phone number)
+        const digitsCount = nextLine.replace(/\D/g, '').length;
+        if (digitsCount >= 7 && digitsCount <= 15) {
+          candidatePhone = nextLine.replace(/\(verified\)/i, '').trim();
+        }
+      }
+
+      if (candidatePhone && !phone) {
+        phone = candidatePhone;
+      }
+      if (candidateEmail && !email) {
+        email = candidateEmail;
+      }
+      if (candidateName && (!name || name === 'Portal Lead')) {
+        name = candidateName;
+      }
+    }
+  }
+
   // Clean values from HTML wrappers or carriage returns
   const cleanLine = (str: string) => str.replace(/<[^>]*>/g, '').split(/[\r\n]/)[0].trim();
 
