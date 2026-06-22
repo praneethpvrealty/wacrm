@@ -37,7 +37,8 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "worker": "tsx src/scripts/queue-worker.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
@@ -48,6 +49,7 @@
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.106.2",
     "@vercel/analytics": "^2.0.1",
+    "ioredis": "^5.5.0",
     "@xyflow/react": "^12.10.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -74,7 +76,8 @@
     "tailwindcss": "^4",
     "typescript": "^6",
     "vitest": "^4.1.7",
-    "husky": "^8.0.0"
+    "husky": "^8.0.0",
+    "tsx": "^4.19.3"
   },
   "overrides": {
     "postcss": "^8.5.10",

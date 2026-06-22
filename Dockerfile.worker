@@ -1,0 +1,14 @@
+FROM node:20-alpine
+WORKDIR /app
+
+# Copy dependency configs
+COPY package.json package-lock.json tsconfig.json ./
+
+# Install dependencies (including devDependencies like tsx for TS execution)
+RUN npm ci
+
+# Copy codebase
+COPY src ./src
+
+# Start background queue worker
+CMD ["npm", "run", "worker"]
