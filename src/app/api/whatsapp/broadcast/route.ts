@@ -187,6 +187,20 @@ export async function POST(request: Request) {
       propertyRow = prop
     }
 
+    let greetingTemplateRow: MessageTemplate | null = null
+    if (broadcast_type === 'greeting') {
+      const { data: rawTemplates } = await supabase
+        .from('message_templates')
+        .select('*')
+        .eq('account_id', accountId)
+        .eq('name', 'property_share')
+        .limit(1)
+      const rawTemplateRow = rawTemplates && rawTemplates.length > 0 ? rawTemplates[0] : null
+      if (rawTemplateRow && isMessageTemplate(rawTemplateRow)) {
+        greetingTemplateRow = rawTemplateRow
+      }
+    }
+
     let templateRow: MessageTemplate | null = null
     if (broadcast_type === 'template' && template_name) {
       // Load the template row once so sendTemplateMessage can build
@@ -286,23 +300,60 @@ export async function POST(request: Request) {
           customDbClient: supabase,
         })
       } else if (broadcast_type === 'greeting' && propertyRow) {
+        let contactName = 'there'
+        const normalized = recipient.phone.replace(/\D/g, '')
+        const phoneSuffix = normalized.length >= 8 ? normalized.slice(-8) : normalized
+        const { data: contactRow } = await supabase
+          .from('contacts')
+          .select('name')
+          .eq('account_id', accountId)
+          .like('phone', `%${phoneSuffix}`)
+          .maybeSingle()
+        if (contactRow?.name) {
+          const cleanName = contactRow.name.trim()
+          const cleanNameDigits = cleanName.replace(/\D/g, '')
+          if (cleanNameDigits !== normalized && cleanNameDigits.length < 8) {
+            contactName = cleanName
+          }
+        }
+
         const agentName = profile?.full_name || 'An agent'
-        const greetingText = `Welcome to ConvoReal! ${agentName} would like to share ${propertyRow.title} with you.`
-        result = await sendWhatsAppMessageAndPersist({
-          accountId,
-          userId: user.id,
-          toPhone: recipient.phone,
-          kind: 'interactive',
-          senderType: 'agent',
-          interactiveType: 'buttons',
-          interactiveBody: greetingText,
-          interactiveButtons: [
-            { id: `share_property_yes:${propertyRow.id}`, title: 'Sure, please send' },
-            { id: `share_property_no:${propertyRow.id}`, title: 'No Thanks' }
-          ],
-          text: greetingText,
-          customDbClient: supabase,
-        })
+
+        if (greetingTemplateRow) {
+          const templateParams = [contactName, agentName, propertyRow.title]
+          const resolvedText = resolveTemplateBodyText(greetingTemplateRow.body_text, templateParams)
+
+          result = await sendWhatsAppMessageAndPersist({
+            accountId,
+            userId: user.id,
+            toPhone: recipient.phone,
+            kind: 'template',
+            senderType: 'agent',
+            templateName: 'property_share',
+            templateLanguage: greetingTemplateRow.language || 'en',
+            templateParams,
+            templateRow: greetingTemplateRow,
+            text: resolvedText,
+            customDbClient: supabase,
+          })
+        } else {
+          const greetingText = `Welcome to ConvoReal! ${agentName} would like to share ${propertyRow.title} with you.`
+          result = await sendWhatsAppMessageAndPersist({
+            accountId,
+            userId: user.id,
+            toPhone: recipient.phone,
+            kind: 'interactive',
+            senderType: 'agent',
+            interactiveType: 'buttons',
+            interactiveBody: greetingText,
+            interactiveButtons: [
+              { id: `share_property_yes:${propertyRow.id}`, title: 'Sure, please send' },
+              { id: `share_property_no:${propertyRow.id}`, title: 'No Thanks' }
+            ],
+            text: greetingText,
+            customDbClient: supabase,
+          })
+        }
       } else {
         const defaultText = content_text || `*New Listing Available*\n\n${product_retailer_id}`
         result = await sendWhatsAppMessageAndPersist({

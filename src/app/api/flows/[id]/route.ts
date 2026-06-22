@@ -180,6 +180,15 @@ export async function DELETE(
   const guard = await requireOwnership(id)
   if (!guard.ok) return NextResponse.json(guard.body, { status: guard.status })
 
+  // Clear active_flow_id on contacts referencing this flow to prevent foreign key constraint violation
+  const { error: clearErr } = await supabaseAdmin()
+    .from('contacts')
+    .update({ active_flow_id: null } as unknown as Record<string, unknown>)
+    .eq('active_flow_id', id)
+  if (clearErr) {
+    console.error('[delete-flow] Error clearing active_flow_id on contacts:', clearErr.message)
+  }
+
   // CASCADE on flow_nodes / flow_runs / flow_run_events handles the
   // children. Active runs end abruptly — there's no graceful "drain"
   // mechanism in v1, but that's intentional: deleting a flow is a
