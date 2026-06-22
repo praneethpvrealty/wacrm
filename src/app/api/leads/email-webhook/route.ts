@@ -108,6 +108,23 @@ export function parseMimeEmail(raw: string): { html: string; text: string } {
   return { html, text };
 }
 
+// Converts HTML strings to plain text preserving structure and line breaks
+export function stripHtmlToText(html: string): string {
+  return html
+    .replace(/<\/(p|div|tr|h1|h2|h3|h4|h5|h6|li)>/gi, '\n') // Preserves line breaks for block elements
+    .replace(/<br\s*\/?>/gi, '\n') // Preserves line breaks for br tags
+    .replace(/<[^>]*>/g, '') // Removes all HTML tags
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/[ \t]+/g, ' ') // Normalize spaces
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
 // Helper to parse budget strings (e.g., "1.5 Cr", "80 Lakhs", "50 L")
 function parseBudgetToINR(text: string): number | null {
   const clean = text.toLowerCase().replace(/,/g, '').trim();
@@ -223,6 +240,11 @@ export async function resolveHousingPhone(html: string, bodyText: string): Promi
 
 // Extractor rules for different portals
 export function parsePortalLead(subject: string, bodyText: string, html: string) {
+  // If the body text contains HTML tags, convert it to clean plain text first
+  if (bodyText.includes('<') && bodyText.includes('>')) {
+    bodyText = stripHtmlToText(bodyText);
+  }
+
   let name = '';
   let phone = '';
   let email = '';
@@ -321,28 +343,73 @@ export function parsePortalLead(subject: string, bodyText: string, html: string)
   if (!phone || !email || !name || name === 'Portal Lead') {
     const lines = bodyText.split('\n').map(l => l.trim()).filter(Boolean);
     const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
-    const emailIndex = lines.findIndex(l => emailRegex.test(l));
+    
+    // Find the first email line index that is NOT a system or portal/notification email
+    let emailIndex = -1;
+    for (let i = 0; i < lines.length; i++) {
+      const match = lines[i].match(emailRegex);
+      if (match) {
+        const candidate = match[0].toLowerCase();
+        const isSystemOrPortal = 
+          candidate.includes('convoreal.com') ||
+          candidate.includes('99acres.com') ||
+          candidate.includes('magicbricks.com') ||
+          candidate.includes('housing.com') ||
+          candidate.startsWith('noreply') ||
+          candidate.startsWith('no-reply') ||
+          candidate.startsWith('alerts') ||
+          candidate.startsWith('notification') ||
+          candidate.startsWith('info') ||
+          candidate.startsWith('support') ||
+          candidate.startsWith('reply');
+          
+        if (!isSystemOrPortal) {
+          emailIndex = i;
+          break;
+        }
+      }
+    }
     
     if (emailIndex !== -1) {
       const candidateEmail = lines[emailIndex].match(emailRegex)?.[0];
       
-      // Candidate Name: Line immediately before the email address (excluding generic words)
+      // Candidate Name: Try same line first if it matches "Name <email>" format, otherwise scan previous 2 lines
       let candidateName = '';
-      if (emailIndex > 0) {
-        const prevLine = lines[emailIndex - 1];
-        if (!/details|response|dear|hello|hi|sourcing|ingest|message|subject/i.test(prevLine)) {
-          candidateName = prevLine;
+      const lineWithEmail = lines[emailIndex];
+      const nameInAngleBracketsMatch = lineWithEmail.match(/(?:from\s*:\s*)?([^<]+)<[^>]+>/i);
+      if (nameInAngleBracketsMatch) {
+        const potentialName = nameInAngleBracketsMatch[1].replace(/["']/g, '').trim();
+        if (potentialName && !/details|response|dear|hello|hi|sourcing|ingest|message|subject|advertisement|property/i.test(potentialName)) {
+          candidateName = potentialName;
+        }
+      }
+
+      if (!candidateName) {
+        for (let i = 1; i <= 2; i++) {
+          if (emailIndex - i >= 0) {
+            const line = lines[emailIndex - i];
+            const isHeaderOrSMTP = /^[a-zA-Z0-9-]+:/i.test(line) || 
+                                   /received|by|id|date|subject|from|to|message-id|content-type/i.test(line);
+            if (!/details|response|dear|hello|hi|sourcing|ingest|message|subject|advertisement|property/i.test(line) && !isHeaderOrSMTP) {
+              candidateName = line;
+              break;
+            }
+          }
         }
       }
       
-      // Candidate Phone: Line immediately after the email address
+      // Candidate Phone: Scan the next 2 lines for a phone number (containing 7-15 digits)
       let candidatePhone = '';
-      if (emailIndex < lines.length - 1) {
-        const nextLine = lines[emailIndex + 1];
-        // Match line containing at least 7 digits (e.g. phone number)
-        const digitsCount = nextLine.replace(/\D/g, '').length;
-        if (digitsCount >= 7 && digitsCount <= 15) {
-          candidatePhone = nextLine.replace(/\(verified\)/i, '').trim();
+      for (let i = 1; i <= 2; i++) {
+        if (emailIndex + i < lines.length) {
+          const line = lines[emailIndex + i];
+          const digitsCount = line.replace(/\D/g, '').length;
+          const isHeaderOrSMTP = /^[a-zA-Z0-9-]+:/i.test(line) || 
+                                 /received|by|id|date|subject|from|to|message-id|content-type/i.test(line);
+          if (digitsCount >= 7 && digitsCount <= 15 && !isHeaderOrSMTP) {
+            candidatePhone = line.replace(/\(verified\)/i, '').trim();
+            break;
+          }
         }
       }
 

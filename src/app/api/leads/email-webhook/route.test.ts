@@ -168,6 +168,25 @@ describe('Email Webhook Lead Parsing', () => {
       expect(res.phone).toBe('+91-9700364876');
       expect(res.email).toBe('srivirinchi.kadiyala@gmail.com');
     });
+
+    it('should ignore SMTP routing headers, received lines, and system sync emails', () => {
+      const subject = 'Fwd: Property Advertisement Response on 99acres';
+      const body = `
+        Received: by cloudflare-email.net (cloudflare) id 85IrCefi6a5y
+        To: lead-sync-4f1247de-269c-47c2-8974-36ef8f77f77d@leads.convoreal.com
+        From: noreply@99acres.com
+        
+        Details of the response:
+        Robert Smith
+        robert@gmail.com
+        +919876543210 (Verified)
+      `;
+      const res = parsePortalLead(subject, body, '');
+      expect(res.source).toBe('99acres');
+      expect(res.name).toBe('Robert Smith');
+      expect(res.email).toBe('robert@gmail.com');
+      expect(res.phone).toBe('+919876543210');
+    });
   });
 
   describe('parseMimeEmail', () => {
