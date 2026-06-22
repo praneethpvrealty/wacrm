@@ -65,14 +65,27 @@ The Queue Worker is deployed as a background daemon container (no public web end
 
 ## 4. Configure Meta Developer Console Webhook
 
-1. Copy the HTTPS endpoint of your deployed Go Ingress service (e.g. `https://go-ingress-production.up.railway.app`).
+1. Locate your Go Ingress service's **actual public domain** on Railway:
+   - Open your `go-ingress` service on Railway.
+   - Go to the **Settings** tab and scroll to **Networking** (or click **Networking** on the side settings menu).
+   - Under **Public Networking**, copy the generated domain (it will look like `https://go-ingress-production-xxxx.up.railway.app`). 
+   - *Note: If no domain is present, click **Generate Domain** first.*
 2. Log into the [Meta Developer Console](https://developers.facebook.com).
 3. Navigate to **WhatsApp → Configuration** (or **Webhooks**).
 4. Click **Edit Webhook Settings**:
-   - **Callback URL**: `https://go-ingress-production.up.railway.app/api/whatsapp/webhook`
-   - **Verify Token**: *(The value you configured in `WHATSAPP_VERIFY_TOKEN`)*
-5. Click **Verify and Save**. Meta will send a GET challenge. The Go service will proxy it to Next.js, and verify the token instantly.
+   - **Callback URL**: Paste your actual Railway service domain with `/api/whatsapp/webhook` appended (e.g., `https://go-ingress-production-xxxx.up.railway.app/api/whatsapp/webhook`).
+   - **Verify Token**: Enter the exact same value you configured in your Railway environment variables for `WHATSAPP_VERIFY_TOKEN` (e.g., `crm`).
+5. Click **Verify and Save**. Meta will send a GET challenge. The Go service will verify the token (proxying it to Next.js if dynamic DB-verification is needed) and return the challenge instantly.
 6. Under Webhook Fields, ensure you subscribe to `messages` events.
+
+### Troubleshooting Webhook Verification Failures:
+If you see the error *"The callback URL or verify token couldn't be validated"* on the Meta dashboard:
+1. Open your `go-ingress` service on Railway.
+2. Go to the **Console** tab to view the live build/runtime logs.
+3. Click **Verify and Save** again in Meta and inspect the logs:
+   - **No logs at all**: Meta cannot reach your Go server. Double-check your Callback URL domain or make sure the service is online.
+   - **"Missing verification parameters"**: The URL parameters were incorrect.
+   - **"Static verification mismatch" / "Proxy request failed"**: Check if `NEXT_PUBLIC_SITE_URL` (or `NEXTJS_BACKEND_URL`) is set correctly in your Go environment variables and that your Next.js application is running/accessible.
 
 ---
 
