@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { normalizePhoneWithCountryCode } from '@/lib/whatsapp/phone-utils';
 import { sendTextMessage } from '@/lib/whatsapp/meta-api';
+import { decrypt } from '@/lib/whatsapp/encryption';
 
 // Lazy-initialized admin client
 let _adminClient: SupabaseClient | null = null;
@@ -684,7 +685,7 @@ export async function POST(request: Request) {
           try {
             await sendTextMessage({
               phoneNumberId: waConfig.phone_number_id,
-              accessToken: waConfig.access_token,
+              accessToken: decrypt(waConfig.access_token),
               to: cleanPhone,
               text: replyText,
             });
@@ -764,7 +765,7 @@ export async function POST(request: Request) {
         try {
           await sendTextMessage({
             phoneNumberId: waConfig.phone_number_id,
-            accessToken: waConfig.access_token,
+            accessToken: decrypt(waConfig.access_token),
             to: cleanPhone,
             text: replyText,
           });

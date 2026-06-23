@@ -276,7 +276,7 @@ export function OtherSettingsPanel() {
   const leadsDomain = process.env.NEXT_PUBLIC_LEADS_EMAIL_DOMAIN || 'leads.convoreal.com';
   const forwardingEmail = `lead-sync-${accountId}@${leadsDomain}`;
 
-  const isVerificationRecent = verAt ? (new Date().getTime() - new Date(verAt).getTime() < 15 * 60 * 1000) : false;
+  const isVerificationRecent = verAt ? (new Date().getTime() - new Date(verAt).getTime() < 7 * 24 * 60 * 60 * 1000) : false;
 
   const getRelativeTimeString = (isoString: string | null) => {
     if (!isoString) return '';
@@ -285,7 +285,13 @@ export function OtherSettingsPanel() {
       const diffMins = Math.floor(diffMs / 60000);
       if (diffMins < 1) return 'just now';
       if (diffMins === 1) return '1 minute ago';
-      return `${diffMins} minutes ago`;
+      if (diffMins < 60) return `${diffMins} minutes ago`;
+      const diffHours = Math.floor(diffMins / 60);
+      if (diffHours === 1) return '1 hour ago';
+      if (diffHours < 24) return `${diffHours} hours ago`;
+      const diffDays = Math.floor(diffHours / 24);
+      if (diffDays === 1) return '1 day ago';
+      return `${diffDays} days ago`;
     } catch {
       return '';
     }
