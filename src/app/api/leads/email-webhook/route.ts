@@ -525,7 +525,7 @@ export async function POST(request: Request) {
       bodyText = parsedMime.text || parsedMime.html; // Fallback to HTML body if plain text is empty
       
       // Extract subject from MIME headers if missing or MIME-encoded
-      const subjectMatch = rawText.match(/Subject:\s*([^\r\n]+)/i);
+      const subjectMatch = rawText.match(/^Subject:\s*([^\r\n]+)/im);
       if (subjectMatch && (!subject || subject.includes('=?'))) {
         subject = decodeMimeSubject(subjectMatch[1].trim());
       } else {
@@ -534,7 +534,7 @@ export async function POST(request: Request) {
 
       // Extract sender from MIME headers if missing or default generic
       if (!sender || sender.includes('unknown')) {
-        const fromMatch = rawText.match(/From:\s*([^\r\n]+)/i);
+        const fromMatch = rawText.match(/^From:\s*([^\r\n]+)/im);
         if (fromMatch) {
           sender = fromMatch[1].trim();
         }
