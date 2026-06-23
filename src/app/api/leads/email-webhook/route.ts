@@ -453,7 +453,7 @@ export async function POST(request: Request) {
     const payload = await request.json();
     
     // Determine if the payload text/html contains raw MIME email headers
-    let rawText = payload.text || payload.html || '';
+    const rawText = payload.text || payload.html || '';
     
     // If the payload appears to be a raw MIME email (contains headers like Content-Type/Received)
     const isMimeEmail = /Content-Type:/i.test(rawText) || /MIME-Version:/i.test(rawText) || /Received:/i.test(rawText);
