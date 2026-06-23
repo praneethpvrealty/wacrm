@@ -291,6 +291,16 @@ async function sendAutoReply({
         leadSource || 'portal'
       ];
       
+      // Auto-resolve dynamic URL buttons if the template has them
+      const buttonParams: Record<number, string> = {};
+      if (template.buttons && Array.isArray(template.buttons)) {
+        template.buttons.forEach((btn: any, idx: number) => {
+          if (btn.type === 'URL' && btn.url && btn.url.includes('{{1}}')) {
+            buttonParams[idx] = `?ref=${accountId}`;
+          }
+        });
+      }
+      
       const sendRes = await sendTemplateMessage({
         phoneNumberId: waConfig.phone_number_id,
         accessToken: decrypt(waConfig.access_token),
@@ -299,7 +309,8 @@ async function sendAutoReply({
         language: template.language || 'en_US',
         template: template as any,
         messageParams: {
-          body: bodyParams
+          body: bodyParams,
+          ...(Object.keys(buttonParams).length > 0 ? { buttonParams } : {})
         }
       });
       
@@ -677,7 +688,7 @@ export async function POST(request: Request) {
       // Parse Gmail confirmation code
       const codeMatch = bodyText.match(/(?:confirmation\s*code\s*:\s*|code\s*:\s*)(\d{8,12})/i);
       // Parse Gmail confirmation link
-      const linkMatch = bodyText.match(/https:\/\/mail\.google\.com\/mail\/v?f-[^\s"'>]+/i);
+      const linkMatch = bodyText.match(/https:\/\/(?:mail|mail-settings)\.google\.com\/mail\/v?f-[^\s"'>]+/i);
       
       console.log(`[lead-webhook] ==========================================`);
       console.log(`[lead-webhook] GMAIL FORWARDING VERIFICATION RECEIVED`);
