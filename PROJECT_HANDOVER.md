@@ -115,32 +115,25 @@ wacrm/
    - Added `listing_source` ('owner' vs 'agent') to properties.
    - Displays a styled **Agent Referred** badge on agent listings.
    - Added a "Listing Source" filter select (All, Direct (Owner), Referred by Agent) to the inventory page toolbar.
+5. **ROI Yield Matching (Migration 048)**:
+   - Added Expected Min ROI preferences (`min_roi` column) to the `contacts` table, preferences drawer, and contact forms.
+   - Updated the property-contact matching engine (`src/lib/matching.ts`) to enforce ROI matching thresholds (e.g. `property.roi >= contact.min_roi`).
+6. **Approved Template Webhook Auto-Replies (Migration 061)**:
+   - Added support for sending approved WhatsApp templates (e.g. Utility category `lead_welcome_utility`) as auto-replies to incoming email webhook leads.
+   - Handled dynamic parameter bindings: `{{1}}` for lead name, `{{2}}` for portal source.
+   - Integrated dynamic URL button mapping matching `?ref=ACCOUNT_ID` to route users back to the tenant's public showcase page.
+   - Added template auto-reply dropdown selectors and rich visual preview cards in Settings (`other-settings.tsx`).
+7. **Forwarding Verification Link Parser**:
+   - Expanded verification link extraction regex inside `route.ts` to capture Google forwarding confirmations from `mail-settings.google.com` (which personal Gmail accounts use).
+8. **Chatbot Concurrent Image-Upload Debounce**:
+   - Implemented `sendPropertyDraftPreviewDebounced` in `chatbot-engine.ts`.
+   - Pauses confirmation preview dispatches for 4 seconds, compares update timestamps in `property_draft_sessions`, and ensures only the last concurrent thread triggers a single compiled preview draft card (preventing duplicate or intermediate replies during concurrent multi-photo/document uploads).
 
 ---
 
 ## 7. Pending Tasks
 
-### Task 1: ROI Yield Matching & Contact Expected ROI Preference
-**Goal**: Allow buyers to filter and match properties purely based on minimum ROI/Yield requirements (e.g. ROI > 4%), and prioritize yield over specific locations if requested.
-
-**Execution Steps**:
-1. **Database Migration**:
-   - Create a migration file `048_add_contacts_min_roi.sql`.
-   - Add a `min_roi` column of type `NUMERIC` to the `contacts` table.
-   - Append this script to the end of `supabase/RUN_IN_SUPABASE_SQL_EDITOR.sql`.
-2. **TypeScript Types**:
-   - Update the `Contact` interface in `src/types/index.ts` to include `min_roi?: number | null;`.
-3. **Contact Forms & Detail Drawer**:
-   - In `contact-form.tsx` (real estate preferences section), add a number input field for "Expected Min ROI (%)".
-   - In `contact-detail-view.tsx` (Preferences tab), display and allow editing of "Expected Min ROI (%)".
-4. **Matching Engine (`src/lib/matching.ts`)**:
-   - Update `getMatchingContacts` to factor in the `min_roi` criteria:
-     - If the contact has `min_roi` defined (e.g. `4`):
-       - It is a match only if the property has `roi` set and `property.roi >= contact.min_roi`.
-       - If the contact does not have a `min_roi` set, matching defaults to true for that criteria.
-     - **Location-Agnostic Option**: If a contact has `areas_of_interest` containing `'any'` or left blank, the location filter should match any property. Make sure matching scores prioritize the ROI match components.
-5. **Types and Test Verification**:
-   - Run type checks (`npm run typecheck`) and the test suite (`npm test`).
+*(Currently, all major milestones from the immediate roadmap have been successfully implemented and verified with clean TypeScript and ESLint type checks. Any subsequent features or enhancements will be appended here as requested.)*
 
 ---
 
