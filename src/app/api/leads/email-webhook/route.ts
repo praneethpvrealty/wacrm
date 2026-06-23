@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { normalizePhoneWithCountryCode } from '@/lib/whatsapp/phone-utils';
-import { sendTextMessage } from '@/lib/whatsapp/meta-api';
+import { sendTextMessage, sendTemplateMessage } from '@/lib/whatsapp/meta-api';
 import { decrypt } from '@/lib/whatsapp/encryption';
 
 // Lazy-initialized admin client
@@ -237,6 +237,111 @@ export async function resolveHousingPhone(html: string, bodyText: string): Promi
   if (phoneMatch) return phoneMatch[1].trim();
   
   return '';
+}
+
+// Helper to trigger automatic WhatsApp auto-reply (either approved template or custom text)
+async function sendAutoReply({
+  supabase,
+  accountId,
+  syncConfig,
+  conversationId,
+  cleanPhone,
+  leadName,
+  leadSource,
+}: {
+  supabase: SupabaseClient;
+  accountId: string;
+  syncConfig: any;
+  conversationId: string | null;
+  cleanPhone: string;
+  leadName: string;
+  leadSource: string;
+}) {
+  if (!syncConfig?.auto_reply_enabled) return;
+
+  const { data: waConfig } = await supabase
+    .from('whatsapp_config')
+    .select('phone_number_id, access_token')
+    .eq('account_id', accountId)
+    .eq('status', 'connected')
+    .maybeSingle();
+
+  if (!waConfig) return;
+
+  try {
+    let replyText = '';
+    let messageId = '';
+    let usedTemplateName: string | null = null;
+
+    let template = null;
+    if (syncConfig.auto_reply_template_name) {
+      const { data: foundTemplate } = await supabase
+        .from('message_templates')
+        .select('*')
+        .eq('account_id', accountId)
+        .eq('name', syncConfig.auto_reply_template_name)
+        .eq('status', 'APPROVED')
+        .maybeSingle();
+      template = foundTemplate;
+    }
+
+    if (template) {
+      const bodyParams = [
+        leadName || 'there',
+        leadSource || 'portal'
+      ];
+      
+      const sendRes = await sendTemplateMessage({
+        phoneNumberId: waConfig.phone_number_id,
+        accessToken: decrypt(waConfig.access_token),
+        to: cleanPhone,
+        templateName: template.name,
+        language: template.language || 'en_US',
+        template: template as any,
+        messageParams: {
+          body: bodyParams
+        }
+      });
+      
+      messageId = sendRes.messageId;
+      usedTemplateName = template.name;
+      
+      // Format text for storing in messages log
+      replyText = template.body_text
+        .replace(/{{1}}/g, leadName || 'there')
+        .replace(/{{2}}/g, leadSource || 'portal');
+    } else if (syncConfig.auto_reply_text) {
+      // Fallback to text message
+      replyText = syncConfig.auto_reply_text
+        .replace(/{name}/g, leadName || 'there')
+        .replace(/{source}/g, leadSource || 'portal');
+
+      const sendRes = await sendTextMessage({
+        phoneNumberId: waConfig.phone_number_id,
+        accessToken: decrypt(waConfig.access_token),
+        to: cleanPhone,
+        text: replyText,
+      });
+      messageId = sendRes.messageId;
+    } else {
+      return; // No reply configured
+    }
+
+    if (conversationId && replyText && messageId) {
+      await supabase.from('messages').insert({
+        conversation_id: conversationId,
+        sender_type: 'bot',
+        content_type: usedTemplateName ? 'template' : 'text',
+        content_text: replyText,
+        template_name: usedTemplateName,
+        message_id: messageId,
+        status: 'sent',
+        created_at: new Date().toISOString(),
+      });
+    }
+  } catch (sendErr) {
+    console.error('[lead-webhook] Failed to send auto-reply:', sendErr);
+  }
 }
 
 // Extractor rules for different portals
@@ -831,43 +936,15 @@ export async function POST(request: Request) {
       });
 
       // Trigger automatic WhatsApp reply if configured
-      if (syncConfig?.auto_reply_enabled && syncConfig.auto_reply_text) {
-        const { data: waConfig } = await supabase
-          .from('whatsapp_config')
-          .select('phone_number_id, access_token')
-          .eq('account_id', accountId)
-          .eq('status', 'connected')
-          .maybeSingle();
-
-        if (waConfig) {
-          const replyText = syncConfig.auto_reply_text
-            .replace(/{name}/g, existingContact.name || 'there')
-            .replace(/{source}/g, parsed.source || 'portal');
-          
-          try {
-            const sendRes = await sendTextMessage({
-              phoneNumberId: waConfig.phone_number_id,
-              accessToken: decrypt(waConfig.access_token),
-              to: cleanPhone,
-              text: replyText,
-            });
-
-            if (conversationId) {
-              await supabase.from('messages').insert({
-                conversation_id: conversationId,
-                sender_type: 'bot',
-                content_type: 'text',
-                content_text: replyText,
-                message_id: sendRes.messageId,
-                status: 'sent',
-                created_at: new Date().toISOString(),
-              });
-            }
-          } catch (sendErr) {
-            console.error('[lead-webhook] Failed to send auto-reply to existing contact:', sendErr);
-          }
-        }
-      }
+      await sendAutoReply({
+        supabase,
+        accountId,
+        syncConfig,
+        conversationId,
+        cleanPhone,
+        leadName: existingContact.name || '',
+        leadSource: parsed.source || '',
+      });
 
       return NextResponse.json({
         status: 'updated',
@@ -966,43 +1043,15 @@ export async function POST(request: Request) {
     });
 
     // Trigger automatic WhatsApp reply if configured
-    if (syncConfig?.auto_reply_enabled && syncConfig.auto_reply_text) {
-      const { data: waConfig } = await supabase
-        .from('whatsapp_config')
-        .select('phone_number_id, access_token')
-        .eq('account_id', accountId)
-        .eq('status', 'connected')
-        .maybeSingle();
-
-      if (waConfig) {
-        const replyText = syncConfig.auto_reply_text
-          .replace(/{name}/g, parsed.name || 'there')
-          .replace(/{source}/g, parsed.source || 'portal');
-        
-        try {
-          const sendRes = await sendTextMessage({
-            phoneNumberId: waConfig.phone_number_id,
-            accessToken: decrypt(waConfig.access_token),
-            to: cleanPhone,
-            text: replyText,
-          });
-
-          if (conversation?.id) {
-            await supabase.from('messages').insert({
-              conversation_id: conversation.id,
-              sender_type: 'bot',
-              content_type: 'text',
-              content_text: replyText,
-              message_id: sendRes.messageId,
-              status: 'sent',
-              created_at: new Date().toISOString(),
-            });
-          }
-        } catch (sendErr) {
-          console.error('[lead-webhook] Failed to send auto-reply to new contact:', sendErr);
-        }
-      }
-    }
+    await sendAutoReply({
+      supabase,
+      accountId,
+      syncConfig,
+      conversationId: conversation?.id || null,
+      cleanPhone,
+      leadName: parsed.name || '',
+      leadSource: parsed.source || '',
+    });
 
     return NextResponse.json({
       status: 'created',

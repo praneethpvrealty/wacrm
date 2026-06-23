@@ -29,6 +29,8 @@ export function OtherSettingsPanel() {
   const [syncActive, setSyncActive] = useState(false);
   const [autoReply, setAutoReply] = useState(false);
   const [autoReplyText, setAutoReplyText] = useState('Hi {name}, thanks for your interest on {source}. We will get back to you shortly.');
+  const [autoReplyTemplateName, setAutoReplyTemplateName] = useState<string | null>(null);
+  const [approvedTemplates, setApprovedTemplates] = useState<any[]>([]);
   const [hasSyncConfig, setHasSyncConfig] = useState(false);
   const [syncConfigLoading, setSyncConfigLoading] = useState(true);
   const [syncConfigSaving, setSyncConfigSaving] = useState(false);
@@ -75,6 +77,7 @@ export function OtherSettingsPanel() {
           setSyncActive(data.is_active);
           setAutoReply(data.auto_reply_enabled);
           setAutoReplyText(data.auto_reply_text || 'Hi {name}, thanks for your interest on {source}. We will get back to you shortly.');
+          setAutoReplyTemplateName(data.auto_reply_template_name || null);
           setHasSyncConfig(true);
         }
         setVerCode(data.last_verification_code || null);
@@ -87,6 +90,25 @@ export function OtherSettingsPanel() {
       if (isInitial) {
         setSyncConfigLoading(false);
       }
+    }
+  }, [accountId, supabase]);
+
+  const fetchApprovedTemplates = useCallback(async () => {
+    if (!accountId) return;
+    try {
+      const { data, error } = await supabase
+        .from('message_templates')
+        .select('name, category, body_text')
+        .eq('account_id', accountId)
+        .eq('status', 'APPROVED');
+      
+      if (error) {
+        console.error('Error fetching approved templates:', error);
+        return;
+      }
+      setApprovedTemplates(data || []);
+    } catch (err) {
+      console.error('Unexpected error loading approved templates:', err);
     }
   }, [accountId, supabase]);
 
@@ -121,13 +143,14 @@ export function OtherSettingsPanel() {
     fetchSettings();
     fetchProjectCount();
     fetchSyncConfig(true);
+    fetchApprovedTemplates();
     
     // Load last synced from localStorage if exists
     const stored = localStorage.getItem('krera_last_synced');
     if (stored) {
       setLastSynced(stored);
     }
-  }, [accountId, supabase, fetchProjectCount, fetchSyncConfig]);
+  }, [accountId, supabase, fetchProjectCount, fetchSyncConfig, fetchApprovedTemplates]);
 
   useEffect(() => {
     if (!accountId) return;
@@ -151,6 +174,7 @@ export function OtherSettingsPanel() {
         is_active: syncActive,
         auto_reply_enabled: autoReply,
         auto_reply_text: autoReply ? autoReplyText : null,
+        auto_reply_template_name: autoReply ? autoReplyTemplateName : null,
         updated_at: new Date().toISOString(),
       };
 
@@ -583,24 +607,74 @@ export function OtherSettingsPanel() {
               </div>
             </div>
 
-            {/* Auto-Reply Text Area */}
+            {/* Auto-Reply Settings */}
             {autoReply && (
-              <div className="space-y-2 pt-2 animate-fadeIn duration-200">
-                <Label htmlFor="autoReplyText" className="text-slate-300 font-medium text-xs">
-                  Auto-Reply Message Content
-                </Label>
-                <textarea
-                  id="autoReplyText"
-                  value={autoReplyText}
-                  onChange={(e) => setAutoReplyText(e.target.value)}
-                  className="flex min-h-24 w-full rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-primary font-medium resize-none leading-relaxed"
-                  placeholder="Hi {name}, thank you for your query on {source}..."
-                />
-                <div className="text-[10px] text-slate-400 leading-relaxed flex flex-wrap gap-x-3 gap-y-1">
-                  <span>Supported variables:</span>
-                  <span><code className="bg-slate-900 px-1 py-0.2 rounded text-primary text-[9px] font-mono">{`{name}`}</code> Lead&apos;s Name</span>
-                  <span><code className="bg-slate-900 px-1 py-0.2 rounded text-primary text-[9px] font-mono">{`{source}`}</code> Portal Name (e.g. Housing)</span>
+              <div className="space-y-4 pt-2 animate-fadeIn duration-200">
+                <div className="space-y-2">
+                  <Label htmlFor="autoReplyType" className="text-slate-300 font-medium text-xs">
+                    Reply Method
+                  </Label>
+                  <select
+                    id="autoReplyType"
+                    value={autoReplyTemplateName || 'custom'}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setAutoReplyTemplateName(val === 'custom' ? null : val);
+                    }}
+                    className="flex h-10 w-full rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-primary font-medium"
+                  >
+                    <option value="custom">Custom Text Message (Restricted to 24h window)</option>
+                    {approvedTemplates.map((t) => (
+                      <option key={t.name} value={t.name}>
+                        Template: {t.name} ({t.category})
+                      </option>
+                    ))}
+                  </select>
                 </div>
+
+                {!autoReplyTemplateName ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="autoReplyText" className="text-slate-300 font-medium text-xs">
+                      Auto-Reply Message Content
+                    </Label>
+                    <textarea
+                      id="autoReplyText"
+                      value={autoReplyText}
+                      onChange={(e) => setAutoReplyText(e.target.value)}
+                      className="flex min-h-24 w-full rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-primary font-medium resize-none leading-relaxed"
+                      placeholder="Hi {name}, thank you for your query on {source}..."
+                    />
+                    <div className="text-[10px] text-slate-400 leading-relaxed flex flex-wrap gap-x-3 gap-y-1">
+                      <span>Supported variables:</span>
+                      <span><code className="bg-slate-900 px-1 py-0.2 rounded text-primary text-[9px] font-mono">{`{name}`}</code> Lead&apos;s Name</span>
+                      <span><code className="bg-slate-900 px-1 py-0.2 rounded text-primary text-[9px] font-mono">{`{source}`}</code> Portal Name (e.g. Housing)</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label className="text-slate-300 font-medium text-xs">
+                      Template Preview & Variables
+                    </Label>
+                    {(() => {
+                      const selectedTpl = approvedTemplates.find(t => t.name === autoReplyTemplateName);
+                      if (!selectedTpl) return null;
+                      return (
+                        <div className="p-3.5 rounded-md border border-slate-850 bg-slate-950 space-y-2">
+                          <p className="text-[11px] text-slate-300 font-mono leading-relaxed bg-slate-900/60 p-2.5 rounded border border-slate-900">
+                            {selectedTpl.body_text}
+                          </p>
+                          <div className="text-[10px] text-slate-400 space-y-1 pt-1">
+                            <p className="font-semibold text-slate-300">Variable mapping for this template:</p>
+                            <ul className="list-disc pl-4 space-y-0.5">
+                              <li><code className="bg-slate-900 px-1 text-primary">{`{{1}}`}</code> maps to Lead&apos;s Name</li>
+                              <li><code className="bg-slate-900 px-1 text-primary">{`{{2}}`}</code> maps to Portal Name (e.g. Housing)</li>
+                            </ul>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
             )}
 
