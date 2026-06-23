@@ -242,6 +242,61 @@ async function sendPropertyDraftPreview(
   await saveBotMessage(conversationId, reply, sendRes.messageId);
 }
 
+async function sendPropertyDraftPreviewDebounced(
+  sessionId: string,
+  updatedAtString: string,
+  phoneNumberId: string,
+  accessToken: string,
+  to: string,
+  header: string,
+  conversationId: string
+): Promise<void> {
+  // Wait 4 seconds for concurrent uploads/messages to settle
+  await new Promise((resolve) => setTimeout(resolve, 4000));
+
+  // Query database to see if a newer update was made
+  const { data: currentSession } = await supabaseAdmin()
+    .from('property_draft_sessions')
+    .select('*')
+    .eq('id', sessionId)
+    .maybeSingle();
+
+  // If session was deleted (confirmed/cancelled) or has a newer timestamp, exit silently
+  if (!currentSession) return;
+  
+  const dbTime = new Date(currentSession.updated_at).getTime();
+  const ourTime = new Date(updatedAtString).getTime();
+
+  // Allow a tiny tolerance (e.g. 50ms) for clock drift, but generally dbTime > ourTime means newer update exists
+  if (dbTime > ourTime + 50) {
+    console.log(`[chatbot-engine] Newer update detected (DB: ${currentSession.updated_at}, Ours: ${updatedAtString}). Skipping preview in this thread.`);
+    return;
+  }
+
+  // We are the latest thread! Send the preview with the latest data from the DB
+  const latestDraft = currentSession.draft_data as ParsedPropertyDraft;
+  const validation = validateDraft(latestDraft);
+  const nextStatus = validation.isValid ? 'awaiting_confirmation' : 'collecting';
+  const missingFields = validation.missingFields;
+
+  // Customize header count of images
+  let finalHeader = header;
+  if (header.includes('Photo added successfully') || header.includes('Photos added successfully')) {
+    finalHeader = `📸 *Photos added successfully!* Total photos attached: *${latestDraft.images.length}*.`;
+  }
+
+  await sendPropertyDraftPreview(
+    phoneNumberId,
+    accessToken,
+    to,
+    finalHeader,
+    latestDraft,
+    nextStatus,
+    missingFields,
+    conversationId
+  );
+}
+
 function validateContactDraftsContainer(container: ParsedContactDraftsContainer): { 
   isValid: boolean; 
   missingFields: string[];
@@ -815,14 +870,15 @@ export async function processOwnerChatbotMessage(
           throw new Error('Failed to update draft session due to concurrent modifications');
         }
 
-        await sendPropertyDraftPreview(
+        const savedTime = updateData[0].updated_at;
+
+        await sendPropertyDraftPreviewDebounced(
+          propSession.id,
+          savedTime,
           phoneNumberId,
           accessToken,
           contactRecord.phone,
           `📸 *Photo added successfully!* Total photos attached: *${updatedDraft.images.length}*.`,
-          updatedDraft,
-          nextStatus,
-          missingFields,
           conversation.id
         );
         return true;
@@ -841,23 +897,26 @@ export async function processOwnerChatbotMessage(
       const { isValid, missingFields } = validateDraft(updatedDraft);
       const nextStatus = isValid ? 'awaiting_confirmation' : 'collecting';
 
-      await supabaseAdmin()
+      const savedTime = new Date().toISOString();
+      const { data: updateData } = await supabaseAdmin()
         .from('property_draft_sessions')
         .update({
           draft_data: updatedDraft,
           status: nextStatus,
-          updated_at: new Date().toISOString()
+          updated_at: savedTime
         })
-        .eq('id', propSession.id);
+        .eq('id', propSession.id)
+        .select();
 
-      await sendPropertyDraftPreview(
+      const actualSavedTime = updateData?.[0]?.updated_at || savedTime;
+
+      await sendPropertyDraftPreviewDebounced(
+        propSession.id,
+        actualSavedTime,
         phoneNumberId,
         accessToken,
         contactRecord.phone,
         `📝 *Draft Listing Updated:*`,
-        updatedDraft,
-        nextStatus,
-        missingFields,
         conversation.id
       );
       return true;
@@ -1312,14 +1371,15 @@ export async function processOwnerChatbotMessage(
         const initialStatus = isValid ? 'awaiting_confirmation' : 'collecting';
 
         // Insert new active session
-        const { error: insertErr } = await supabaseAdmin()
+        const { data: insertedData, error: insertErr } = await supabaseAdmin()
           .from('property_draft_sessions')
           .insert({
             account_id: accountId,
             contact_id: contactRecord.id,
             draft_data: parsedDraft,
             status: initialStatus
-          });
+          })
+          .select();
 
         if (insertErr) {
           // If a concurrent thread created the session first, fall back to merging or appending
@@ -1422,14 +1482,14 @@ export async function processOwnerChatbotMessage(
               }
 
               if (success) {
-                await sendPropertyDraftPreview(
+                const savedTime = updateData[0].updated_at;
+                await sendPropertyDraftPreviewDebounced(
+                  existingSession.id,
+                  savedTime,
                   phoneNumberId,
                   accessToken,
                   contactRecord.phone,
                   `📝 *Listing details and photos merged into draft!*`,
-                  mergedDraft,
-                  nextStatus,
-                  validationFields,
                   conversation.id
                 );
                 return true;
@@ -1439,16 +1499,18 @@ export async function processOwnerChatbotMessage(
           throw insertErr;
         }
 
-        await sendPropertyDraftPreview(
-          phoneNumberId,
-          accessToken,
-          contactRecord.phone,
-          `📝 *Draft Property Listing Created!*`,
-          parsedDraft,
-          initialStatus,
-          missingFields,
-          conversation.id
-        );
+        if (!insertErr && insertedData && insertedData.length > 0) {
+          const savedTime = insertedData[0].updated_at;
+          await sendPropertyDraftPreviewDebounced(
+            insertedData[0].id,
+            savedTime,
+            phoneNumberId,
+            accessToken,
+            contactRecord.phone,
+            `📝 *Draft Property Listing Created!*`,
+            conversation.id
+          );
+        }
         return true;
       } catch (err) {
         console.error('[chatbot-engine] Error initializing property draft session:', err);
