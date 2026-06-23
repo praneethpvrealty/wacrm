@@ -180,10 +180,26 @@ export function OtherSettingsPanel() {
   };
 
   const handleCopyEmail = (emailStr: string) => {
-    navigator.clipboard.writeText(emailStr);
-    setCopied(true);
-    toast.success('Forwarding address copied to clipboard');
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(emailStr);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = emailStr;
+        textArea.style.position = "fixed";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+      setCopied(true);
+      toast.success('Forwarding address copied to clipboard');
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy to clipboard: ', err);
+      toast.error('Failed to copy to clipboard');
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -432,7 +448,7 @@ export function OtherSettingsPanel() {
                 <Button
                   type="button"
                   onClick={() => handleCopyEmail(forwardingEmail)}
-                  className="bg-slate-805 hover:bg-slate-700 text-slate-200 border border-slate-700 h-10 px-3 flex items-center gap-1.5 cursor-pointer text-xs"
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 h-10 px-3 flex items-center gap-1.5 cursor-pointer text-xs"
                 >
                   {copied ? (
                     <>
@@ -605,7 +621,15 @@ export function OtherSettingsPanel() {
                   </code>
                 </li>
                 <li>
-                  <strong>Set Action:</strong> Check <span className="text-slate-300">Forward it to</span> and add your address: <code className="text-primary font-mono select-all font-semibold">{forwardingEmail}</code>.
+                  <strong>Set Action:</strong> Check <span className="text-slate-300">Forward it to</span> and add your address: <code className="text-primary font-mono select-all font-semibold mr-1.5">{forwardingEmail}</code>
+                  <Button
+                    type="button"
+                    onClick={() => handleCopyEmail(forwardingEmail)}
+                    className="inline-flex items-center gap-1 bg-slate-900 hover:bg-slate-800 text-slate-350 border border-slate-800 h-5 px-1.5 rounded cursor-pointer text-[9px] font-sans"
+                  >
+                    <Copy className="size-2.5" />
+                    Copy
+                  </Button>
                 </li>
                 <li>
                   <strong>Verification Code:</strong> Gmail will send a confirmation code. The webhook will intercept it and return success automatically. Refresh Gmail and confirm the forwarding filter.
