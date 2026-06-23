@@ -424,6 +424,28 @@ export function parsePortalLead(subject: string, bodyText: string, html: string)
         name = candidateName;
       }
     }
+
+    // Direct Phone Line Fallback: If phone is still missing, scan for any line containing a valid phone number
+    if (!phone) {
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const digitsCount = line.replace(/\D/g, '').length;
+        const isHeaderOrSMTP = /^[a-zA-Z0-9-]+:/i.test(line) || 
+                               /received|by|id|date|subject|from|to|message-id|content-type/i.test(line);
+        if (digitsCount >= 7 && digitsCount <= 15 && !isHeaderOrSMTP) {
+          phone = line.replace(/\(verified\)/i, '').trim();
+          
+          // Candidate Name: Use the line immediately preceding the phone number line
+          if (i - 1 >= 0 && (!name || name === 'Portal Lead')) {
+            const prevLine = lines[i - 1];
+            if (!/details|response|dear|hello|hi|sourcing|ingest|message|subject|advertisement|property/i.test(prevLine)) {
+              name = prevLine;
+            }
+          }
+          break;
+        }
+      }
+    }
   }
 
   // Clean values from HTML wrappers or carriage returns
@@ -438,11 +460,46 @@ export function parsePortalLead(subject: string, bodyText: string, html: string)
   };
 }
 
+async function writeSyncLog(args: {
+  accountId: string;
+  sender: string;
+  subject: string;
+  extractedName?: string;
+  extractedPhone?: string;
+  extractedEmail?: string;
+  status: 'success' | 'failed' | 'ignored';
+  errorMessage?: string;
+  bodyPreview?: string;
+}) {
+  try {
+    const supabase = getAdminClient();
+    await supabase.from('email_sync_logs').insert({
+      account_id: args.accountId,
+      sender: args.sender || null,
+      subject: args.subject || null,
+      extracted_name: args.extractedName || null,
+      extracted_phone: args.extractedPhone || null,
+      extracted_email: args.extractedEmail || null,
+      status: args.status,
+      error_message: args.errorMessage || null,
+      body_preview: args.bodyPreview || null,
+    });
+  } catch (err) {
+    console.error('[lead-webhook] Failed to write sync log:', err);
+  }
+}
+
 export async function POST(request: Request) {
+  let accountId = '';
+  let sender = '';
+  let subject = '';
+  let bodyText = '';
+  let htmlContent = '';
+
   try {
     const { searchParams } = new URL(request.url);
     const token = searchParams.get('token');
-    let accountId = searchParams.get('account_id');
+    accountId = searchParams.get('account_id') || '';
 
     // Token validation (Optional check)
     const expectedToken = process.env.LEADS_WEBHOOK_TOKEN;
@@ -452,15 +509,14 @@ export async function POST(request: Request) {
 
     const payload = await request.json();
     
+    sender = payload.from || payload.sender || '';
+    subject = payload.subject || '';
+    
     // Determine if the payload text/html contains raw MIME email headers
     const rawText = payload.text || payload.html || '';
     
     // If the payload appears to be a raw MIME email (contains headers like Content-Type/Received)
     const isMimeEmail = /Content-Type:/i.test(rawText) || /MIME-Version:/i.test(rawText) || /Received:/i.test(rawText);
-    
-    let subject = payload.subject || '';
-    let bodyText = '';
-    let htmlContent = '';
     
     if (isMimeEmail) {
       console.log('[lead-webhook] Raw MIME email detected. Parsing multipart MIME structure...');
@@ -474,6 +530,14 @@ export async function POST(request: Request) {
         subject = decodeMimeSubject(subjectMatch[1].trim());
       } else {
         subject = decodeMimeSubject(subject);
+      }
+
+      // Extract sender from MIME headers if missing or default generic
+      if (!sender || sender.includes('unknown')) {
+        const fromMatch = rawText.match(/From:\s*([^\r\n]+)/i);
+        if (fromMatch) {
+          sender = fromMatch[1].trim();
+        }
       }
     } else {
       subject = decodeMimeSubject(payload.subject || '');
@@ -546,6 +610,15 @@ export async function POST(request: Request) {
         } else {
           console.log(`[lead-webhook] Saved forwarding verification to DB for account ${accountId}`);
         }
+
+        await writeSyncLog({
+          accountId,
+          sender,
+          subject,
+          status: 'ignored',
+          errorMessage: 'Verification email processed',
+          bodyPreview: bodyText.slice(0, 200),
+        });
       } else {
         console.warn(`[lead-webhook] Received verification email but no account_id resolved.`);
       }
@@ -564,15 +637,6 @@ export async function POST(request: Request) {
       if (resolvedPhone) {
         parsed.phone = resolvedPhone;
       }
-    }
-
-    if (!parsed.phone) {
-      return NextResponse.json({ error: 'Failed to extract phone number from lead' }, { status: 422 });
-    }
-
-    const normalizedPhoneNum = normalizePhoneWithCountryCode(parsed.phone);
-    if (!normalizedPhoneNum) {
-      return NextResponse.json({ error: 'Extracted phone number is invalid' }, { status: 422 });
     }
 
     const supabase = getAdminClient();
@@ -594,6 +658,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No account ID resolved' }, { status: 400 });
     }
 
+    if (!parsed.phone) {
+      await writeSyncLog({
+        accountId,
+        sender,
+        subject,
+        extractedName: parsed.name,
+        extractedEmail: parsed.email,
+        status: 'failed',
+        errorMessage: 'Failed to extract phone number from lead email',
+        bodyPreview: bodyText.slice(0, 200),
+      });
+      return NextResponse.json({ error: 'Failed to extract phone number from lead' }, { status: 422 });
+    }
+
+    const normalizedPhoneNum = normalizePhoneWithCountryCode(parsed.phone);
+    if (!normalizedPhoneNum) {
+      await writeSyncLog({
+        accountId,
+        sender,
+        subject,
+        extractedName: parsed.name,
+        extractedPhone: parsed.phone,
+        extractedEmail: parsed.email,
+        status: 'failed',
+        errorMessage: 'Extracted phone number is invalid',
+        bodyPreview: bodyText.slice(0, 200),
+      });
+      return NextResponse.json({ error: 'Extracted phone number is invalid' }, { status: 422 });
+    }
+
     // 2. Check if email lead sync is active for this account
     const { data: syncConfig } = await supabase
       .from('email_sync_configs')
@@ -602,6 +696,17 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (syncConfig && !syncConfig.is_active) {
+      await writeSyncLog({
+        accountId,
+        sender,
+        subject,
+        extractedName: parsed.name,
+        extractedPhone: normalizedPhoneNum,
+        extractedEmail: parsed.email,
+        status: 'ignored',
+        errorMessage: 'Email lead synchronization is disabled for this account',
+        bodyPreview: bodyText.slice(0, 200),
+      });
       return NextResponse.json({ error: 'Email lead synchronization is disabled for this account' }, { status: 403 });
     }
 
@@ -668,6 +773,18 @@ export async function POST(request: Request) {
         .update(updatePayload)
         .eq('id', existingContact.id);
 
+      await writeSyncLog({
+        accountId,
+        sender,
+        subject,
+        extractedName: existingContact.name,
+        extractedPhone: normalizedPhoneNum,
+        extractedEmail: parsed.email,
+        status: 'success',
+        errorMessage: 'Existing contact preferences updated',
+        bodyPreview: bodyText.slice(0, 200),
+      });
+
       // Trigger automatic WhatsApp reply if configured
       if (syncConfig?.auto_reply_enabled && syncConfig.auto_reply_text) {
         const { data: waConfig } = await supabase
@@ -711,6 +828,17 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (!profile) {
+      await writeSyncLog({
+        accountId,
+        sender,
+        subject,
+        extractedName: parsed.name,
+        extractedPhone: normalizedPhoneNum,
+        extractedEmail: parsed.email,
+        status: 'failed',
+        errorMessage: 'No user profile found for this account',
+        bodyPreview: bodyText.slice(0, 200),
+      });
       return NextResponse.json({ error: 'No user found for this account' }, { status: 422 });
     }
     const userId = profile.user_id;
@@ -737,6 +865,17 @@ export async function POST(request: Request) {
 
     if (insertErr) {
       console.error('[lead-webhook] Error inserting contact:', insertErr);
+      await writeSyncLog({
+        accountId,
+        sender,
+        subject,
+        extractedName: parsed.name,
+        extractedPhone: normalizedPhoneNum,
+        extractedEmail: parsed.email,
+        status: 'failed',
+        errorMessage: `Failed to insert contact: ${insertErr.message}`,
+        bodyPreview: bodyText.slice(0, 200),
+      });
       return NextResponse.json({ error: insertErr.message }, { status: 500 });
     }
 
@@ -746,6 +885,18 @@ export async function POST(request: Request) {
       contact_id: newContact.id,
       last_message_text: `📥 New Lead from ${parsed.source}: ${parsed.requirementText || 'No comments'}`,
       last_message_at: new Date().toISOString(),
+    });
+
+    await writeSyncLog({
+      accountId,
+      sender,
+      subject,
+      extractedName: newContact.name,
+      extractedPhone: normalizedPhoneNum,
+      extractedEmail: parsed.email,
+      status: 'success',
+      errorMessage: 'New contact created',
+      bodyPreview: bodyText.slice(0, 200),
     });
 
     // Trigger automatic WhatsApp reply if configured
@@ -783,6 +934,17 @@ export async function POST(request: Request) {
   } catch (err) {
     const error = err as Error;
     console.error('[lead-webhook] Request failed:', error);
+    if (accountId) {
+      await writeSyncLog({
+        accountId,
+        sender: sender || '',
+        subject: subject || '',
+        status: 'failed',
+        errorMessage: error.message || 'Server error',
+        bodyPreview: bodyText?.slice(0, 200) || '',
+      });
+    }
     return NextResponse.json({ error: error.message || 'Server error' }, { status: 500 });
   }
 }
+

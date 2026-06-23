@@ -187,6 +187,25 @@ describe('Email Webhook Lead Parsing', () => {
       expect(res.email).toBe('robert@gmail.com');
       expect(res.phone).toBe('+919876543210');
     });
+
+    it('should parse 99acres email in block format without labels and without lead email', () => {
+      const subject = 'Property Advertisement Response';
+      const body = `
+        Dear PRANEETH KUMAR
+        You have received a response on Rs 17.5 Crore , Residential Land/Plot in Sector 6 HSR Layout (G69065068) on 99acres.com
+
+        Details of the response
+        M Naveen
+        +91-9811122232 (Verified)
+        Send Mail
+      `;
+      const res = parsePortalLead(subject, body, '');
+      expect(res.source).toBe('99acres');
+      expect(res.name).toBe('M Naveen');
+      expect(res.phone).toBe('+91-9811122232');
+      expect(res.phone.replace(/\D/g, '')).toBe('919811122232');
+      expect(res.email).toBe('');
+    });
   });
 
   describe('parseMimeEmail', () => {
