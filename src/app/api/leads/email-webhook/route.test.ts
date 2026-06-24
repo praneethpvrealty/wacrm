@@ -62,6 +62,31 @@ describe('Email Webhook Lead Parsing', () => {
       expect(res.phone).toBe('+91-9988776655');
       expect(res.email).toBe('sreeram@example.com');
     });
+
+    it('should parse Housing.com emails with button text (Send Email, Call Now)', () => {
+      const subject = 'Housing - Lead interested in your property';
+      const html = `
+        <div style="font-family: Arial;">
+          <p>We have received a contact request:</p>
+          <p>Name: Kg Subramanian (Owner)</p>
+          <p>Email: <a href="mailto:kgsubramanian@gmail.com?subject=Inquiry">Send Email</a></p>
+          <p>Contact: <a href="https://housing.com/leads/call?lead_id=12345">Call Now</a> <a href="https://housing.com/leads/whatsapp?lead_id=12345">Chat On WhatsApp</a></p>
+          <p>Property ID: 20327451</p>
+        </div>
+      `;
+      const body = `
+        Name: Kg Subramanian (Owner)
+        Email: Send Email
+        Contact: Call Now Chat On WhatsApp
+        Property ID: 20327451
+      `;
+      const res = parsePortalLead(subject, body, html);
+      expect(res.source).toBe('Housing');
+      expect(res.name).toBe('Kg Subramanian (Owner)');
+      expect(res.email).toBe('kgsubramanian@gmail.com');
+      // Phone should be empty here since it needs URL resolution
+      expect(res.phone).toBe('');
+    });
   });
 
   describe('extractHousingUrls', () => {

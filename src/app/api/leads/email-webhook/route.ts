@@ -152,6 +152,59 @@ function parseBudgetToINR(text: string): number | null {
   return null;
 }
 
+// Helper to validate if a name looks like a legitimate contact name
+// Returns true if the name is valid, false if it's junk
+function isValidContactName(name: string): boolean {
+  if (!name || name.trim().length === 0) return false;
+  
+  const trimmed = name.trim();
+  
+  // Too short or too long
+  if (trimmed.length < 2 || trimmed.length > 100) return false;
+  
+  // Encoding artifacts and Quoted-Printable leftovers
+  if (/^=[\da-fA-F]{2}\s*=$/.test(trimmed)) return false; // =0A = etc.
+  if (/^=0A\s*=$/i.test(trimmed)) return false;
+  if (/[ÃÂ©â€œâ€\x9d]/.test(trimmed)) return false; // UTF-8 encoding issues
+  
+  // URLs and links
+  if (/^https?:\/\//i.test(trimmed)) return false;
+  if (/^help\s*:?\s*https?:\/\//i.test(trimmed)) return false;
+  
+  // Copyright notices
+  if (/^©|^&copy;|^\(c\)/i.test(trimmed)) return false;
+  if (/\d{4}\s+(?:ITP|Digital Media|Inc\.|Corp\.|LLC|Ltd\.)/i.test(trimmed)) return false;
+  
+  // Marketing/promotional text
+  if (/(?:exclusive|savings|discount|offer|deal|sale|free|limited|champion|gear)/i.test(trimmed)) return false;
+  if (/(?:unlock|subscribe|unsubscribe|click here|act now|buy now)/i.test(trimmed)) return false;
+  
+  // System placeholders
+  if (/^\[image.*\]/i.test(trimmed)) return false;
+  if (/^(?:image|photo|avatar|picture)/i.test(trimmed)) return false;
+  
+  // Job titles and signatures (not names)
+  if (/(?:specialist|manager|director|lead|senior|junior|associate|consultant)\s*\|/i.test(trimmed)) return false;
+  if (/\|\s*(?:trial|demo|experience|intern)/i.test(trimmed)) return false;
+  
+  // Addresses (contain state codes, zip codes)
+  if (/\b[A-Z]{2}\s+\d{5,6}\b/.test(trimmed)) return false; // CA 94104, TN 600018
+  if (/\d+\s+(?:Market|Street|St|Ave|Avenue|Blvd|Road|Rd)\s+(?:St|PMB|Suite|Ste|Apt)/i.test(trimmed)) return false;
+  
+  // LinkedIn and social media help URLs
+  if (/linkedin\.com\/help/i.test(trimmed)) return false;
+  if (/(?:facebook|twitter|instagram|youtube)\.com/i.test(trimmed)) return false;
+  
+  // Just numbers or mostly numbers
+  const digitCount = (trimmed.match(/\d/g) || []).length;
+  if (digitCount > trimmed.length * 0.5) return false;
+  
+  // Just special characters or punctuation
+  if (/^[^\w\s]+$/.test(trimmed)) return false;
+  
+  return true;
+}
+
 // Helper to follow redirect headers (manual mode) to extract phone number
 export async function resolvePhoneNumberFromUrl(url: string, depth = 0): Promise<string | null> {
   if (depth > 3) return null; // Avoid infinite redirects
@@ -159,9 +212,14 @@ export async function resolvePhoneNumberFromUrl(url: string, depth = 0): Promise
     const cleanUrl = url.replace(/&amp;/g, '&');
     
     // Check if the URL itself already contains the phone number
-    const directPhoneMatch = cleanUrl.match(/(?:phone|phone_number|wa\.me\/|send\?phone=|tel:)(\+?\d{10,15})/i);
+    // Handle both direct + and URL-encoded %2B for plus sign
+    const directPhoneMatch = cleanUrl.match(/(?:phone|phone_number|wa\.me\/|send\?phone=|tel:)(\+?\d{10,15})/i) ||
+                             cleanUrl.match(/(?:phone|phone_number)=([+%]2?B?\d{10,15})/i);
     if (directPhoneMatch) {
-      return directPhoneMatch[1];
+      let phone = directPhoneMatch[1];
+      // Decode URL-encoded plus sign (%2B or %2b)
+      phone = phone.replace(/%2B/gi, '+').replace(/%2b/gi, '+');
+      return phone;
     }
     
     const response = await fetch(cleanUrl, {
@@ -174,9 +232,13 @@ export async function resolvePhoneNumberFromUrl(url: string, depth = 0): Promise
     
     const location = response.headers.get('location');
     if (location) {
-      const phoneMatch = location.match(/(?:phone|phone_number|wa\.me\/|send\?phone=|tel:)(\+?\d{10,15})/i);
+      const phoneMatch = location.match(/(?:phone|phone_number|wa\.me\/|send\?phone=|tel:)(\+?\d{10,15})/i) ||
+                         location.match(/(?:phone|phone_number)=([+%]2?B?\d{10,15})/i);
       if (phoneMatch) {
-        return phoneMatch[1];
+        let phone = phoneMatch[1];
+        // Decode URL-encoded plus sign (%2B or %2b)
+        phone = phone.replace(/%2B/gi, '+').replace(/%2b/gi, '+');
+        return phone;
       }
       if (location.startsWith('http')) {
         return await resolvePhoneNumberFromUrl(location, depth + 1);
@@ -185,9 +247,13 @@ export async function resolvePhoneNumberFromUrl(url: string, depth = 0): Promise
     
     // Fallback: search within page body if it returned 200 instead of a redirect
     const body = await response.text();
-    const bodyPhoneMatch = body.match(/(?:tel:|phone=|wa\.me\/|send\?phone=)(\+?\d{10,15})/i);
+    const bodyPhoneMatch = body.match(/(?:tel:|phone=|wa\.me\/|send\?phone=)(\+?\d{10,15})/i) ||
+                           body.match(/(?:phone|phone_number)=([+%]2?B?\d{10,15})/i);
     if (bodyPhoneMatch) {
-      return bodyPhoneMatch[1];
+      let phone = bodyPhoneMatch[1];
+      // Decode URL-encoded plus sign (%2B or %2b)
+      phone = phone.replace(/%2B/gi, '+').replace(/%2b/gi, '+');
+      return phone;
     }
   } catch (err) {
     console.error(`[resolvePhoneNumberFromUrl] Error at depth ${depth} for URL ${url}:`, err);
@@ -516,18 +582,33 @@ export function parsePortalLead(subject: string, bodyText: string, html: string)
     const nameMatch = bodyText.match(/name\s*[:|-]\s*(.+)/i);
     if (nameMatch) name = nameMatch[1].trim();
 
-    // Phone extraction: "Phone - 9876543210" or "Mobile: 9876543210"
-    const phoneMatch = bodyText.match(/(?:phone|mobile)\s*[:|-]\s*(.+)/i);
-    if (phoneMatch) phone = phoneMatch[1].trim();
+    // Phone extraction: "Phone - 9876543210" or "Mobile: 9876543210" or "Contact: 9876543210"
+    const phoneMatch = bodyText.match(/(?:phone|mobile|contact)\s*[:|-]\s*([+\d\s()-]{7,})/i);
+    if (phoneMatch) {
+      const extractedPhone = phoneMatch[1].trim();
+      // Validate it's actually a phone number (at least 7 digits) and not button text
+      const digitsOnly = extractedPhone.replace(/\D/g, '');
+      if (digitsOnly.length >= 7) {
+        phone = extractedPhone;
+      }
+    }
 
     // Email extraction: "Email - jane@example.com" or "Email: jane@example.com"
     const emailMatch = bodyText.match(/email\s*[:|-]\s*(.+)/i);
-    if (emailMatch) email = emailMatch[1].trim();
+    if (emailMatch) {
+      const extractedEmail = emailMatch[1].trim();
+      // Validate it's actually an email address (contains @) and not button text like "Send Email"
+      if (extractedEmail.includes('@') && /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(extractedEmail)) {
+        email = extractedEmail;
+      }
+    }
 
-    // Try mailto link from HTML
-    if (html && !email) {
+    // Try mailto link from HTML (always try HTML extraction for Housing emails)
+    if (html) {
       const { mailtoEmail } = extractHousingUrls(html);
-      if (mailtoEmail) email = mailtoEmail;
+      if (mailtoEmail && mailtoEmail.includes('@')) {
+        email = mailtoEmail;
+      }
     }
 
     // Requirement extraction: "Requirement - 2 BHK Flat" or "regarding your villa:" etc.
@@ -643,7 +724,9 @@ export function parsePortalLead(subject: string, bodyText: string, html: string)
           const digitsCount = line.replace(/\D/g, '').length;
           const isHeaderOrSMTP = /^[a-zA-Z0-9-]+:/i.test(line) || 
                                  /received|by|id|date|subject|from|to|message-id|content-type/i.test(line);
-          if (digitsCount >= 7 && digitsCount <= 15 && !isHeaderOrSMTP) {
+          // Skip lines that are clearly not phone numbers (Property ID, listing IDs, etc.)
+          const isNotPhone = /property\s*id|listing\s*id|reference|ref\s*#|id\s*:/i.test(line);
+          if (digitsCount >= 7 && digitsCount <= 15 && !isHeaderOrSMTP && !isNotPhone) {
             candidatePhone = line.replace(/\(verified\)/i, '').trim();
             break;
           }
@@ -668,7 +751,9 @@ export function parsePortalLead(subject: string, bodyText: string, html: string)
         const digitsCount = line.replace(/\D/g, '').length;
         const isHeaderOrSMTP = /^[a-zA-Z0-9-]+:/i.test(line) || 
                                /received|by|id|date|subject|from|to|message-id|content-type/i.test(line);
-        if (digitsCount >= 7 && digitsCount <= 15 && !isHeaderOrSMTP) {
+        // Skip lines that are clearly not phone numbers (Property ID, listing IDs, etc.)
+        const isNotPhone = /property\s*id|listing\s*id|reference|ref\s*#|id\s*:/i.test(line);
+        if (digitsCount >= 7 && digitsCount <= 15 && !isHeaderOrSMTP && !isNotPhone) {
           phone = line.replace(/\(verified\)/i, '').trim();
           
           // Candidate Name: Use the line immediately preceding the phone number line
@@ -882,7 +967,17 @@ export async function POST(request: Request) {
       // Property listing updates (not individual inquiries)
       /(new\s+listings?\s+in|property\s+alert|price\s+drop|listing\s+update)/i.test(subject) && !/buyer\s+wants/i.test(subject) ||
       // Auto-generated reports
-      /(weekly|monthly|daily)\s+report/i.test(subject);
+      /(weekly|monthly|daily)\s+report/i.test(subject) ||
+      // LinkedIn notifications
+      /linkedin/i.test(sender) ||
+      /linkedin.*(?:notification|alert|update|connection|message|invite)/i.test(subject) ||
+      // Social media notifications
+      /(?:facebook|twitter|instagram|youtube|tiktok).*notification/i.test(sender) ||
+      // Marketing/savings/promotional content in subject
+      /(exclusive|savings|discount|offer|deal|sale|free|limited.time|act.now|buy.now)/i.test(subject) ||
+      // Help/support articles
+      /^help\s*:/i.test(subject) ||
+      /help.*\.(com|org|net)/i.test(subject);
     
     if (isNonLeadEmail) {
       console.log(`[lead-webhook] Non-lead email filtered out. Subject: ${subject}, From: ${sender}`);
@@ -903,7 +998,9 @@ export async function POST(request: Request) {
     const parsed = parsePortalLead(subject, bodyText, htmlContent);
 
     // Dynamic resolution for Housing.com lead phone number
-    if (parsed.source === 'Housing' && (!parsed.phone || parsed.phone === '')) {
+    // Also try HTML URL resolution if phone looks suspicious (e.g., Property ID)
+    const isSuspiciousPhone = parsed.phone && /^(property\s*id|listing|ref)/i.test(parsed.phone);
+    if (parsed.source === 'Housing' && (!parsed.phone || parsed.phone === '' || isSuspiciousPhone)) {
       const resolvedPhone = await resolveHousingPhone(htmlContent, bodyText);
       if (resolvedPhone) {
         parsed.phone = resolvedPhone;
@@ -979,6 +1076,27 @@ export async function POST(request: Request) {
         bodyPreview: bodyText.slice(0, 200),
       });
       return NextResponse.json({ error: 'Email lead synchronization is disabled for this account' }, { status: 403 });
+    }
+
+    // Validate contact name quality - reject junk names
+    if (!isValidContactName(parsed.name)) {
+      console.log(`[lead-webhook] Rejected lead with invalid name: "${parsed.name}"`);
+      await writeSyncLog({
+        accountId,
+        sender,
+        subject,
+        extractedName: parsed.name,
+        extractedPhone: normalizedPhoneNum,
+        extractedEmail: parsed.email,
+        status: 'ignored',
+        errorMessage: `Invalid contact name: "${parsed.name}"`,
+        bodyPreview: bodyText.slice(0, 200),
+      });
+      return NextResponse.json({ 
+        error: 'Invalid contact name detected',
+        name: parsed.name,
+        reason: 'Name appears to be junk, marketing content, or system notification'
+      }, { status: 422 });
     }
 
     // 3. Parse property preferences from requirement text
