@@ -234,6 +234,7 @@ export function stripOwnerSuffix(name: string): string {
 // Helper to find or create a tag and return its ID
 async function findOrCreateTag(
   supabase: SupabaseClient,
+  accountId: string,
   userId: string,
   tagName: string,
   color: string = '#3b82f6'
@@ -242,7 +243,7 @@ async function findOrCreateTag(
   const { data: existingTag } = await supabase
     .from('tags')
     .select('id')
-    .eq('user_id', userId)
+    .eq('account_id', accountId)
     .eq('name', tagName)
     .maybeSingle();
 
@@ -254,6 +255,7 @@ async function findOrCreateTag(
   const { data: newTag, error } = await supabase
     .from('tags')
     .insert({
+      account_id: accountId,
       user_id: userId,
       name: tagName,
       color: color,
@@ -272,6 +274,7 @@ async function findOrCreateTag(
 // Helper to assign tags to a contact
 async function assignTagsToContact(
   supabase: SupabaseClient,
+  accountId: string,
   userId: string,
   contactId: string,
   tagNames: string[]
@@ -297,7 +300,7 @@ async function assignTagsToContact(
   };
 
   for (const tagName of tagNames) {
-    const tagId = await findOrCreateTag(supabase, userId, tagName, tagColorMap[tagName] || '#3b82f6');
+    const tagId = await findOrCreateTag(supabase, accountId, userId, tagName, tagColorMap[tagName] || '#3b82f6');
     if (tagId) {
       // Assign tag to contact (ignore if already assigned)
       await supabase
@@ -1522,7 +1525,7 @@ export async function POST(request: Request) {
       }
 
       if (tagsToAssign.length > 0) {
-        await assignTagsToContact(supabase, userId, existingContact.id, tagsToAssign);
+        await assignTagsToContact(supabase, accountId, userId, existingContact.id, tagsToAssign);
       }
 
       // Find or create conversation for existing contact
@@ -1678,7 +1681,7 @@ export async function POST(request: Request) {
       }
 
       if (tagsToAssign.length > 0) {
-        await assignTagsToContact(supabase, userId, newContact.id, tagsToAssign);
+        await assignTagsToContact(supabase, accountId, userId, newContact.id, tagsToAssign);
       }
     }
 
