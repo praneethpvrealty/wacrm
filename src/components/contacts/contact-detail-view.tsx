@@ -132,6 +132,7 @@ export function ContactDetailView({
   const [savingDetails, setSavingDetails] = useState(false);
   const [approving, setApproving] = useState(false);
   const [inquiredProperty, setInquiredProperty] = useState<Property | null>(null);
+  const [inquiredProperties, setInquiredProperties] = useState<Property[]>([]);
   const [sendDetailsOnApprove, setSendDetailsOnApprove] = useState(true);
 
   // Requirements for Agent/Owner/Seller/etc
@@ -228,7 +229,7 @@ export function ContactDetailView({
       setEditPropertyInterests(data.property_interests ?? []);
       setEditMinRoi(data.min_roi ? String(data.min_roi) : '');
 
-      // Fetch last inquired property details
+      // Fetch last inquired property details (for backward compatibility)
       if (data.last_inquired_property_id) {
         const { data: propData } = await supabase
           .from('properties')
@@ -238,6 +239,23 @@ export function ContactDetailView({
         setInquiredProperty(propData || null);
       } else {
         setInquiredProperty(null);
+      }
+
+      // Fetch all inquired properties from junction table
+      const { data: inquiries } = await supabase
+        .from('contact_property_inquiries')
+        .select('property_id')
+        .eq('contact_id', contactId);
+
+      if (inquiries && inquiries.length > 0) {
+        const propertyIds = inquiries.map(i => i.property_id);
+        const { data: props } = await supabase
+          .from('properties')
+          .select('*')
+          .in('id', propertyIds);
+        setInquiredProperties(props || []);
+      } else {
+        setInquiredProperties([]);
       }
     }
     setLoading(false);
@@ -350,6 +368,18 @@ export function ContactDetailView({
         .eq('id', contactId);
 
       if (error) throw error;
+
+      // Also add to junction table if linking a property
+      if (propertyId) {
+        await supabase
+          .from('contact_property_inquiries')
+          .upsert({
+            contact_id: contactId,
+            property_id: propertyId,
+            inquiry_source: 'Manual'
+          }, { onConflict: 'contact_id,property_id' });
+      }
+      
       toast.success(propertyId ? 'Interest property linked successfully' : 'Interest property cleared');
       setEditLastInquiredPropertyId(propertyId);
       
@@ -360,6 +390,11 @@ export function ContactDetailView({
           .eq('id', propertyId)
           .maybeSingle();
         setInquiredProperty(propData || null);
+
+        // Update inquired properties list
+        if (propData && !inquiredProperties.find(p => p.id === propertyId)) {
+          setInquiredProperties(prev => [...prev, propData]);
+        }
       } else {
         setInquiredProperty(null);
       }
@@ -368,7 +403,38 @@ export function ContactDetailView({
       console.error('Failed to update interest property:', err);
       toast.error('Failed to update interest property');
     }
-  }, [supabase, contactId, onUpdated]);
+  }, [supabase, contactId, onUpdated, inquiredProperties]);
+
+  const handleRemoveInquiredProperty = useCallback(async (propertyId: string) => {
+    try {
+      const { error } = await supabase
+        .from('contact_property_inquiries')
+        .delete()
+        .eq('contact_id', contactId)
+        .eq('property_id', propertyId);
+
+      if (error) throw error;
+      
+      // Update local state
+      setInquiredProperties(prev => prev.filter(p => p.id !== propertyId));
+      
+      // If this was the last_inquired_property_id, clear it too
+      if (editLastInquiredPropertyId === propertyId) {
+        await supabase
+          .from('contacts')
+          .update({ last_inquired_property_id: null })
+          .eq('id', contactId);
+        setEditLastInquiredPropertyId(null);
+        setInquiredProperty(null);
+      }
+      
+      toast.success('Property removed from interests');
+      onUpdated();
+    } catch (err) {
+      console.error('Failed to remove property interest:', err);
+      toast.error('Failed to remove property interest');
+    }
+  }, [supabase, contactId, onUpdated, editLastInquiredPropertyId]);
 
 
   useEffect(() => {
@@ -1659,8 +1725,10 @@ export function ContactDetailView({
                       </div>
 
                       <div className="flex-1 overflow-y-auto space-y-2 min-h-0">
-                        <h4 className="text-xs font-semibold text-slate-400 mb-2">Currently Interested Listing</h4>
-                        {!inquiredProperty ? (
+                        <h4 className="text-xs font-semibold text-slate-400 mb-2">
+                          Interested Properties ({inquiredProperties.length})
+                        </h4>
+                        {inquiredProperties.length === 0 ? (
                           <div className="text-center py-8 border border-dashed border-slate-800 rounded-lg bg-slate-900/20">
                             <Building className="size-8 mx-auto text-slate-700 mb-2 opacity-50" />
                             <p className="text-xs text-slate-500 max-w-[240px] mx-auto">
@@ -1668,42 +1736,49 @@ export function ContactDetailView({
                             </p>
                           </div>
                         ) : (
-                          <div className="rounded-lg bg-slate-850/60 border border-slate-800 p-3 hover:border-slate-700/80 transition-all duration-200">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <span className="text-[9px] px-1.5 py-0.2 bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 rounded uppercase font-bold tracking-wider inline-block mb-1.5">
-                                  SHOWN INTEREST
-                                </span>
-                                <h5 className="text-xs font-semibold text-white truncate">
-                                  {inquiredProperty.property_code ? `[${inquiredProperty.property_code}] ` : ''}
-                                  {inquiredProperty.title}
-                                </h5>
-                                <p className="text-[10px] text-slate-400 mt-0.5 truncate">{inquiredProperty.location}</p>
-                                <div className="flex items-center gap-2 mt-1.5">
-                                  <span className="text-[10px] text-primary font-bold">
-                                    {inquiredProperty.price >= 10000000 
-                                      ? `₹${(inquiredProperty.price / 10000000).toFixed(2).replace(/\.00$/, '')} Cr` 
-                                      : inquiredProperty.price >= 100000 
-                                        ? `₹${(inquiredProperty.price / 100000).toFixed(2).replace(/\.00$/, '')} Lakhs` 
-                                        : `₹${inquiredProperty.price.toLocaleString('en-IN')}`}
-                                  </span>
-                                  <span className="text-[9px] px-1.5 py-0.2 bg-slate-800 border border-slate-700 text-slate-300 rounded uppercase font-semibold">
-                                    {inquiredProperty.status}
-                                  </span>
+                          <div className="space-y-2">
+                            {inquiredProperties.map((prop) => (
+                              <div
+                                key={prop.id}
+                                className="rounded-lg bg-slate-850/60 border border-slate-800 p-3 hover:border-slate-700/80 transition-all duration-200"
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <span className="text-[9px] px-1.5 py-0.2 bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 rounded uppercase font-bold tracking-wider inline-block mb-1.5">
+                                      SHOWN INTEREST
+                                    </span>
+                                    <h5 className="text-xs font-semibold text-white truncate">
+                                      {prop.property_code ? `[${prop.property_code}] ` : ''}
+                                      {prop.title}
+                                    </h5>
+                                    <p className="text-[10px] text-slate-400 mt-0.5 truncate">{prop.location}</p>
+                                    <div className="flex items-center gap-2 mt-1.5">
+                                      <span className="text-[10px] text-primary font-bold">
+                                        {prop.price >= 10000000 
+                                          ? `₹${(prop.price / 10000000).toFixed(2).replace(/\.00$/, '')} Cr` 
+                                          : prop.price >= 100000 
+                                            ? `₹${(prop.price / 100000).toFixed(2).replace(/\.00$/, '')} Lakhs` 
+                                            : `₹${prop.price.toLocaleString('en-IN')}`}
+                                      </span>
+                                      <span className="text-[9px] px-1.5 py-0.2 bg-slate-800 border border-slate-700 text-slate-300 rounded uppercase font-semibold">
+                                        {prop.status}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => handleRemoveInquiredProperty(prop.id)}
+                                      className="h-7 w-7 p-0 text-slate-400 hover:text-red-400 hover:bg-slate-800"
+                                      title="Remove interest link"
+                                    >
+                                      <Unlink className="size-3" />
+                                    </Button>
+                                  </div>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleLinkInterestProperty(null)}
-                                  className="h-7 w-7 p-0 text-slate-400 hover:text-red-400 hover:bg-slate-800"
-                                  title="Remove interest link"
-                                >
-                                  <Unlink className="size-3" />
-                                </Button>
-                              </div>
-                            </div>
+                            ))}
                           </div>
                         )}
 
