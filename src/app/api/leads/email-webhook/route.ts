@@ -212,6 +212,13 @@ function isValidContactName(name: string): boolean {
   return true;
 }
 
+// Helper to strip owner/developer/builder suffixes from contact names
+// e.g. "Kg Subramanian (Owner)" -> "Kg Subramanian"
+export function stripOwnerSuffix(name: string): string {
+  if (!name) return name;
+  return name.replace(/\s*\((?:Owner|Developer|Builder|Broker|Landlord|Seller)\)\s*$/i, '').trim();
+}
+
 // Helper to follow redirect headers (manual mode) to extract phone number
 export async function resolvePhoneNumberFromUrl(url: string, depth = 0): Promise<string | null> {
   if (depth > 3) return null; // Avoid infinite redirects
@@ -1176,6 +1183,14 @@ export async function POST(request: Request) {
       }, { status: 422 });
     }
 
+    // Strip owner/developer/builder suffixes from name
+    // e.g. "Kg Subramanian (Owner)" -> "Kg Subramanian"
+    const cleanName = stripOwnerSuffix(parsed.name);
+    if (cleanName !== parsed.name) {
+      console.log(`[lead-webhook] Stripped owner suffix: "${parsed.name}" -> "${cleanName}"`);
+      parsed.name = cleanName;
+    }
+
     // 3. Parse property preferences from requirement text
     let maxBudget: number | null = null;
     const areasOfInterest: string[] = [];
@@ -1209,8 +1224,8 @@ export async function POST(request: Request) {
       });
     }
 
-    // Match property from email against user's listings
-    let matchedPropertyId: string | null = null;
+    // Match properties from email against user's listings
+    let matchedPropertyIds: string[] = [];
     if (parsed.source === 'Housing' && (parsed.propertyType || parsed.propertyLocation || parsed.housingPropertyId)) {
       try {
         // Fetch user's published properties
@@ -1221,8 +1236,8 @@ export async function POST(request: Request) {
           .eq('is_published', true);
 
         if (properties && properties.length > 0) {
-          // Try to match by multiple criteria
-          const matchedProperty = properties.find((p) => {
+          // Find all matching properties
+          const matchedProperties = properties.filter((p) => {
             let matchScore = 0;
             
             // Match by property type (Apartment, Flat, etc.)
@@ -1270,13 +1285,13 @@ export async function POST(request: Request) {
             return matchScore >= 3;
           });
 
-          if (matchedProperty) {
-            matchedPropertyId = matchedProperty.id;
-            console.log(`[lead-webhook] Matched property: ${matchedProperty.title} (${matchedProperty.id}) from Housing.com inquiry`);
+          if (matchedProperties.length > 0) {
+            matchedPropertyIds = matchedProperties.map(p => p.id);
+            console.log(`[lead-webhook] Matched ${matchedProperties.length} properties: ${matchedProperties.map(p => p.title).join(', ')} from Housing.com inquiry`);
           }
         }
       } catch (err) {
-        console.error('[lead-webhook] Failed to match property:', err);
+        console.error('[lead-webhook] Failed to match properties:', err);
       }
     }
 
@@ -1301,7 +1316,7 @@ export async function POST(request: Request) {
       if (maxBudget) updatePayload.max_budget = maxBudget;
       if (areasOfInterest.length > 0) updatePayload.areas_of_interest = areasOfInterest;
       if (propertyInterests.length > 0) updatePayload.property_interests = propertyInterests;
-      if (matchedPropertyId) updatePayload.last_inquired_property_id = matchedPropertyId;
+      if (matchedPropertyIds.length > 0) updatePayload.last_inquired_property_id = matchedPropertyIds[0];
       
       // Tag source
       updatePayload.company = parsed.source;
@@ -1311,6 +1326,18 @@ export async function POST(request: Request) {
         .from('contacts')
         .update(updatePayload)
         .eq('id', existingContact.id);
+
+      // Insert all matched properties into junction table
+      if (matchedPropertyIds.length > 0) {
+        const inquiries = matchedPropertyIds.map(propertyId => ({
+          contact_id: existingContact.id,
+          property_id: propertyId,
+          inquiry_source: parsed.source,
+        }));
+        await supabase
+          .from('contact_property_inquiries')
+          .upsert(inquiries, { onConflict: 'contact_id,property_id' });
+      }
 
       // Find or create conversation for existing contact
       let conversationId = '';
@@ -1426,7 +1453,7 @@ export async function POST(request: Request) {
         max_budget: maxBudget,
         areas_of_interest: areasOfInterest.length > 0 ? areasOfInterest : null,
         property_interests: propertyInterests.length > 0 ? propertyInterests : null,
-        last_inquired_property_id: matchedPropertyId,
+        last_inquired_property_id: matchedPropertyIds.length > 0 ? matchedPropertyIds[0] : null,
         status: 'pending_review',
       })
       .select('id, name')
@@ -1446,6 +1473,18 @@ export async function POST(request: Request) {
         bodyPreview: bodyText.slice(0, 200),
       });
       return NextResponse.json({ error: insertErr.message }, { status: 500 });
+    }
+
+    // Insert all matched properties into junction table
+    if (matchedPropertyIds.length > 0 && newContact) {
+      const inquiries = matchedPropertyIds.map(propertyId => ({
+        contact_id: newContact.id,
+        property_id: propertyId,
+        inquiry_source: parsed.source,
+      }));
+      await supabase
+        .from('contact_property_inquiries')
+        .upsert(inquiries, { onConflict: 'contact_id,property_id' });
     }
 
     // 5. Create active conversation thread
