@@ -814,6 +814,41 @@ export async function POST(request: Request) {
       });
     }
 
+    // ── Non-lead email filtering ──────────────────────────────────────────
+    // Reject common non-lead emails that slip through Gmail filters.
+    // These are notifications, account updates, marketing blasts, etc.
+    const isNonLeadEmail = 
+      // System/notification emails
+      /^noreply@|^no-reply@|^donotreply@|^mailer-daemon@/i.test(sender) ||
+      // Account-related notifications
+      /account\s+(update|change|alert|notification|verify|security|suspension|deactivation)/i.test(subject) ||
+      // Payment/billing notifications
+      /(payment|billing|invoice|subscription|renewal|expiry|expir)/i.test(subject) ||
+      // Newsletter/marketing blasts (not individual leads)
+      /(newsletter|weekly\s+digest|daily\s+update|marketing|promotional|unsubscribe)/i.test(subject) ||
+      // Password reset / OTP
+      /(password|otp|one.time|reset.*password|forgot.*password)/i.test(subject) ||
+      // Property listing updates (not individual inquiries)
+      /(new\s+listings?\s+in|property\s+alert|price\s+drop|listing\s+update)/i.test(subject) && !/buyer\s+wants/i.test(subject) ||
+      // Auto-generated reports
+      /(weekly|monthly|daily)\s+report/i.test(subject);
+    
+    if (isNonLeadEmail) {
+      console.log(`[lead-webhook] Non-lead email filtered out. Subject: ${subject}, From: ${sender}`);
+      // Still log it for audit but don't create a contact/conversation
+      if (accountId) {
+        await writeSyncLog({
+          accountId,
+          sender,
+          subject,
+          status: 'ignored',
+          errorMessage: 'Filtered: non-lead email (notification/marketing/system)',
+          bodyPreview: bodyText.slice(0, 200),
+        });
+      }
+      return NextResponse.json({ status: 'filtered', message: 'Non-lead email filtered out.' });
+    }
+
     const parsed = parsePortalLead(subject, bodyText, htmlContent);
 
     // Dynamic resolution for Housing.com lead phone number
