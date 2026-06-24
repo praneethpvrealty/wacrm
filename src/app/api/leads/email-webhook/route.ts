@@ -553,6 +553,14 @@ export function parsePortalLead(subject: string, bodyText: string, html: string)
   let email = '';
   let requirementText = '';
   let source = 'Others';
+  
+  // Property details for matching against listings
+  let propertyType = '';
+  let bedrooms: number | null = null;
+  let propertyLocation = '';
+  let areaSqft: number | null = null;
+  let propertyPrice: number | null = null;
+  let housingPropertyId = '';
 
   const combined = `${subject}\n${bodyText}`;
 
@@ -621,6 +629,54 @@ export function parsePortalLead(subject: string, bodyText: string, html: string)
       if (propIdMatch) {
         requirementText = `Inquiry on Property ID: ${propIdMatch[1].trim()}`;
       }
+    }
+
+    // Extract property details for matching against listings
+    // Property type: "3 BHK Apartment", "2 BHK Flat", "Villa", etc.
+    const propertyTypeMatch = bodyText.match(/(\d+)\s*(?:BHK|BHK)\s*(Apartment|Flat|House|Villa|Plot|Land|Commercial)/i);
+    if (propertyTypeMatch) {
+      bedrooms = parseInt(propertyTypeMatch[1]);
+      propertyType = propertyTypeMatch[2];
+    } else {
+      // Try just property type without bedrooms
+      const typeOnlyMatch = bodyText.match(/(Apartment|Flat|House|Villa|Plot|Land|Commercial)/i);
+      if (typeOnlyMatch) propertyType = typeOnlyMatch[1];
+    }
+
+    // Location extraction: "Kattigenahalli" or "in Kattigenahalli"
+    const locationMatch = bodyText.match(/(?:in|at|near|located)\s+([A-Za-z\s,]+?)(?:\s*,|\s*\n|\s*\d|\s*₹|\s*\.)/i);
+    if (locationMatch) {
+      propertyLocation = locationMatch[1].trim();
+    } else {
+      // Try location after property type
+      const locationAfterType = bodyText.match(/(?:Apartment|Flat|House|Villa|Plot|Land)\s+in\s+([A-Za-z\s,]+)/i);
+      if (locationAfterType) {
+        propertyLocation = locationAfterType[1].trim();
+      }
+    }
+
+    // Area extraction: "1779 sq. ft." or "1,779 Sq.Ft."
+    const areaMatch = bodyText.match(/([\d,]+)\s*(?:sq\.?\s*ft\.?|sqft|sq\.?\s*feet)/i);
+    if (areaMatch) {
+      areaSqft = parseInt(areaMatch[1].replace(/,/g, ''));
+    }
+
+    // Price extraction: "₹2.67 Cr" or "2.67 Cr" or "₹ 2.67 Cr"
+    const priceMatch = bodyText.match(/₹?\s*([\d.]+)\s*(Cr|Crore|Lakh|L)\b/i);
+    if (priceMatch) {
+      const priceValue = parseFloat(priceMatch[1]);
+      const unit = priceMatch[2].toLowerCase();
+      if (unit === 'cr' || unit === 'crore') {
+        propertyPrice = Math.round(priceValue * 10000000);
+      } else if (unit === 'lakh' || unit === 'l') {
+        propertyPrice = Math.round(priceValue * 100000);
+      }
+    }
+
+    // Housing Property ID extraction: "Property ID: 20327451"
+    const propIdMatch = bodyText.match(/Property\s*ID\s*[:|-]\s*(\d+)/i);
+    if (propIdMatch) {
+      housingPropertyId = propIdMatch[1];
     }
 
   } else if (combined.toLowerCase().includes('99acres')) {
@@ -778,6 +834,13 @@ export function parsePortalLead(subject: string, bodyText: string, html: string)
     email: email ? cleanLine(email) : '',
     requirementText: requirementText ? cleanLine(requirementText) : '',
     source,
+    // Property details for matching against listings
+    propertyType: propertyType || null,
+    bedrooms,
+    propertyLocation: propertyLocation || null,
+    areaSqft,
+    propertyPrice,
+    housingPropertyId: housingPropertyId || null,
   };
 }
 
@@ -1132,6 +1195,77 @@ export async function POST(request: Request) {
       });
     }
 
+    // Match property from email against user's listings
+    let matchedPropertyId: string | null = null;
+    if (parsed.source === 'Housing' && (parsed.propertyType || parsed.propertyLocation || parsed.housingPropertyId)) {
+      try {
+        // Fetch user's published properties
+        const { data: properties } = await supabase
+          .from('properties')
+          .select('id, title, type, location, bedrooms, area_sqft, price, property_code')
+          .eq('account_id', accountId)
+          .eq('is_published', true);
+
+        if (properties && properties.length > 0) {
+          // Try to match by multiple criteria
+          const matchedProperty = properties.find((p) => {
+            let matchScore = 0;
+            
+            // Match by property type (Apartment, Flat, etc.)
+            if (parsed.propertyType && p.type) {
+              const typeLower = parsed.propertyType.toLowerCase();
+              const pTypeLower = p.type.toLowerCase();
+              if (typeLower.includes(pTypeLower) || pTypeLower.includes(typeLower)) {
+                matchScore += 2;
+              }
+            }
+
+            // Match by bedrooms
+            if (parsed.bedrooms && p.bedrooms) {
+              if (parsed.bedrooms === p.bedrooms) {
+                matchScore += 2;
+              }
+            }
+
+            // Match by location (fuzzy match)
+            if (parsed.propertyLocation && p.location) {
+              const locLower = parsed.propertyLocation.toLowerCase();
+              const pLocLower = p.location.toLowerCase();
+              if (pLocLower.includes(locLower) || locLower.includes(pLocLower)) {
+                matchScore += 3;
+              }
+            }
+
+            // Match by area (within 10% tolerance)
+            if (parsed.areaSqft && p.area_sqft) {
+              const areaDiff = Math.abs(parsed.areaSqft - p.area_sqft) / p.area_sqft;
+              if (areaDiff <= 0.1) {
+                matchScore += 2;
+              }
+            }
+
+            // Match by price (within 15% tolerance)
+            if (parsed.propertyPrice && p.price) {
+              const priceDiff = Math.abs(parsed.propertyPrice - p.price) / p.price;
+              if (priceDiff <= 0.15) {
+                matchScore += 2;
+              }
+            }
+
+            // Require at least 3 points to consider it a match
+            return matchScore >= 3;
+          });
+
+          if (matchedProperty) {
+            matchedPropertyId = matchedProperty.id;
+            console.log(`[lead-webhook] Matched property: ${matchedProperty.title} (${matchedProperty.id}) from Housing.com inquiry`);
+          }
+        }
+      } catch (err) {
+        console.error('[lead-webhook] Failed to match property:', err);
+      }
+    }
+
     const cleanPhone = normalizedPhoneNum.replace(/\D/g, '');
     const { data: existingContact } = await supabase
       .from('contacts')
@@ -1148,10 +1282,12 @@ export async function POST(request: Request) {
         property_interests?: string[];
         company?: string;
         source?: string;
+        last_inquired_property_id?: string | null;
       } = {};
       if (maxBudget) updatePayload.max_budget = maxBudget;
       if (areasOfInterest.length > 0) updatePayload.areas_of_interest = areasOfInterest;
       if (propertyInterests.length > 0) updatePayload.property_interests = propertyInterests;
+      if (matchedPropertyId) updatePayload.last_inquired_property_id = matchedPropertyId;
       
       // Tag source
       updatePayload.company = parsed.source;
@@ -1276,6 +1412,7 @@ export async function POST(request: Request) {
         max_budget: maxBudget,
         areas_of_interest: areasOfInterest.length > 0 ? areasOfInterest : null,
         property_interests: propertyInterests.length > 0 ? propertyInterests : null,
+        last_inquired_property_id: matchedPropertyId,
         status: 'pending_review',
       })
       .select('id, name')
