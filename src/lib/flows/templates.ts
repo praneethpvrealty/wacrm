@@ -296,7 +296,7 @@ const REAL_ESTATE_ONBOARDING: FlowTemplate = {
   icon: "MessageSquare",
   trigger_type: "keyword",
   trigger_config: {
-    keywords: ["invest", "buy", "rent", "properties", "homes", "listing"],
+    keywords: ["invest", "buy", "rent", "properties", "homes", "listing", "show properties", "show properties"],
     match_type: "contains",
   },
   entry_node_id: "start",
