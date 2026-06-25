@@ -200,6 +200,7 @@ export function PropertyForm({
   const [features, setFeatures] = useState<string[]>([]);
   const [nearbyHighlights, setNearbyHighlights] = useState<string[]>([]);
   const [images, setImages] = useState<string[]>(['']);
+  const [defaultImageIndex, setDefaultImageIndex] = useState(0);
   const [documents, setDocuments] = useState<string[]>(['']);
   const [uploadingDocument, setUploadingDocument] = useState(false);
   const [googleMapLink, setGoogleMapLink] = useState('');
@@ -1019,6 +1020,7 @@ export function PropertyForm({
         setFeatures(property.features || []);
         setNearbyHighlights(property.nearby_highlights || []);
         setImages(property.images && property.images.length > 0 ? property.images : ['']);
+        setDefaultImageIndex(0); // Default image is always at index 0
         setDocuments(property.documents && property.documents.length > 0 ? property.documents : ['']);
         setOwnerContactId(property.owner_contact_id ?? null);
         setListingSource(property.listing_source ?? 'owner');
@@ -1453,13 +1455,7 @@ export function PropertyForm({
   }
 
   function handleSetDefaultImage(index: number) {
-    if (index === 0) return;
-    setImages((prev) => {
-      const copy = [...prev];
-      const selected = copy[index];
-      const remaining = copy.filter((_, i) => i !== index);
-      return [selected, ...remaining];
-    });
+    setDefaultImageIndex(index);
     toast.success('Selected image set as default listing photo');
   }
 
@@ -1531,7 +1527,11 @@ export function PropertyForm({
 
       const parsedFeatures = features;
       const parsedNearbyHighlights = nearbyHighlights;
-      const parsedImages = images.map((img) => img.trim()).filter((img) => img.length > 0);
+      const filteredImages = images.map((img) => img.trim()).filter((img) => img.length > 0);
+      // Reorder images so the default image is at index 0
+      const parsedImages = filteredImages.length > 0 && defaultImageIndex > 0 && defaultImageIndex < filteredImages.length
+        ? [filteredImages[defaultImageIndex], ...filteredImages.filter((_, i) => i !== defaultImageIndex)]
+        : filteredImages;
       const parsedDocuments = documents.map((doc) => doc.trim()).filter((doc) => doc.length > 0);
 
       // Construct formatted complete location string
@@ -1658,8 +1658,8 @@ export function PropertyForm({
       }
 
       toast.success(isEdit ? 'Property updated successfully' : 'Property created successfully');
-      onOpenChange(false);
       onSaved();
+      onOpenChange(false);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'An error occurred while saving';
       toast.error(message);
@@ -3123,10 +3123,10 @@ export function PropertyForm({
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleSetDefaultImage(idx)}
-                                className={`h-8 w-8 p-0 shrink-0 ${idx === 0 ? 'text-amber-400' : 'text-slate-500 hover:text-amber-400'}`}
-                                title={idx === 0 ? "Default Image" : "Set as Default"}
+                                className={`h-8 w-8 p-0 shrink-0 ${idx === defaultImageIndex ? 'text-amber-400' : 'text-slate-500 hover:text-amber-400'}`}
+                                title={idx === defaultImageIndex ? "Default Image" : "Set as Default"}
                               >
-                                <Star className={`size-3.5 ${idx === 0 ? 'fill-amber-400' : ''}`} />
+                                <Star className={`size-3.5 ${idx === defaultImageIndex ? 'fill-amber-400' : ''}`} />
                               </Button>
                             )}
                             {images.length > 1 && (

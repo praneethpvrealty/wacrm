@@ -163,7 +163,7 @@ export default function InventoryPage() {
       if (showcaseFilter !== 'All') params.set('is_published', showcaseFilter === 'Showcased' ? 'true' : 'false');
       if (sourceFilter !== 'All') params.set('listing_source', sourceFilter === 'Owner' ? 'owner' : 'agent');
 
-      const response = await fetch(`/api/properties?${params.toString()}`, {
+      const response = await fetch(`/api/properties?${params.toString()}&_t=${Date.now()}`, {
         cache: 'no-store',
       });
       if (!response.ok) {
