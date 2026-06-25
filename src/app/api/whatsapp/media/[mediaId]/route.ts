@@ -83,12 +83,14 @@ export async function GET(
       
       // Check if it's a "not found" error (expired/invalid media)
       if (errorMessage.includes('does not exist') || errorMessage.includes('missing permissions') || errorMessage.includes('GraphMethodException')) {
-        console.warn(`[media] Media ${mediaId} is no longer available (expired or deleted)`)
+        console.warn(`[media] Media ${mediaId} is not a valid media object`)
+        
         return NextResponse.json(
           { 
-            error: 'Media no longer available',
-            message: 'This media is no longer available. It may have been deleted by the sender or expired.',
-            code: 'MEDIA_UNAVAILABLE'
+            error: 'Media unavailable',
+            message: 'This media could not be loaded. It may have been sent as a forwarded message or is no longer available.',
+            code: 'MEDIA_UNAVAILABLE',
+            mediaId: mediaId
           },
           { status: 404 }
         )
