@@ -82,13 +82,13 @@ export async function GET(
       })
       
       // Check if it's a "not found" error (expired/invalid media)
-      if (errorMessage.includes('does not exist') || errorMessage.includes('missing permissions')) {
+      if (errorMessage.includes('does not exist') || errorMessage.includes('missing permissions') || errorMessage.includes('GraphMethodException')) {
         console.warn(`[media] Media ${mediaId} is no longer available (expired or deleted)`)
         return NextResponse.json(
           { 
             error: 'Media no longer available',
-            message: 'This media was sent more than 30 days ago and has expired. Please ask the sender to resend it.',
-            code: 'MEDIA_EXPIRED'
+            message: 'This media is no longer available. It may have been deleted by the sender or expired.',
+            code: 'MEDIA_UNAVAILABLE'
           },
           { status: 404 }
         )

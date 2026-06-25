@@ -65,11 +65,14 @@ function StatusIcon({ status, errorInfo }: { status: Message["status"]; errorInf
   }
 }
 
-function MediaUnavailable({ label }: { label: string }) {
+function MediaUnavailable({ label, reason }: { label: string; reason?: string }) {
   return (
     <div className="flex items-center gap-2 rounded-lg bg-slate-700/40 px-3 py-2 text-xs text-slate-300">
       <ImageOff className="h-4 w-4 shrink-0 text-slate-500" />
-      <span>{label} unavailable</span>
+      <div>
+        <span>{label} unavailable</span>
+        {reason && <span className="block text-[10px] text-slate-500">{reason}</span>}
+      </div>
     </div>
   );
 }
@@ -113,8 +116,9 @@ function MediaImage({ url, alt }: { url: string; alt: string }) {
 
   if (error) {
     return (
-      <div className="flex h-40 w-60 items-center justify-center rounded-lg bg-slate-700">
+      <div className="flex flex-col items-center justify-center gap-1 h-40 w-60 rounded-lg bg-slate-700">
         <ImageOff className="h-8 w-8 text-slate-500" />
+        <span className="text-[10px] text-slate-500 text-center px-2">Media unavailable - may have been deleted</span>
       </div>
     );
   }
