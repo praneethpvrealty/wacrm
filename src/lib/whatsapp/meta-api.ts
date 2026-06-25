@@ -1293,14 +1293,31 @@ export async function getMediaUrl(
   })
   
   if (!response.ok) {
-    // Log the full error response for debugging
+    // Read the body once — it can only be consumed once
     const errorBody = await response.text()
-    console.error(`[meta-api] Media ${mediaId} fetch failed:`, {
-      status: response.status,
-      statusText: response.statusText,
-      body: errorBody,
-    })
-    await throwMetaError(response, `Media fetch failed: ${response.status}`)
+    let metaMessage = `Media fetch failed: ${response.status}`
+    try {
+      const parsed = JSON.parse(errorBody)
+      if (parsed?.error?.message) {
+        metaMessage = parsed.error.message
+      }
+    } catch {
+      // not JSON, use raw body if short enough
+      if (errorBody && errorBody.length < 300) metaMessage = errorBody
+    }
+    // Only log as error for unexpected failures; for known "does not exist" cases
+    // the proxy route will handle it gracefully and log a warn
+    const isKnownUnavailable =
+      metaMessage.includes('does not exist') ||
+      metaMessage.includes('missing permissions') ||
+      metaMessage.includes('GraphMethodException')
+    if (!isKnownUnavailable) {
+      console.error(`[meta-api] Media ${mediaId} fetch failed:`, {
+        status: response.status,
+        body: errorBody,
+      })
+    }
+    throw new Error(metaMessage)
   }
   
   const data = await response.json()

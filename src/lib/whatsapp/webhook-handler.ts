@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { decrypt } from '@/lib/whatsapp/encryption'
-import { getMediaUrl, sendTextMessage } from '@/lib/whatsapp/meta-api'
+import { sendTextMessage } from '@/lib/whatsapp/meta-api'
 import { normalizePhone, phonesMatch, normalizePhoneWithCountryCode } from '@/lib/whatsapp/phone-utils'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
@@ -1534,9 +1534,6 @@ async function handlePropertyUpdateIntent(
   })
 
   // Ask for first field
-  const field = PROPERTY_UPDATABLE_FIELDS[0]
-  const currentValue = property[field.name] || 'not set'
-  
   await sendWhatsAppMessageAndPersist({
     accountId,
     userId: configOwnerUserId,

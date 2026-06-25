@@ -565,21 +565,37 @@ export function FlyerCreatorDialog({
 
   const uploadFlyerToProperty = async (silent = false) => {
     const canvas = canvasRef.current;
-    if (!canvas || !property) return;
+    if (!canvas || !property) {
+      console.error('[FlyerCreatorDialog] Canvas or property is missing');
+      if (!silent) toast.error('Canvas or property not available');
+      return;
+    }
 
     if (!silent) setSavingToProperty(true);
     try {
       // 1. Convert canvas to Blob
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+      console.log('[FlyerCreatorDialog] Converting canvas to blob...');
+      const blob = await new Promise<Blob | null>((resolve) => {
+        try {
+          canvas.toBlob(resolve, 'image/png');
+        } catch (err) {
+          console.error('[FlyerCreatorDialog] Canvas toBlob error:', err);
+          resolve(null);
+        }
+      });
+      
       if (!blob) {
-        throw new Error('Failed to generate image blob from design canvas.');
+        throw new Error('Failed to generate image blob from design canvas. The canvas may be empty.');
       }
+      
+      console.log('[FlyerCreatorDialog] Blob created, size:', blob.size);
 
       // 2. Upload blob to Supabase Storage
       const supabase = createClient();
       const randomStr = Math.random().toString(36).substring(2, 7);
       const path = `${property.account_id}/flyer-${Date.now()}-${randomStr}.png`;
 
+      console.log('[FlyerCreatorDialog] Uploading to path:', path);
       const { error: uploadError } = await supabase.storage
         .from('property-images')
         .upload(path, blob, {
@@ -589,8 +605,11 @@ export function FlyerCreatorDialog({
         });
 
       if (uploadError) {
+        console.error('[FlyerCreatorDialog] Upload error:', uploadError);
         throw new Error(`Failed to upload flyer: ${uploadError.message}`);
       }
+      
+      console.log('[FlyerCreatorDialog] Upload successful');
 
       // 3. Get public URL
       const { data: { publicUrl } } = supabase.storage
@@ -601,14 +620,18 @@ export function FlyerCreatorDialog({
       const currentImages = property.images || [];
       const updatedImages = [publicUrl, ...currentImages.filter(url => url !== publicUrl)];
 
+      console.log('[FlyerCreatorDialog] Updating property images...');
       const { error: updateError } = await supabase
         .from('properties')
         .update({ images: updatedImages, updated_at: new Date().toISOString() })
         .eq('id', property.id);
 
       if (updateError) {
+        console.error('[FlyerCreatorDialog] Database update error:', updateError);
         throw new Error(`Failed to save flyer url to property: ${updateError.message}`);
       }
+      
+      console.log('[FlyerCreatorDialog] Property updated successfully');
 
       if (!silent) {
         toast.success('Flyer saved successfully as the default property photo!');

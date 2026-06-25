@@ -70,32 +70,27 @@ export async function GET(
       mediaInfo = await getMediaUrl({ mediaId, accessToken })
     } catch (metaError: unknown) {
       const errorMessage = metaError instanceof Error ? metaError.message : String(metaError)
-      
-      // Log the full error for debugging
-      console.error(`[media] Meta API error for media ${mediaId}:`, {
-        error: errorMessage,
-        accountId,
-        accessTokenPrefix: accessToken.substring(0, 10) + '...',
-      })
-      
-      // Check if it's a "not found" error (expired/invalid media)
-      if (errorMessage.includes('does not exist') || errorMessage.includes('missing permissions') || errorMessage.includes('GraphMethodException')) {
-        // Expected for forwarded messages — the forwarded media ID is not directly
-        // accessible via the Graph API. Show a graceful placeholder in the inbox.
+
+      // Check if it's a "not found" error (expired/invalid media or forwarded message).
+      // meta-api.ts now throws with the real Meta message so this check is reliable.
+      if (
+        errorMessage.includes('does not exist') ||
+        errorMessage.includes('missing permissions') ||
+        errorMessage.includes('GraphMethodException')
+      ) {
         console.warn(`[media] Media ${mediaId} unavailable (forwarded or expired)`)
-        
         return NextResponse.json(
-          { 
+          {
             error: 'Media unavailable',
             message: 'This media could not be loaded. It may have been sent as a forwarded message or is no longer available.',
             code: 'MEDIA_UNAVAILABLE',
-            mediaId: mediaId
+            mediaId,
           },
           { status: 404 }
         )
       }
-      
-      // Re-throw other errors
+
+      // Re-throw unexpected errors — outer catch will log + return 500
       throw metaError
     }
 
