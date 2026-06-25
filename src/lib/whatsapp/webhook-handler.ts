@@ -857,11 +857,13 @@ async function parseMessageContent(
     mediaId: string
   ): Promise<string | null> => {
     try {
+      // Log the media ID for debugging
+      console.log(`[webhook] Verifying media ${mediaId}`)
       await getMediaUrl({ mediaId, accessToken })
       return `/api/whatsapp/media/${mediaId}`
     } catch (error) {
       console.error(
-        `Failed to verify media ${mediaId} with Meta:`,
+        `[webhook] Failed to verify media ${mediaId} with Meta:`,
         error instanceof Error ? error.message : error
       )
       return null

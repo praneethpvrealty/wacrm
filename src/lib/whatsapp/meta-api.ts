@@ -1226,6 +1226,60 @@ export interface GetMediaUrlArgs {
 }
 
 /**
+ * Check if the access token has the required WhatsApp permissions.
+ * Returns a list of issues found, or empty array if all good.
+ */
+export async function checkWhatsAppPermissions(
+  accessToken: string,
+  wabaId?: string | null
+): Promise<{ hasIssues: boolean; issues: string[] }> {
+  const issues: string[] = []
+
+  // Test 1: Check if token can access phone numbers (basic permission)
+  try {
+    const response = await fetch(`${META_API_BASE}/me/phone_numbers?limit=1`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    if (!response.ok) {
+      issues.push('Token cannot access phone numbers - missing whatsapp_business_messaging permission')
+    }
+  } catch {
+    issues.push('Failed to verify phone number access')
+  }
+
+  // Test 2: Check if token can access WABA (if provided)
+  if (wabaId) {
+    try {
+      const response = await fetch(`${META_API_BASE}/${wabaId}?fields=id,name`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+      if (!response.ok) {
+        issues.push('Token cannot access WhatsApp Business Account - missing whatsapp_business_management permission')
+      }
+    } catch {
+      issues.push('Failed to verify WABA access')
+    }
+  }
+
+  // Test 3: Try to fetch a test media object to verify media permissions
+  // This is a lightweight check - we don't need a real media ID, just checking if the endpoint responds
+  try {
+    const response = await fetch(`${META_API_BASE}/me/media?limit=1`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    // Even a 404 means the endpoint exists and we have some access
+    // A 403 or 401 would indicate missing permissions
+    if (response.status === 401 || response.status === 403) {
+      issues.push('Token lacks media access permissions - ensure whatsapp_business_messaging scope is enabled')
+    }
+  } catch {
+    // Network errors are not permission issues
+  }
+
+  return { hasIssues: issues.length > 0, issues }
+}
+
+/**
  * Resolve a media ID to Meta's (short-lived, authenticated) CDN URL
  * plus the MIME type. Step one of the media-proxy flow.
  */
@@ -1233,14 +1287,29 @@ export async function getMediaUrl(
   args: GetMediaUrlArgs
 ): Promise<{ url: string; mimeType: string }> {
   const { mediaId, accessToken } = args
+  
+  // Log the request for debugging
+  console.log(`[meta-api] Resolving media ${mediaId}`)
+  
   const response = await fetch(`${META_API_BASE}/${mediaId}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   })
+  
   if (!response.ok) {
+    // Log the full error response for debugging
+    const errorBody = await response.text()
+    console.error(`[meta-api] Media ${mediaId} fetch failed:`, {
+      status: response.status,
+      statusText: response.statusText,
+      body: errorBody,
+    })
     await throwMetaError(response, `Media fetch failed: ${response.status}`)
   }
+  
   const data = await response.json()
   if (!data.url) throw new Error('Media URL not found in Meta response')
+  
+  console.log(`[meta-api] Media ${mediaId} resolved successfully`)
   return { url: data.url, mimeType: data.mime_type || 'application/octet-stream' }
 }
 

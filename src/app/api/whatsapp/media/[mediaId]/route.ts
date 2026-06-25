@@ -64,8 +64,39 @@ export async function GET(
 
     const accessToken = decrypt(config.access_token)
 
+    // Log the request for debugging
+    console.log(`[media] Fetching media ${mediaId} for account ${accountId}`)
+
     // Get the download URL from Meta
-    const mediaInfo = await getMediaUrl({ mediaId, accessToken })
+    let mediaInfo
+    try {
+      mediaInfo = await getMediaUrl({ mediaId, accessToken })
+    } catch (metaError: unknown) {
+      const errorMessage = metaError instanceof Error ? metaError.message : String(metaError)
+      
+      // Log the full error for debugging
+      console.error(`[media] Meta API error for media ${mediaId}:`, {
+        error: errorMessage,
+        accountId,
+        accessTokenPrefix: accessToken.substring(0, 10) + '...',
+      })
+      
+      // Check if it's a "not found" error (expired/invalid media)
+      if (errorMessage.includes('does not exist') || errorMessage.includes('missing permissions')) {
+        console.warn(`[media] Media ${mediaId} is no longer available (expired or deleted)`)
+        return NextResponse.json(
+          { 
+            error: 'Media no longer available',
+            message: 'This media was sent more than 30 days ago and has expired. Please ask the sender to resend it.',
+            code: 'MEDIA_EXPIRED'
+          },
+          { status: 404 }
+        )
+      }
+      
+      // Re-throw other errors
+      throw metaError
+    }
 
     // Download the binary data
     const { buffer, contentType } = await downloadMedia({

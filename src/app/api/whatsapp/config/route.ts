@@ -5,6 +5,7 @@ import {
   registerPhoneNumber,
   subscribeWabaToApp,
   verifyPhoneNumber,
+  checkWhatsAppPermissions,
 } from '@/lib/whatsapp/meta-api'
 import { encrypt, decrypt } from '@/lib/whatsapp/encryption'
 
@@ -251,6 +252,14 @@ export async function POST(request: Request) {
         { error: `Meta API error: ${message}` },
         { status: 400 }
       )
+    }
+
+    // Check token permissions for media access
+    const permissionCheck = await checkWhatsAppPermissions(access_token, waba_id)
+    if (permissionCheck.hasIssues) {
+      console.warn('WhatsApp permission issues detected:', permissionCheck.issues)
+      // Return warning but don't block save - user might fix permissions later
+      // The issues will be logged for debugging
     }
 
     // Encrypt sensitive tokens before storing
