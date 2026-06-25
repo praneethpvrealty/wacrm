@@ -770,6 +770,17 @@ async function processMessage(
         senderPhone
       )
       return
+    } else if (interactiveReplyId.startsWith('show_more_properties:')) {
+      const propertyId = interactiveReplyId.split(':')[1]
+      await handleShowMoreProperties(
+        propertyId,
+        accountId,
+        configOwnerUserId,
+        contactRecord.id,
+        conversation.id,
+        senderPhone
+      )
+      return
     } else if (interactiveReplyId === 'browse_all_properties') {
       await handleBrowseAllProperties(
         accountId,
@@ -1214,7 +1225,7 @@ export async function handlePropertyShareYesReply(
     })
 
     // Offer browse properties option
-    const followUpText = `Would you like to explore other properties? Tap below to browse all available listings.`
+    const followUpText = `Would you like to explore other properties?`
     await sendWhatsAppMessageAndPersist({
       accountId,
       userId: configOwnerUserId,
@@ -1225,7 +1236,8 @@ export async function handlePropertyShareYesReply(
       interactiveType: 'buttons',
       interactiveBody: followUpText,
       interactiveButtons: [
-        { id: 'browse_all_properties', title: 'Browse Properties' },
+        { id: `show_more_properties:${typedProperty.id}`, title: 'Show More Properties' },
+        { id: 'browse_all_properties', title: 'Browse All' },
         { id: `share_property_no:${typedProperty.id}`, title: 'No Thanks' }
       ],
       senderType: 'bot',
@@ -1757,4 +1769,181 @@ export async function handleUpdateSessionInput(
     senderType: 'bot',
   })
   return true
+}
+
+// ============================================================
+// Show More Properties Handler
+// ============================================================
+
+export async function handleShowMoreProperties(
+  currentPropertyId: string,
+  accountId: string,
+  configOwnerUserId: string,
+  contactId: string,
+  conversationId: string,
+  toPhone: string
+) {
+  try {
+    // Get current property to find similar ones
+    const { data: currentProperty } = await supabaseAdmin()
+      .from('properties')
+      .select('*')
+      .eq('id', currentPropertyId)
+      .eq('account_id', accountId)
+      .maybeSingle()
+
+    if (!currentProperty) {
+      console.error('[webhook] Current property not found for show more:', currentPropertyId)
+      return
+    }
+
+    // Find similar properties based on type, location, or price range
+    const price = Number(currentProperty.price) || 0
+    const minPrice = price * 0.7 // 30% below
+    const maxPrice = price * 1.3 // 30% above
+
+    const { data: similarProperties, error } = await supabaseAdmin()
+      .from('properties')
+      .select('*')
+      .eq('account_id', accountId)
+      .eq('is_published', true)
+      .neq('id', currentPropertyId) // Exclude current property
+      .or(`type.eq.${currentProperty.type},and(price.gte.${minPrice},price.lte.${maxPrice})`)
+      .order('created_at', { ascending: false })
+      .limit(5)
+
+    if (error || !similarProperties || similarProperties.length === 0) {
+      // No similar properties, fall back to browse all
+      await handleBrowseAllProperties(
+        accountId,
+        configOwnerUserId,
+        contactId,
+        conversationId,
+        toPhone
+      )
+      return
+    }
+
+    // Send properties one by one
+    let currency = 'INR'
+    const { data: settings } = await supabaseAdmin()
+      .from('showcase_settings')
+      .select('currency')
+      .eq('account_id', accountId)
+      .maybeSingle()
+    if (settings?.currency) {
+      currency = settings.currency
+    }
+
+    // Send intro message
+    await sendWhatsAppMessageAndPersist({
+      accountId,
+      userId: configOwnerUserId,
+      contactId,
+      conversationId,
+      toPhone,
+      kind: 'text',
+      text: `Here are ${similarProperties.length} similar properties you might like:`,
+      senderType: 'bot',
+    })
+
+    // Send each property
+    for (const prop of similarProperties) {
+      const typedProp = prop as PropertyRow
+      
+      const amount = Number(typedProp.price)
+      let formattedPrice = ''
+      if (!isNaN(amount) && amount > 0) {
+        if (currency === 'INR') {
+          if (amount >= 10000000) {
+            formattedPrice = `₹${(amount / 10000000).toFixed(2).replace(/\.00$/, '')} Cr`
+          } else if (amount >= 100000) {
+            formattedPrice = `₹${(amount / 100000).toFixed(2).replace(/\.00$/, '')} Lakhs`
+          } else {
+            formattedPrice = new Intl.NumberFormat('en-IN', {
+              style: 'currency',
+              currency: 'INR',
+              maximumFractionDigits: 0,
+            }).format(amount)
+          }
+        } else {
+          formattedPrice = new Intl.NumberFormat(undefined, {
+            style: 'currency',
+            currency: currency,
+            maximumFractionDigits: 0,
+          }).format(amount)
+        }
+      }
+
+      const isLand = typedProp.type?.includes('Land') || typedProp.type?.includes('Plot')
+      const areaVal = isLand ? typedProp.land_area : typedProp.area_sqft
+      const unitVal = isLand ? typedProp.land_area_unit : typedProp.area_unit
+      const areaStr = areaVal ? `${areaVal} ${unitVal || 'Sq.Ft.'}` : ''
+
+      const locationParts = [
+        typedProp.sublocality?.trim(),
+        typedProp.city?.trim()
+      ].filter(Boolean).join(', ') || typedProp.location
+
+      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+      const showcaseUrl = `${baseUrl}/?property_id=${typedProp.id}`
+
+      // Send image first
+      const firstImage = typedProp.images?.find((img: string) => img.trim().length > 0)
+      if (firstImage) {
+        await sendWhatsAppMessageAndPersist({
+          accountId,
+          userId: configOwnerUserId,
+          contactId,
+          conversationId,
+          toPhone,
+          kind: 'media',
+          mediaKind: 'image',
+          mediaLink: firstImage,
+          mediaCaption: typedProp.title,
+          senderType: 'bot',
+        })
+      }
+
+      // Send details
+      let detailsText = `🏠 *${typedProp.title}*\n`
+      if (formattedPrice) detailsText += `💰 *Price:* ${formattedPrice}\n`
+      if (locationParts) detailsText += `📍 *Location:* ${locationParts}\n`
+      if (areaStr) detailsText += `📐 *Area:* ${areaStr}\n`
+      if (typedProp.bedrooms) detailsText += `🛏️ *BHK:* ${typedProp.bedrooms} BHK\n`
+      detailsText += `\n🔗 *View Details:*\n${showcaseUrl}`
+
+      await sendWhatsAppMessageAndPersist({
+        accountId,
+        userId: configOwnerUserId,
+        contactId,
+        conversationId,
+        toPhone,
+        kind: 'text',
+        text: detailsText,
+        senderType: 'bot',
+      })
+    }
+
+    // Final follow-up with options
+    await sendWhatsAppMessageAndPersist({
+      accountId,
+      userId: configOwnerUserId,
+      contactId,
+      conversationId,
+      toPhone,
+      kind: 'interactive',
+      interactiveType: 'buttons',
+      interactiveBody: `Would you like to see more properties or get in touch?`,
+      interactiveButtons: [
+        { id: `show_more_properties:${similarProperties[similarProperties.length - 1].id}`, title: 'Show More' },
+        { id: 'browse_all_properties', title: 'Browse All' },
+      ],
+      senderType: 'bot',
+    })
+
+    console.log(`[webhook] Sent ${similarProperties.length} similar properties to contact ${contactId}`)
+  } catch (err) {
+    console.error('[webhook] Failed in handleShowMoreProperties:', err)
+  }
 }
