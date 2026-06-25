@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useCan } from '@/hooks/use-can';
 import { useAuth } from '@/hooks/use-auth';
@@ -49,6 +49,15 @@ export default function InventoryPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [hasAutoOpened, setHasAutoOpened] = useState(false);
+
+  // Global stats — counts across ALL properties, independent of the
+  // current page/filters so the summary cards always show accurate totals.
+  const [globalStats, setGlobalStats] = useState({
+    total: 0,
+    published: 0,
+    available: 0,
+    soldOrContract: 0,
+  });
   
   // Filters
   const [typeFilter, setTypeFilter] = useState('All');
@@ -97,6 +106,49 @@ export default function InventoryPage() {
   useEffect(() => {
     fetchShowcaseSettings();
   }, [fetchShowcaseSettings]);
+
+  // Fetch unfiltered, unpaginated counts for the summary stats panel.
+  // Uses Supabase HEAD queries (count only, no rows transferred) so it
+  // is cheap regardless of the total number of rows.
+  const fetchGlobalStats = useCallback(async () => {
+    if (!accountId) return;
+    try {
+      const supabase = createClient();
+      const [totalRes, publishedRes, availableRes, soldRes] = await Promise.all([
+        supabase
+          .from('properties')
+          .select('*', { count: 'exact', head: true })
+          .eq('account_id', accountId),
+        supabase
+          .from('properties')
+          .select('*', { count: 'exact', head: true })
+          .eq('account_id', accountId)
+          .eq('is_published', true),
+        supabase
+          .from('properties')
+          .select('*', { count: 'exact', head: true })
+          .eq('account_id', accountId)
+          .eq('status', 'Available'),
+        supabase
+          .from('properties')
+          .select('*', { count: 'exact', head: true })
+          .eq('account_id', accountId)
+          .in('status', ['Sold', 'Under Contract']),
+      ]);
+      setGlobalStats({
+        total: totalRes.count ?? 0,
+        published: publishedRes.count ?? 0,
+        available: availableRes.count ?? 0,
+        soldOrContract: soldRes.count ?? 0,
+      });
+    } catch (err) {
+      console.error('Failed to load global stats:', err);
+    }
+  }, [accountId]);
+
+  useEffect(() => {
+    fetchGlobalStats();
+  }, [fetchGlobalStats]);
 
   const fetchProperties = useCallback(async () => {
     setLoading(true);
@@ -258,6 +310,7 @@ export default function InventoryPage() {
       setDeleteConfirmOpen(false);
       setDeleteTarget(null);
       fetchProperties();
+      fetchGlobalStats();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error deleting property';
       toast.error(message);
@@ -290,23 +343,16 @@ export default function InventoryPage() {
           : 'Property is now public on showcase'
       );
       fetchProperties();
+      fetchGlobalStats();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to update status';
       toast.error(message);
     }
   }
 
-  // Calculate statistics for showcase boxes
-  const stats = useMemo(() => {
-    const total = properties.length;
-    const published = properties.filter((p) => p.is_published).length;
-    const available = properties.filter((p) => p.status === 'Available').length;
-    const soldOrContract = properties.filter(
-      (p) => p.status === 'Sold' || p.status === 'Under Contract'
-    ).length;
-
-    return { total, published, available, soldOrContract };
-  }, [properties]);
+  // stats is now sourced from the accurate global DB counts, not from the
+  // current page slice. Aliased for minimal JSX diff below.
+  const stats = globalStats;
 
   return (
     <div className="flex flex-col flex-1 p-6 space-y-6">
@@ -461,7 +507,7 @@ export default function InventoryPage() {
         open={formOpen}
         onOpenChange={setFormOpen}
         property={selectedProperty}
-        onSaved={fetchProperties}
+        onSaved={() => { fetchProperties(); fetchGlobalStats(); }}
         viewOnly={formViewOnly}
       />
 
@@ -470,7 +516,7 @@ export default function InventoryPage() {
         open={flyerOpen}
         onOpenChange={setFlyerOpen}
         property={flyerProperty}
-        onSaved={fetchProperties}
+        onSaved={() => { fetchProperties(); fetchGlobalStats(); }}
       />
 
       {/* Share Property Dialog */}
@@ -478,7 +524,7 @@ export default function InventoryPage() {
         open={shareOpen}
         onOpenChange={setShareOpen}
         property={shareProperty}
-        onSaved={fetchProperties}
+        onSaved={() => { fetchProperties(); fetchGlobalStats(); }}
       />
 
       {/* Share Showcase Portal Dialog */}

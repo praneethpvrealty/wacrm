@@ -358,7 +358,18 @@ export default function InboxPage() {
 
   const handleConversationsLoaded = useCallback(
     (loaded: Conversation[]) => {
-      setConversations(loaded);
+      // When merging a refetch (resync / tab focus / reconnect) into state,
+      // preserve unread_count: 0 for the conversation the user is currently
+      // viewing. The DB update issued on select may not have round-tripped
+      // yet, so the fresh row can still carry a positive unread_count — which
+      // would restore the blue dot for a thread the user is already reading.
+      const activeId = activeConversationIdRef.current;
+      const merged = activeId
+        ? loaded.map((c) =>
+            c.id === activeId ? { ...c, unread_count: 0 } : c,
+          )
+        : loaded;
+      setConversations(merged);
       // Resolve a pending deep-link here rather than in an effect — this
       // is an event handler, so the setState calls below are allowed by
       // react-hooks/set-state-in-effect. Runs once per ?c=<id> URL value

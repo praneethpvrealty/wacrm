@@ -90,6 +90,14 @@ export function ShowcaseView({
   const [interestModalOpen, setInterestModalOpen] = useState(false);
   const [interestSubmitting, setInterestSubmitting] = useState(false);
 
+  // Document request states
+  const [docReqOpen, setDocReqOpen] = useState(false);
+  const [docReqName, setDocReqName] = useState('');
+  const [docReqPhone, setDocReqPhone] = useState('');
+  const [docReqEmail, setDocReqEmail] = useState('');
+  const [docReqSubmitting, setDocReqSubmitting] = useState(false);
+  const [docReqSuccess, setDocReqSuccess] = useState<string | null>(null); // property id that was requested
+
   const isStateLoadedRef = useRef(false);
 
   // 1. Client-side mount hook to load state from URL and localStorage (retained for 7 days)
@@ -656,6 +664,39 @@ export function ShowcaseView({
     return result;
   }, [properties, selectedType, selectedListingType, minBeds, searchQuery, sortBy]);
 
+  // Document request submission handler
+  const handleDocRequestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!docReqName.trim() || !docReqPhone.trim() || !selectedProperty) return;
+    setDocReqSubmitting(true);
+    try {
+      const res = await fetch(`/api/public/properties/${selectedProperty.id}/document-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requester_name: docReqName.trim(),
+          requester_phone: docReqPhone.trim(),
+          requester_email: docReqEmail.trim() || undefined,
+          account_id: accountId,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || 'Request failed');
+      }
+      // Pre-fill visitor info for future forms
+      saveVisitorInfo(docReqName.trim(), docReqPhone.trim(), docReqEmail.trim());
+      setDocReqSuccess(selectedProperty.id);
+      toast.success('Document request submitted! The agent will review and share documents with you via WhatsApp.');
+    } catch (err) {
+      console.error(err);
+      const msg = err instanceof Error ? err.message : 'Failed to submit request';
+      toast.error(msg);
+    } finally {
+      setDocReqSubmitting(false);
+    }
+  };
+
   // Form submission handler
   const handleInquirySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -736,6 +777,9 @@ export function ShowcaseView({
     setSelectedProperty(property);
     setActiveImageIdx(0);
     setSubmitSuccess(false);
+    // Reset doc request form when switching property
+    setDocReqOpen(false);
+    setDocReqSuccess(null);
 
     // Sync URL property_id parameter
     if (typeof window !== 'undefined') {
@@ -1513,6 +1557,93 @@ export function ShowcaseView({
                       ))}
                     </div>
                   </div>
+                )}
+              </div>
+
+              {/* ─── Request Documents Block ─── */}
+              <div className="mt-4">
+                {docReqSuccess === selectedProperty.id ? (
+                  <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-xl p-4 flex items-start gap-3">
+                    <CheckCircle className="size-5 text-emerald-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-bold text-white">Request Submitted!</p>
+                      <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
+                        The agent will review your request and send the documents to your WhatsApp number once approved.
+                      </p>
+                    </div>
+                  </div>
+                ) : docReqOpen ? (
+                  <form
+                    onSubmit={handleDocRequestSubmit}
+                    className="bg-slate-950/60 border border-primary/20 rounded-xl p-4 space-y-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <FileText className="size-4 text-primary" />
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">Request Property Documents</h4>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setDocReqOpen(false)}
+                        className="text-slate-500 hover:text-slate-300 cursor-pointer"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Enter your details below. The agent will review and send documents to your WhatsApp once approved.
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Input
+                        required
+                        value={docReqName}
+                        onChange={(e) => setDocReqName(e.target.value)}
+                        placeholder="Your Name"
+                        className="bg-slate-900 border-slate-800 text-white placeholder:text-slate-600 text-xs"
+                      />
+                      <Input
+                        required
+                        type="tel"
+                        value={docReqPhone}
+                        onChange={(e) => setDocReqPhone(e.target.value)}
+                        placeholder="WhatsApp Number"
+                        className="bg-slate-900 border-slate-800 text-white placeholder:text-slate-600 text-xs"
+                      />
+                    </div>
+                    <Input
+                      type="email"
+                      value={docReqEmail}
+                      onChange={(e) => setDocReqEmail(e.target.value)}
+                      placeholder="Email Address (Optional)"
+                      className="bg-slate-900 border-slate-800 text-white placeholder:text-slate-600 text-xs w-full"
+                    />
+                    <Button
+                      type="submit"
+                      disabled={docReqSubmitting}
+                      className="w-full bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-bold flex items-center justify-center gap-2"
+                    >
+                      {docReqSubmitting ? (
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                      ) : (
+                        <Send className="size-3.5" />
+                      )}
+                      Submit Document Request
+                    </Button>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDocReqName(visitorName);
+                      setDocReqPhone(visitorPhone);
+                      setDocReqEmail(visitorEmail);
+                      setDocReqOpen(true);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 border border-slate-800 bg-slate-900/60 hover:bg-slate-900 hover:border-primary/40 text-slate-300 hover:text-white text-xs font-semibold py-3 rounded-xl transition-all cursor-pointer group"
+                  >
+                    <FileText className="size-4 text-primary group-hover:scale-110 transition-transform" />
+                    Request Property Documents
+                  </button>
                 )}
               </div>
 

@@ -46,9 +46,23 @@ export async function GET(request: Request) {
 
     // 4. Fetch properties bypassing RLS using supabaseAdmin client
     const client = supabaseAdmin();
+    // NOTE: 'documents' is intentionally excluded — documents are private and
+    // only accessible via approved share links (/docs/[token]).
+    const PUBLIC_PROPERTY_COLUMNS = [
+      "id", "account_id", "user_id", "title", "description", "price",
+      "location", "sublocality", "city", "state", "type", "status",
+      "listing_type", "bedrooms", "bathrooms", "area_sqft", "area_unit",
+      "land_area", "land_area_unit", "super_built_area", "project",
+      "land_zone", "ideal_for", "dimensions", "road_width", "road_width_unit",
+      "facing_direction", "nearby_highlights", "is_published", "features",
+      "images", "google_map_link", "property_code", "owner_contact_id",
+      "rental_income", "roi", "listing_source", "rent_per_month",
+      "maintenance", "advance", "gst", "created_at", "updated_at",
+    ].join(", ");
+
     let query = client
       .from("properties")
-      .select("*", { count: "exact" })
+      .select(PUBLIC_PROPERTY_COLUMNS, { count: "exact" })
       .eq("account_id", accountId)
       .eq("is_published", true)
       .eq("status", "Available")

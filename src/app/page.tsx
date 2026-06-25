@@ -282,11 +282,15 @@ export default async function RootPage({ searchParams }: PageProps) {
     });
   }
 
-  // Attach agent details to each property object
+  // Attach agent details to each property object.
+  // NOTE: documents are intentionally stripped — they must never be exposed
+  // on the public portal. Access is gated via /docs/[token] after agent approval.
   const propertiesWithAgent = propertiesList.map(prop => {
     const agent = prop.user_id ? userIdToAgentMap[prop.user_id] : null;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { documents: _documents, ...publicProp } = prop;
     return {
-      ...prop,
+      ...publicProp,
       agent_details: agent || null
     };
   });
