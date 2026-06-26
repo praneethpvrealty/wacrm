@@ -119,6 +119,7 @@ export async function PUT(
       maintenance,
       advance,
       gst,
+      notes,
     } = body;
 
     // Validate only if passed
@@ -300,6 +301,10 @@ export async function PUT(
 
     if (gst !== undefined) {
       updateData.gst = typeof gst === "number" ? gst : null;
+    }
+
+    if (notes !== undefined) {
+      updateData.notes = typeof notes === "string" ? notes.trim() || null : null;
     }
 
     // Verify it exists in this account before updating (defensive check)

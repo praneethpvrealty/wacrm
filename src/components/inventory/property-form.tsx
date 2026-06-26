@@ -204,6 +204,7 @@ export function PropertyForm({
   const [documents, setDocuments] = useState<string[]>(['']);
   const [uploadingDocument, setUploadingDocument] = useState(false);
   const [googleMapLink, setGoogleMapLink] = useState('');
+  const [notes, setNotes] = useState('');
 
   // Document Requests management
   interface DocRequest {
@@ -1048,6 +1049,7 @@ export function PropertyForm({
         }
         setListingSource(property.listing_source ?? 'owner');
         setGoogleMapLink(property.google_map_link ?? '');
+        setNotes(property.notes ?? '');
         
         if (contacts && contacts.length > 0) {
           const interested = contacts
@@ -1123,6 +1125,7 @@ export function PropertyForm({
         setDocuments(['']);
         setSearchQuery('');
         setGoogleMapLink('');
+        setNotes('');
         setOwnerContactId(defaultOwnerId ?? null);
         setListingSource('owner');
       }
@@ -1646,6 +1649,7 @@ export function PropertyForm({
         google_map_link: googleMapLink.trim() || null,
         rental_income: hasCommercialFields && rentalIncome.trim() !== '' ? Number(rentalIncome) : null,
         roi: hasCommercialFields && roiValue !== null ? roiValue : null,
+        notes: notes.trim() || null,
         updated_at: new Date().toISOString(),
       };
 
@@ -2021,6 +2025,19 @@ export function PropertyForm({
                       <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">About this property</h4>
                       <div className="text-slate-300 text-sm whitespace-pre-wrap leading-relaxed bg-slate-950/15 p-4 rounded-xl border border-slate-850">
                         {description}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* INTERNAL NOTES (CRM-only) */}
+                  {notes && (
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-semibold text-amber-400/80 uppercase tracking-wider flex items-center gap-1.5">
+                        <span>Internal Notes</span>
+                        <span className="text-[9px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20 px-1.5 py-0.5 rounded">CRM Only</span>
+                      </h4>
+                      <div className="text-slate-300 text-sm whitespace-pre-wrap leading-relaxed bg-amber-950/10 p-4 rounded-xl border border-amber-900/30">
+                        {notes}
                       </div>
                     </div>
                   )}
@@ -2758,8 +2775,25 @@ export function PropertyForm({
                         value={googleMapLink}
                         onChange={(e) => setGoogleMapLink(e.target.value)}
                         placeholder="e.g. https://maps.google.com/?q=..."
-                        className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 h-9"
                       />
+                    </div>
+
+                    <div className="space-y-1.5 col-span-2">
+                      <Label htmlFor="prop-notes" className="text-slate-300 flex items-center gap-1.5">
+                        Internal Notes
+                        <span className="text-[10px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded">CRM Only — Not visible to clients</span>
+                      </Label>
+                      <Textarea
+                        id="prop-notes"
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        placeholder="e.g. Near Garuda Mall, 3rd left from Metro Station. Owner available only on weekdays..."
+                        className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 min-h-[80px] resize-y text-sm"
+                        rows={3}
+                      />
+                      <p className="text-[10px] text-slate-500 leading-normal">
+                        Location landmarks, access info, owner contact preferences — searchable in the CRM but private to your team.
+                      </p>
                     </div>
 
                     {/* Commercial Location Fields */}

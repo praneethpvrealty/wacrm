@@ -604,6 +604,8 @@ export interface Property {
   documents?: string[];
   google_map_link?: string | null;
   property_code?: string;
+  /** Internal agent notes — CRM-only, never shown on the public showcase. */
+  notes?: string | null;
   owner_contact_id?: string | null;
   owner?: Contact | null;
   interested_contacts?: Contact[];

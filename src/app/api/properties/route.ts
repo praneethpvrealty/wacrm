@@ -42,10 +42,10 @@ export async function GET(request: Request) {
       .range(from, to);
 
     if (search) {
-      // Parse natural language search: "2 BHK villa in Domlur under 2 Cr" or "price > 50 Cr"
+      // Parse natural language search: "3 BHK villa in Whitefield under 2 Cr"
       const parsed = parsePropertyQuery(search);
 
-      // Apply extracted price range
+      // Apply price bounds from NL query
       if (parsed.minPrice !== null) {
         query = query.gte("price", parsed.minPrice);
       }
@@ -53,15 +53,55 @@ export async function GET(request: Request) {
         query = query.lte("price", parsed.maxPrice);
       }
 
-      // Apply extracted type filter
-      if (parsed.types.length > 0) {
+      // Apply area bounds (only if we have them)
+      if (parsed.minArea !== null) {
+        query = query.gte("area_sqft", parsed.minArea);
+      }
+      if (parsed.maxArea !== null) {
+        query = query.lte("area_sqft", parsed.maxArea);
+      }
+
+      // Apply bedroom filter
+      if (parsed.bedrooms !== null) {
+        query = query.eq("bedrooms", parsed.bedrooms);
+      }
+
+      // Apply listing type (rent vs sale) from NL query — only if the
+      // dedicated listing_type param wasn't already set via the dropdown
+      if (parsed.listingType && !listingType) {
+        query = query.eq("listing_type", parsed.listingType);
+      }
+
+      // Apply type filter from NL query ONLY when the dropdown type filter
+      // hasn't been set — they would conflict and produce zero results otherwise.
+      if (parsed.types.length > 0 && !type) {
         query = query.in("type", parsed.types);
       }
 
-      // Fall back to ILIKE text search on remaining search terms
+      // Apply location filter from NL query
+      if (parsed.locations.length > 0 && !parsed.remainingSearch) {
+        const locFilters = parsed.locations
+          .map(loc => `location.ilike.%${loc}%,sublocality.ilike.%${loc}%,city.ilike.%${loc}%`)
+          .join(",");
+        query = query.or(locFilters);
+      }
+
+      // Full-text fallback on remaining terms after stripping structured intent
       if (parsed.remainingSearch) {
         const term = `%${parsed.remainingSearch}%`;
-        query = query.or(`title.ilike.${term},location.ilike.${term},project.ilike.${term},description.ilike.${term},property_code.ilike.${term}`);
+        // Search across all text fields that might contain location/area notes
+        // nearby_highlights and features are text[] — cast::text lets us ilike them
+        query = query.or(
+          `title.ilike.${term},` +
+          `location.ilike.${term},` +
+          `sublocality.ilike.${term},` +
+          `city.ilike.${term},` +
+          `project.ilike.${term},` +
+          `description.ilike.${term},` +
+          `ideal_for.ilike.${term},` +
+          `notes.ilike.${term},` +
+          `property_code.ilike.${term}`
+        );
       }
     }
 
@@ -183,6 +223,7 @@ export async function POST(request: Request) {
       maintenance,
       advance,
       gst,
+      notes,
     } = body;
 
     // Validation
@@ -262,6 +303,7 @@ export async function POST(request: Request) {
       maintenance: typeof maintenance === "number" ? maintenance : null,
       advance: typeof advance === "number" ? advance : null,
       gst: typeof gst === "number" ? gst : null,
+      notes: typeof notes === "string" ? notes.trim() || null : null,
     };
 
     const { data, error } = await ctx.supabase
