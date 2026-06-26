@@ -1,5 +1,6 @@
 export const CATEGORY_SUBTYPES: Record<string, string[]> = {
   Residential: [
+    "Residential",
     "Flat/ Apartment",
     "Residential House",
     "Villa",
@@ -9,6 +10,7 @@ export const CATEGORY_SUBTYPES: Record<string, string[]> = {
     "Studio Apartment",
   ],
   Commercial: [
+    "Commercial",
     "Commercial Office Space",
     "Office in IT Park/ SEZ",
     "Commercial Shop",
@@ -20,6 +22,7 @@ export const CATEGORY_SUBTYPES: Record<string, string[]> = {
     "Industrial Shed",
   ],
   Agricultural: [
+    "Agricultural",
     "Agricultural Land",
     "Farm House",
   ],
@@ -158,6 +161,7 @@ export function parsePropertyQuery(searchQuery: string): ParsedQuery {
   if (types.length === 0) {
     if (q.includes('commercial')) {
       types.push(
+        'Commercial',
         'Commercial Office Space',
         'Office in IT Park/ SEZ',
         'Commercial Shop',
@@ -168,6 +172,7 @@ export function parsePropertyQuery(searchQuery: string): ParsedQuery {
     }
     if (q.includes('residential')) {
       types.push(
+        'Residential',
         'Flat/ Apartment',
         'Residential House',
         'Villa',
@@ -178,7 +183,7 @@ export function parsePropertyQuery(searchQuery: string): ParsedQuery {
       );
     }
     if (q.includes('agricultural')) {
-      types.push('Agricultural Land', 'Farm House');
+      types.push('Agricultural', 'Agricultural Land', 'Farm House');
     }
   }
 
