@@ -182,9 +182,13 @@ export function PropertyList({
                   {property.listing_type === 'Rent' ? 'For Rent' : 'For Sale'}
                 </Badge>
                 <Badge
-                  className={`border font-semibold text-[10px] tracking-wider uppercase px-2 py-0.5 rounded-full ${
-                    statusColors[property.status] || 'bg-slate-800 text-slate-300 border-slate-700'
-                  }`}
+                  className={
+                    property.status === 'Sold'
+                      ? 'bg-red-600 text-white border-red-500 font-black text-xs tracking-wider uppercase px-2.5 py-0.5 rounded-full shadow-md shadow-red-950/50 animate-pulse scale-105 border'
+                      : `border font-semibold text-[10px] tracking-wider uppercase px-2 py-0.5 rounded-full ${
+                          statusColors[property.status] || 'bg-slate-800 text-slate-300 border-slate-700'
+                        }`
+                  }
                 >
                   {property.status}
                 </Badge>

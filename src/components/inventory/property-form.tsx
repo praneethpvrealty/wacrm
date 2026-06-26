@@ -1862,12 +1862,15 @@ export function PropertyForm({
                           {type}
                         </Badge>
                         <Badge
-                          className={`border font-semibold text-[10px] tracking-wider uppercase px-2 py-0.5 rounded ${
-                            status === 'Available' ? 'bg-green-500/10 text-green-400 border-green-500/30' :
-                            status === 'Under Contract' ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' :
-                            status === 'Sold' ? 'bg-slate-800 text-slate-400 border-slate-700' :
-                            'bg-red-500/10 text-red-400 border-red-500/30'
-                          }`}
+                          className={
+                            status === 'Sold'
+                              ? 'bg-red-600 text-white border-red-500 font-black text-xs tracking-wider uppercase px-2.5 py-0.5 rounded shadow-md shadow-red-950/50 animate-pulse scale-105 border'
+                              : `border font-semibold text-[10px] tracking-wider uppercase px-2 py-0.5 rounded ${
+                                  status === 'Available' ? 'bg-green-500/10 text-green-400 border-green-500/30' :
+                                  status === 'Under Contract' ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' :
+                                  'bg-red-500/10 text-red-400 border-red-500/30'
+                                }`
+                          }
                         >
                           {status}
                         </Badge>

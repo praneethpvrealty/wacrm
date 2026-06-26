@@ -732,6 +732,15 @@ export async function processOwnerChatbotMessage(
           google_map_link: draft.google_map_link,
           land_area: draft.land_area,
           land_area_unit: draft.land_area_unit || 'Sq.Ft.',
+          land_zone: draft.type && (
+            draft.type.toLowerCase().includes('commercial') ||
+            draft.type.toLowerCase().includes('office') ||
+            draft.type.toLowerCase().includes('warehouse') ||
+            draft.type.toLowerCase().includes('godown') ||
+            draft.type.toLowerCase().includes('industrial') ||
+            draft.type.toLowerCase().includes('it park') ||
+            draft.type.toLowerCase().includes('sez')
+          ) ? 'Commercial' : null,
           owner_contact_id: ownerContactId,
           listing_source: listingSource,
           listing_type: draft.listing_type || 'Sale',
