@@ -1381,7 +1381,7 @@ export async function syncProductToCatalog(
   if (property.description) descriptionParts.push(property.description)
   const description = descriptionParts.join('\n').substring(0, 900) || 'Property details'
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://wacrm.tech'
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://convoreal.com'
   const productUrl = `${siteUrl}/?property_id=${property.id}`
   const heroImage = (Array.isArray(property.images) ? property.images : [])
     .map((img: string) => img.trim())
