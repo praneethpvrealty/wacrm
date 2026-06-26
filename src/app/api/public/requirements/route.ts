@@ -83,12 +83,11 @@ export async function POST(request: Request) {
     }
 
     // 2. Check if contact exists under this account
-    const { data: existingContact, error: findError } = await admin
+    const { data: existingContacts, error: findError } = await admin
       .from("contacts")
       .select("id, name, email")
       .eq("account_id", accountId)
-      .eq("phone", normalizedPhone)
-      .maybeSingle();
+      .eq("phone", normalizedPhone);
 
     if (findError) {
       console.error("[POST /api/public/requirements] Contact lookup failed:", findError);
@@ -98,6 +97,7 @@ export async function POST(request: Request) {
       );
     }
 
+    const existingContact = existingContacts && existingContacts.length > 0 ? existingContacts[0] : null;
     let contactId: string;
 
     const contactFields = {

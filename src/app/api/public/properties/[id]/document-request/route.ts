@@ -100,12 +100,13 @@ export async function POST(
     // 5. Find or create a contact for the requester so we can thread inbox messages
     let contactId: string | null = null;
     try {
-      const { data: existingContact } = await admin
+      const { data: existingContacts } = await admin
         .from("contacts")
         .select("id")
         .eq("account_id", account_id)
-        .eq("phone", normalizedPhone)
-        .maybeSingle();
+        .eq("phone", normalizedPhone);
+
+      const existingContact = existingContacts && existingContacts.length > 0 ? existingContacts[0] : null;
 
       if (existingContact) {
         contactId = existingContact.id;
