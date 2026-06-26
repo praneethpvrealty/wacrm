@@ -649,7 +649,6 @@ export function ShowcaseView({
     // Filter by search query — supports natural language
     if (searchQuery) {
       const parsed = parsePropertyQuery(searchQuery);
-      const q = searchQuery.toLowerCase();
 
       // Apply price range from parsed query
       if (parsed.minPrice !== null) {

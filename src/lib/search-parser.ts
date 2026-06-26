@@ -45,9 +45,6 @@ export interface ParsedQuery {
 // Unit helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-const PRICE_UNIT = /cr(?:ore)?s?|lakh?s?|lacs?|k/i;
-const AREA_UNIT  = /sq\.?\s*(?:ft|feet|meter|mtr|m)|sqft|sqm|acres?|guntas?|grounds?|cents?/i;
-
 function parsePriceUnit(val: number, unit: string): number {
   const u = unit.toLowerCase().replace(/\s+/g, '');
   if (u.startsWith('cr'))  return val * 10_000_000;
