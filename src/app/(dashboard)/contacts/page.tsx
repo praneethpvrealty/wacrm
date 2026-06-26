@@ -398,64 +398,63 @@ export default function ContactsPage() {
 
       if (isNlpQuery) {
         // 1. Fetch contact IDs from notes matching locations, types, and bedrooms in parallel
-        let locNotesPromise = Promise.resolve<any[]>([]);
-        if (parsed.locations.length > 0) {
+        const getLocNotes = async (): Promise<{ contact_id: string }[]> => {
+          if (parsed.locations.length === 0) return [];
           const locFilters = parsed.locations.map(loc => `note_text.ilike.%${loc}%`).join(',');
-          locNotesPromise = supabaseClient
+          const { data } = await supabaseClient
             .from('contact_notes')
             .select('contact_id')
             .eq('account_id', accountId)
-            .or(locFilters)
-            .then(res => res.data || []);
-        }
+            .or(locFilters);
+          return (data as { contact_id: string }[]) || [];
+        };
 
-        let typeNotesPromise = Promise.resolve<any[]>([]);
-        if (parsed.types.length > 0) {
+        const getTypeNotes = async (): Promise<{ contact_id: string }[]> => {
+          if (parsed.types.length === 0) return [];
           const typeFilters = parsed.types.map(type => `note_text.ilike.%${type}%`).join(',');
-          typeNotesPromise = supabaseClient
+          const { data } = await supabaseClient
             .from('contact_notes')
             .select('contact_id')
             .eq('account_id', accountId)
-            .or(typeFilters)
-            .then(res => res.data || []);
-        }
+            .or(typeFilters);
+          return (data as { contact_id: string }[]) || [];
+        };
 
-        let bedNotesPromise = Promise.resolve<any[]>([]);
-        if (parsed.bedrooms !== null) {
+        const getBedNotes = async (): Promise<{ contact_id: string }[]> => {
+          if (parsed.bedrooms === null) return [];
           const b = parsed.bedrooms;
           const bedFilters = `note_text.ilike.%${b}%bhk%,note_text.ilike.%${b}%bedroom%,note_text.ilike.%${b}%bed%`;
-          bedNotesPromise = supabaseClient
+          const { data } = await supabaseClient
             .from('contact_notes')
             .select('contact_id')
             .eq('account_id', accountId)
-            .or(bedFilters)
-            .then(res => res.data || []);
-        }
+            .or(bedFilters);
+          return (data as { contact_id: string }[]) || [];
+        };
 
         // 2. Fetch contact IDs from tags matching types
-        let tagContactIdsPromise = Promise.resolve<string[]>([]);
-        if (parsed.types.length > 0) {
+        const getTagContactIds = async (): Promise<string[]> => {
+          if (parsed.types.length === 0) return [];
           const tagFilters = parsed.types.map(t => `name.ilike.${t}`).join(',');
-          tagContactIdsPromise = supabaseClient
+          const { data: tags } = await supabaseClient
             .from('tags')
             .select('id')
-            .or(tagFilters)
-            .then(async (res) => {
-              const tagIds = (res.data || []).map(t => t.id);
-              if (tagIds.length === 0) return [];
-              const { data: ctData } = await supabaseClient
-                .from('contact_tags')
-                .select('contact_id')
-                .in('tag_id', tagIds);
-              return (ctData || []).map(ct => ct.contact_id).filter(Boolean);
-            });
-        }
+            .or(tagFilters);
+          
+          const tagIds = (tags || []).map(t => t.id);
+          if (tagIds.length === 0) return [];
+          const { data: ctData } = await supabaseClient
+            .from('contact_tags')
+            .select('contact_id')
+            .in('tag_id', tagIds);
+          return (ctData || []).map(ct => ct.contact_id).filter(Boolean);
+        };
 
         const [locNotes, typeNotes, bedNotes, tagContactIds] = await Promise.all([
-          locNotesPromise,
-          typeNotesPromise,
-          bedNotesPromise,
-          tagContactIdsPromise,
+          getLocNotes(),
+          getTypeNotes(),
+          getBedNotes(),
+          getTagContactIds(),
         ]);
 
         const locNoteContactIds = Array.from(new Set(locNotes.map(n => n.contact_id).filter(Boolean)));
