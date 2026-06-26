@@ -338,10 +338,16 @@ export function ShowcaseView({
           t.src=v;s=b.getElementsByTagName(e)[0];
           s.parentNode.insertBefore(t,s)}(window, document,'script',
           'https://connect.facebook.net/en_US/fbevents.js');
-          fbq('init', '${settings.meta_pixel_id}');
-          fbq('track', 'PageView');
         `;
         document.head.appendChild(script);
+      }
+
+      // Initialize and fire PageView for the current ID
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const fbq = (window as any).fbq;
+      if (typeof fbq === 'function') {
+        fbq('init', settings.meta_pixel_id);
+        fbq('track', 'PageView');
       }
     }
   }, [settings?.meta_pixel_id]);
