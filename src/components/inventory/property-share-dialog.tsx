@@ -218,7 +218,7 @@ export function PropertyShareDialog({
       ? `${window.location.origin}/?property_id=${property.id}&mode=agent`
       : `/?property_id=${property.id}&mode=agent`;
 
-    return `Hi,\n\nSharing a property listing for your client's reference:\n\n*${title}*\n${details ? `${details}\n` : ''}*Price: ${price}*\n\nFull details, photos and location map:\n${agentUrl}\n\nNote: This link shows complete property details. Your client can contact us directly for documents or further discussion.\n\n${signOffWithPhone}`;
+    return `Hi,\n\nThis property is handpicked matching your requirements — check out all the details, photos, and location map:\n\n*${title}*\n${details ? `${details}\n` : ''}*Price: ${price}*\n\n${agentUrl}\n\n${signOffWithPhone}`;
   }, [property, formattedPrice, profile]);
 
   // Get showcase URL for copying
@@ -229,7 +229,7 @@ export function PropertyShareDialog({
       : `/?property_id=${property.id}`;
   }, [property]);
 
-  // Agent showcase URL — same page but with ?mode=agent (no inquiry form / interest buttons)
+  // Agent showcase URL — clean listing detail page (no inquiry form, no buttons)
   const agentShowcaseUrl = useMemo(() => {
     if (!property) return '';
     return typeof window !== 'undefined'
@@ -1079,7 +1079,7 @@ export function PropertyShareDialog({
               </h3>
               <p className="text-xs text-slate-400">
                 Share full property details with other agents so they can present it to their clients independently.
-                This link hides the inquiry form and interest buttons — <span className="text-blue-400 font-medium">clients contact the agent directly</span>.
+                Share a clean property detail page with full specs, photos, and location map — no inquiry forms or buttons.
               </p>
 
               {/* Agent message preview */}

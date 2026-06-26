@@ -71,7 +71,7 @@ export function ShowcaseView({
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [activeImageIdx, setActiveImageIdx] = useState(0);
 
-  // Agent mode: ?mode=agent hides inquiry form, interest buttons and document request
+  // ?mode=agent: clean listing detail view (no forms, buttons, or document requests)
   const [isAgentMode, setIsAgentMode] = useState(false);
 
   // Form states
@@ -115,7 +115,7 @@ export function ShowcaseView({
     const urlSortBy = urlParams.get('sort');
     const urlSearchQuery = urlParams.get('search');
 
-    // Agent mode: hide inquiry form, interest buttons, document request
+    // Clean listing mode: hide inquiry form, buttons, document requests
     if (urlParams.get('mode') === 'agent') {
       setIsAgentMode(true);
     }
@@ -1256,7 +1256,7 @@ export function ShowcaseView({
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0">
-                          {(displayPhone || property.agent_details?.phone) && (
+                          {!isAgentMode && (displayPhone || property.agent_details?.phone) && (
                             <a
                               href={getWhatsAppLink(property)}
                               onClick={() => trackWhatsAppInquiry(property)}
@@ -1384,14 +1384,6 @@ export function ShowcaseView({
             {/* Right Pane: Details & Form */}
             <div className="w-full lg:w-[50%] p-6 flex flex-col justify-between overflow-y-auto max-h-none lg:max-h-[90vh]">
               
-              {/* Agent Mode Banner */}
-              {isAgentMode && (
-                <div className="mb-4 flex items-center gap-2 bg-blue-500/10 border border-blue-500/30 rounded-lg px-3 py-2 text-xs text-blue-300">
-                  <svg className="size-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                  <span><strong>Agent Preview</strong> — Inquiry form and interest buttons are hidden. Share this link with co-brokers.</span>
-                </div>
-              )}
-
               {/* Header Info */}
               <div className="space-y-4">
                 <div>
@@ -1446,7 +1438,7 @@ export function ShowcaseView({
                       </div>
                     ) : null}
                   </div>
-                  {(displayPhone || selectedProperty.agent_details?.phone) && (
+                  {!isAgentMode && (displayPhone || selectedProperty.agent_details?.phone) && (
                     <a
                       href={getWhatsAppLink(selectedProperty)}
                       onClick={() => trackWhatsAppInquiry(selectedProperty)}
@@ -1460,7 +1452,47 @@ export function ShowcaseView({
                   )}
                 </div>
 
-                {/* Masked Exact Location Block */}
+                {/* Location on Map — shown in agent mode with google_map_link */}
+                {isAgentMode && selectedProperty.google_map_link && (
+                  <div className="bg-slate-950/50 border border-slate-850 p-3.5 rounded-xl space-y-2">
+                    <div className="flex items-start gap-2.5">
+                      <div className="h-7 w-7 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+                        <MapPin className="size-4 text-amber-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h5 className="text-[11px] font-extrabold text-amber-500 uppercase tracking-wider">Location on Map</h5>
+                        <a
+                          href={selectedProperty.google_map_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 mt-1.5 text-xs text-blue-400 hover:text-blue-300 underline underline-offset-2 break-all"
+                        >
+                          <MapPin className="size-3.5 shrink-0" />
+                          {selectedProperty.google_map_link.length > 60
+                            ? selectedProperty.google_map_link.substring(0, 60) + '...'
+                            : selectedProperty.google_map_link}
+                        </a>
+                      </div>
+                    </div>
+                    <div className="rounded-lg overflow-hidden border border-slate-800 h-40 bg-slate-900">
+                      <iframe
+                        title="Property Location"
+                        src={selectedProperty.google_map_link.includes('q=')
+                          ? selectedProperty.google_map_link.replace(/\/+$/, '') + '&output=embed'
+                          : `https://maps.google.com/maps?q=${encodeURIComponent(selectedProperty.sublocality || selectedProperty.location || '')}&output=embed`}
+                        width="100%"
+                        height="100%"
+                        style={{ border: 0 }}
+                        allowFullScreen
+                        loading="lazy"
+                        referrerPolicy="no-referrer-when-downgrade"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Masked Exact Location Block — shown to buyers */}
+                {!isAgentMode && (
                 <div className="bg-slate-950/50 border border-slate-850 p-3.5 rounded-xl space-y-1.5 backdrop-blur-sm relative overflow-hidden group">
                   <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-transparent pointer-events-none" />
                   <div className="flex items-start gap-2.5">
@@ -1478,6 +1510,7 @@ export function ShowcaseView({
                     Exact coordinates: 12.9348° N, 77.6189° E. Map pin: https://maps.google.com/?q=...
                   </div>
                 </div>
+                )}
 
                 {/* Grid Technical Specifications */}
                 {hasSpecs && (
