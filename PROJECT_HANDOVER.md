@@ -30,7 +30,7 @@ To ensure the new model has full context:
 
 ## 3. Database Schema
 
-The master database schema is consolidated inside [RUN_IN_SUPABASE_SQL_EDITOR.sql](file:///Volumes/work/CRM%20project/waCrmCustomised/wacrm/supabase/RUN_IN_SUPABASE_SQL_EDITOR.sql). Key tables:
+The master database schema is consolidated inside [RUN_IN_SUPABASE_SQL_EDITOR.sql](./supabase/RUN_IN_SUPABASE_SQL_EDITOR.sql). Key tables:
 
 1. **`accounts`**: Enterprise/agency accounts. Scopes all multi-tenant tables.
 2. **`contacts`**: Contacts book.

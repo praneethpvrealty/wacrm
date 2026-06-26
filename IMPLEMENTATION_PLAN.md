@@ -30,7 +30,7 @@ ALTER TABLE contacts
 COMMENT ON COLUMN contacts.min_roi IS 'Minimum expected rental yield ROI (%) for buyer profiles.';
 ```
 
-### [MODIFY] Combined Script: [RUN_IN_SUPABASE_SQL_EDITOR.sql](file:///Volumes/work/CRM%20project/waCrmCustomised/wacrm/supabase/RUN_IN_SUPABASE_SQL_EDITOR.sql)
+### [MODIFY] Combined Script: [RUN_IN_SUPABASE_SQL_EDITOR.sql](./supabase/RUN_IN_SUPABASE_SQL_EDITOR.sql)
 Append this migration statement to the end of the master script.
 
 ---
@@ -39,7 +39,7 @@ Append this migration statement to the end of the master script.
 
 Update the shared type definitions.
 
-### [MODIFY] [src/types/index.ts](file:///Volumes/work/CRM%20project/waCrmCustomised/wacrm/src/types/index.ts)
+### [MODIFY] [src/types/index.ts](./src/types/index.ts)
 ```typescript
 export interface Contact {
   id: string;
@@ -74,12 +74,12 @@ export interface Contact {
 
 ## 4. UI Component Updates
 
-### [MODIFY] [contact-form.tsx](file:///Volumes/work/CRM%20project/waCrmCustomised/wacrm/src/components/contacts/contact-form.tsx)
+### [MODIFY] [contact-form.tsx](./src/components/contacts/contact-form.tsx)
 - Define state `const [minRoi, setMinRoi] = useState('');` and set it on load inside `useEffect`.
 - Add an Expected Min ROI (%) number input field inside the Real Estate Preferences group.
 - Save `min_roi: minRoi ? Number(minRoi) : null` in the `handleSubmit` payload.
 
-### [MODIFY] [contact-detail-view.tsx](file:///Volumes/work/CRM%20project/waCrmCustomised/wacrm/src/components/contacts/contact-detail-view.tsx)
+### [MODIFY] [contact-detail-view.tsx](./src/components/contacts/contact-detail-view.tsx)
 - Define state `const [editMinRoi, setEditMinRoi] = useState('');` and set it on load.
 - Render the Expected Min ROI (%) control inside the Preferences tab, below the budget limits inputs.
 - Save `min_roi: editMinRoi ? Number(editMinRoi) : null` in the `savePreferences` update call.
@@ -90,14 +90,14 @@ export interface Contact {
 
 To read contact notes in the matching engine, we need to select `contact_notes` when querying contacts:
 
-### [MODIFY] [property-form.tsx](file:///Volumes/work/CRM%20project/waCrmCustomised/wacrm/src/components/inventory/property-form.tsx)
+### [MODIFY] [property-form.tsx](./src/components/inventory/property-form.tsx)
 - Modify the `fetchContacts` select query to fetch linked notes:
   ```typescript
   .from('contacts')
   .select('*, contact_notes(note_text)')
   ```
 
-### [MODIFY] [property-share-dialog.tsx](file:///Volumes/work/CRM%20project/waCrmCustomised/wacrm/src/components/inventory/property-share-dialog.tsx)
+### [MODIFY] [property-share-dialog.tsx](./src/components/inventory/property-share-dialog.tsx)
 - Modify the `fetchContacts` query similarly:
   ```typescript
   .from('contacts')
@@ -108,7 +108,7 @@ To read contact notes in the matching engine, we need to select `contact_notes` 
 
 ## 6. Matching Engine Re-engineering
 
-### [MODIFY] [matching.ts](file:///Volumes/work/CRM%20project/waCrmCustomised/wacrm/src/lib/matching.ts)
+### [MODIFY] [matching.ts](./src/lib/matching.ts)
 
 1. **Text Aggregation**: Combine the contact's requirements text and notes text:
    ```typescript
@@ -143,7 +143,7 @@ To read contact notes in the matching engine, we need to select `contact_notes` 
 ## 7. Verification Plan
 
 ### Automated Tests
-Create a comprehensive test suite in [matching.test.ts](file:///Volumes/work/CRM%20project/waCrmCustomised/wacrm/src/lib/matching.test.ts):
+Create a comprehensive test suite in [matching.test.ts](./src/lib/matching.test.ts):
 - Verify properties match only if their ROI meets the contact's `min_roi` constraint.
 - Verify yield-focused investors match properties in different areas if they have no location preference.
 - Verify contacts requesting "luxury apartments" or "commercial buildings" in notes/requirements match corresponding properties.

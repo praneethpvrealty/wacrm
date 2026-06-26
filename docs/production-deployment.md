@@ -20,7 +20,7 @@ For production scaling and simple serverless billing, use **Upstash Serverless R
 
 ## 2. Deploy Go Ingress Service (Railway / Render)
 
-The Go Ingress Service should be deployed as a public web server using [go-ingress/Dockerfile](file:///Volumes/work/CRM%20project/waCrmCustomised/wacrm/go-ingress/Dockerfile).
+The Go Ingress Service should be deployed as a public web server using [go-ingress/Dockerfile](./go-ingress/Dockerfile).
 
 ### Option A: Railway (Recommended)
 1. Push your repository to GitHub.
@@ -40,7 +40,7 @@ The Go Ingress Service should be deployed as a public web server using [go-ingre
 
 ## 3. Deploy Node Queue Worker (Railway / Render)
 
-The Queue Worker is deployed as a background daemon container (no public web endpoint needed) using [Dockerfile.worker](file:///Volumes/work/CRM%20project/waCrmCustomised/wacrm/Dockerfile.worker).
+The Queue Worker is deployed as a background daemon container (no public web endpoint needed) using [Dockerfile.worker](./Dockerfile.worker).
 
 ### Deployment Steps (Railway):
 1. In the same Railway project, return to the main canvas (click the **`X`** in the top-right of any open service panel).
@@ -103,7 +103,7 @@ Once the worker and Go ingress are online:
 
 ## 6. Monorepo Build Optimization on Vercel
 
-To prevent Vercel from unnecessarily building your Next.js application whenever you push changes that only affect your Go server or background worker, use the pre-configured [**`vercel.json`**](file:///Volumes/work/CRM%20project/waCrmCustomised/wacrm/vercel.json) in your root directory.
+To prevent Vercel from unnecessarily building your Next.js application whenever you push changes that only affect your Go server or background worker, use the pre-configured [**`vercel.json`**](./vercel.json) in your root directory.
 
 This file uses the **Ignored Build Step** feature to tell Vercel to check if changes occurred outside the Go, docs, and worker files before triggering a build:
 

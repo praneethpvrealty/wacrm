@@ -87,6 +87,34 @@ describe('Email Webhook Lead Parsing', () => {
       // Phone should be empty here since it needs URL resolution
       expect(res.phone).toBe('');
     });
+
+    it('should parse Housing.com email without falling back to URL/Property ID, and resolve phone via resolveHousingPhone', async () => {
+      const subject = 'Housing - Lead interested in your property';
+      const html = `
+        <div style="font-family: Arial;">
+          <p>Name: Md Shalam</p>
+          <p>Email: <a href="mailto:support@housing.com?subject=Inquiry">Send Email</a></p>
+          <p>Contact: <a href="https://pahal.housing.com/lead/cta/number?phone=+919731330512&userName=Md+Shalam">Call Now</a> <a href="https://pahal.housing.com/lead/cta/whatsapp?phone=+919731330512&userName=Md+Shalam">Chat On WhatsApp</a></p>
+          <p>Property ID: 15782099</p>
+        </div>
+      `;
+      const body = `
+        Name: Md Shalam
+        Email: Send Email
+        Contact: Call Now Chat On WhatsApp
+        Property ID: 15782099
+        https://housing.com/leads/call?lead_id=15782099
+      `;
+      const res = parsePortalLead(subject, body, html);
+      expect(res.source).toBe('Housing');
+      expect(res.name).toBe('Md Shalam');
+      // Phone should be empty or a suspended/suspicious value that will get resolved
+      // Since the body has the URL, the fallback parser might pick it up, but it contains a '/' and 'http', so it will be ignored now!
+      expect(res.phone).toBe('');
+      
+      const resolvedPhone = await resolveHousingPhone(html, body);
+      expect(resolvedPhone).toBe('+919731330512');
+    });
   });
 
   describe('extractHousingUrls', () => {

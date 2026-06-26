@@ -895,8 +895,8 @@ export function parsePortalLead(subject: string, bodyText: string, html: string)
           const digitsCount = line.replace(/\D/g, '').length;
           const isHeaderOrSMTP = /^[a-zA-Z0-9-]+:/i.test(line) || 
                                  /received|by|id|date|subject|from|to|message-id|content-type/i.test(line);
-          // Skip lines that are clearly not phone numbers (Property ID, listing IDs, etc.)
-          const isNotPhone = /property\s*id|listing\s*id|reference|ref\s*#|id\s*:/i.test(line);
+          // Skip lines that are clearly not phone numbers (Property ID, listing IDs, etc., or URLs)
+          const isNotPhone = /property\s*id|listing\s*id|reference|ref\s*#|id\s*:/i.test(line) || line.includes('/') || line.includes('http');
           if (digitsCount >= 7 && digitsCount <= 15 && !isHeaderOrSMTP && !isNotPhone) {
             candidatePhone = line.replace(/\(verified\)/i, '').trim();
             break;
@@ -922,8 +922,8 @@ export function parsePortalLead(subject: string, bodyText: string, html: string)
         const digitsCount = line.replace(/\D/g, '').length;
         const isHeaderOrSMTP = /^[a-zA-Z0-9-]+:/i.test(line) || 
                                /received|by|id|date|subject|from|to|message-id|content-type/i.test(line);
-        // Skip lines that are clearly not phone numbers (Property ID, listing IDs, etc.)
-        const isNotPhone = /property\s*id|listing\s*id|reference|ref\s*#|id\s*:/i.test(line);
+        // Skip lines that are clearly not phone numbers (Property ID, listing IDs, etc., or URLs)
+        const isNotPhone = /property\s*id|listing\s*id|reference|ref\s*#|id\s*:/i.test(line) || line.includes('/') || line.includes('http');
         if (digitsCount >= 7 && digitsCount <= 15 && !isHeaderOrSMTP && !isNotPhone) {
           phone = line.replace(/\(verified\)/i, '').trim();
           
@@ -1176,8 +1176,14 @@ export async function POST(request: Request) {
     const parsed = parsePortalLead(subject, bodyText, htmlContent);
 
     // Dynamic resolution for Housing.com lead phone number
-    // Also try HTML URL resolution if phone looks suspicious (e.g., Property ID)
-    const isSuspiciousPhone = parsed.phone && /^(property\s*id|listing|ref)/i.test(parsed.phone);
+    // Also try HTML URL resolution if phone looks suspicious (e.g., Property ID or URL)
+    const isSuspiciousPhone = parsed.phone && (
+      /^(property\s*id|listing|ref)/i.test(parsed.phone) ||
+      parsed.phone.includes('/') ||
+      parsed.phone.includes('http') ||
+      (parsed.housingPropertyId && parsed.phone.replace(/\D/g, '') === parsed.housingPropertyId) ||
+      parsed.phone.replace(/\D/g, '').length < 10
+    );
     if (parsed.source === 'Housing' && (!parsed.phone || parsed.phone === '' || isSuspiciousPhone)) {
       const resolvedPhone = await resolveHousingPhone(htmlContent, bodyText);
       if (resolvedPhone) {
