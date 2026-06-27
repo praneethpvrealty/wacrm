@@ -11,6 +11,15 @@ export async function POST(request: Request) {
     const secret = rawSecret?.replace(/^"|"$/g, '');
     const signatureHeader = request.headers.get('x-supabase-signature');
 
+    console.log('[SMS Hook Debug]', {
+      hasRawSecret: !!rawSecret,
+      rawSecretLength: rawSecret?.length,
+      hasCleanSecret: !!secret,
+      cleanSecretLength: secret?.length,
+      hasSignatureHeader: !!signatureHeader,
+      signatureHeaderValue: signatureHeader,
+    });
+
     if (!secret || !signatureHeader) {
       console.error('[SMS Hook] Missing secret or signature header');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -38,6 +47,13 @@ export async function POST(request: Request) {
       .createHmac('sha256', secret)
       .update(message)
       .digest('hex');
+
+    console.log('[SMS Hook Debug] Signature verification:', {
+      timestamp,
+      receivedSignature: signature,
+      expectedSignature,
+      isMatch: signature === expectedSignature,
+    });
 
     // Secure timing-safe signature comparison
     const signatureBuffer = Buffer.from(signature, 'hex');
