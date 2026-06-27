@@ -150,19 +150,27 @@ export async function POST(request: Request) {
 
     // Parse the JSON payload
     const body = JSON.parse(bodyText);
-    const { phone, message: otpMessage, user } = body;
+    const user = body.user;
 
-    if (!phone || !otpMessage) {
-      console.error('[SMS Hook] Missing phone or message parameters in payload');
+    // Retrieve phone and message/otp code
+    const phone = body.phone || body.sms?.phone;
+    const otpMessage = body.message || body.sms?.message;
+    const otpCodeFromPayload = body.sms?.otp;
+
+    if (!phone) {
+      console.error('[SMS Hook] Missing phone parameter in payload');
       return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
     }
 
     // Extract the 6-digit verification code
-    const codeMatch = otpMessage.match(/\b\d{6}\b/);
-    const otpCode = codeMatch ? codeMatch[0] : '';
+    let otpCode = otpCodeFromPayload || '';
+    if (!otpCode && otpMessage) {
+      const codeMatch = otpMessage.match(/\b\d{6}\b/);
+      otpCode = codeMatch ? codeMatch[0] : '';
+    }
 
     if (!otpCode) {
-      console.error('[SMS Hook] Verification code not found in message body');
+      console.error('[SMS Hook] Verification code not found in payload');
       return NextResponse.json({ error: 'Verification code not found' }, { status: 400 });
     }
 
