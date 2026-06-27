@@ -444,63 +444,16 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      {/* Filters Toolbar */}
-      <div className="flex flex-col lg:flex-row gap-4 bg-slate-900/60 border border-slate-800/80 rounded-xl p-4">
-        {/* Search */}
-        <div className="relative flex-1">
+      {/* Search Bar */}
+      <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-4">
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" />
           <Input
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-            placeholder="Search by title, location or keywords..."
+            placeholder='e.g. residential properties > 10 Cr in Koramangala, 3 BHK villa in JP Nagar'
             className="pl-9 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 h-9"
           />
-        </div>
-
-        {/* Filter Selection Panel */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0">
-           <select
-             value={typeFilter}
-             onChange={(e) => { setTypeFilter(e.target.value); setPage(0); }}
-             className="h-9 rounded-md border border-slate-700 bg-slate-800 px-3 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary font-medium"
-           >
-             <option value="All">All Categories</option>
-             <option value="Residential">Residential</option>
-             <option value="Commercial">Commercial</option>
-             <option value="Agricultural">Agricultural</option>
-           </select>
-
-           <select
-             value={statusFilter}
-             onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}
-             className="h-9 rounded-md border border-slate-700 bg-slate-800 px-3 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary font-medium"
-           >
-             <option value="All">All Statuses</option>
-             <option value="Available">Available</option>
-             <option value="Under Contract">Under Contract</option>
-             <option value="Sold">Sold</option>
-             <option value="Off Market">Off Market</option>
-           </select>
-
-           <select
-             value={showcaseFilter}
-             onChange={(e) => { setShowcaseFilter(e.target.value); setPage(0); }}
-             className="h-9 rounded-md border border-slate-700 bg-slate-800 px-3 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary font-medium"
-           >
-             <option value="All">All Showcase</option>
-             <option value="Showcased">Showcased Only</option>
-             <option value="Private">Private Only</option>
-           </select>
-
-           <select
-             value={sourceFilter}
-             onChange={(e) => { setSourceFilter(e.target.value); setPage(0); }}
-             className="h-9 rounded-md border border-slate-700 bg-slate-800 px-3 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary font-medium"
-           >
-             <option value="All">All Sources</option>
-             <option value="Owner">Direct (Owner)</option>
-             <option value="Agent">Referred by Agent</option>
-           </select>
         </div>
       </div>
 

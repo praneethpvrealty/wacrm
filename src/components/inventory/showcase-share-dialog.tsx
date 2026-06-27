@@ -11,8 +11,9 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Share2, Copy, Check, ExternalLink } from 'lucide-react';
+import { Share2, Copy, Check, ExternalLink, MessageCircle } from 'lucide-react';
 import type { ShowcaseSettings } from '@/types';
 
 interface ShowcaseShareDialogProps {
@@ -46,7 +47,22 @@ export function ShowcaseShareDialog({
 }: ShowcaseShareDialogProps) {
   const [shareCategory, setShareCategory] = useState<'All' | 'Residential' | 'Commercial' | 'Agricultural'>('All');
   const [copied, setCopied] = useState(false);
+  const [copiedWithMessage, setCopiedWithMessage] = useState(false);
   const [includeSearch, setIncludeSearch] = useState(true);
+
+  const defaultPassionateMessage = `Hi there! 👋
+
+I've curated an exclusive property showcase just for you. Browse through handpicked listings and find the one that feels right.
+
+Explore the full showcase here:
+{portalUrl}
+
+If any property catches your eye, I'd be happy to help with details, schedule a site visit, or negotiate the best deal on your behalf. Let's find your perfect property together!
+
+Best regards`;
+
+
+  const [passionateMessage, setPassionateMessage] = useState(defaultPassionateMessage);
 
   const generatedLink = useMemo(() => {
     if (typeof window === 'undefined') return '';
@@ -94,6 +110,39 @@ export function ShowcaseShareDialog({
 
   const handleViewShowcase = () => {
     window.open(generatedLink, '_blank');
+  };
+
+  const handleCopyWithMessage = async () => {
+    try {
+      const messageWithLink = passionateMessage.replace('{portalUrl}', generatedLink);
+      await navigator.clipboard.writeText(messageWithLink);
+      setCopiedWithMessage(true);
+      toast.success('Message with showcase link copied to clipboard!');
+      setTimeout(() => setCopiedWithMessage(false), 2000);
+    } catch (err) {
+      toast.error('Failed to copy message');
+      console.error(err);
+    }
+  };
+
+  const handleShareMessage = async () => {
+    try {
+      const messageWithLink = passionateMessage.replace('{portalUrl}', generatedLink);
+      if (navigator.share) {
+        await navigator.share({
+          title: 'Property Showcase',
+          text: messageWithLink,
+        });
+      } else {
+        await navigator.clipboard.writeText(messageWithLink);
+        toast.success('Message copied to clipboard!');
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name !== 'AbortError') {
+        toast.error('Failed to share');
+        console.error(err);
+      }
+    }
   };
 
   return (
@@ -177,6 +226,49 @@ export function ShowcaseShareDialog({
               >
                 <ExternalLink className="size-3.5" />
                 View
+              </Button>
+            </div>
+          </div>
+
+          {/* Passionate Share Message */}
+          <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-xl space-y-3">
+            <Label className="text-slate-350 text-xs font-bold uppercase tracking-wider block flex items-center gap-2">
+              <MessageCircle className="size-3.5 text-emerald-400" />
+              Share with the message
+            </Label>
+            <Textarea
+              value={passionateMessage}
+              onChange={(e) => setPassionateMessage(e.target.value)}
+              placeholder="Write a passionate message to share with your customers..."
+              className="bg-slate-900 border-slate-800 text-xs text-slate-200 min-h-[120px] resize-none"
+            />
+            <p className="text-[10px] text-slate-500">
+              Use <code className="bg-slate-950 px-1 py-0.5 rounded text-primary">{'{portalUrl}'}</code> as placeholder for the showcase link. It will be replaced when copied.
+            </p>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleCopyWithMessage}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs py-2.5 flex items-center justify-center gap-2"
+              >
+                {copiedWithMessage ? (
+                  <>
+                    <Check className="size-3.5" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="size-3.5" />
+                    Copy Message
+                  </>
+                )}
+              </Button>
+              <Button
+                onClick={handleShareMessage}
+                variant="outline"
+                className="border-emerald-600 hover:bg-emerald-600/20 text-emerald-400 font-semibold text-xs py-2.5 px-4 flex items-center justify-center gap-2"
+              >
+                <Share2 className="size-3.5" />
+                Share
               </Button>
             </div>
           </div>
