@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
-import { LogOut, Menu, Settings as SettingsIcon, User } from "lucide-react";
+import { LogOut, Menu, Settings as SettingsIcon, User, Search } from "lucide-react";
 import {
   Avatar,
   AvatarFallback,
@@ -52,20 +52,33 @@ export function Header({ onOpenSidebar }: HeaderProps) {
     "U";
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-slate-800 bg-slate-950 px-4 lg:px-6">
+    <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-slate-900/60 bg-slate-950/80 backdrop-blur-md px-4 lg:px-6 relative z-20">
       <div className="flex min-w-0 items-center gap-2">
         {/* Hamburger — mobile only. 44×44 hit target per Apple HIG. */}
         <button
           type="button"
           onClick={onOpenSidebar}
           aria-label="Open menu"
-          className="flex h-10 w-10 items-center justify-center rounded-md text-slate-300 transition-colors hover:bg-slate-800 hover:text-white lg:hidden"
+          className="flex h-10 w-10 items-center justify-center rounded-md text-slate-300 transition-colors hover:bg-slate-800/40 hover:text-white lg:hidden"
         >
           <Menu className="h-5 w-5" />
         </button>
-        <h1 className="truncate text-base font-semibold text-white sm:text-lg">
+        <h1 className="truncate text-base font-bold text-white sm:text-lg mr-4">
           {title}
         </h1>
+      </div>
+
+      {/* Global Search Bar mockup */}
+      <div className="relative hidden md:block w-72 lg:w-96">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-500" />
+        <input
+          type="text"
+          placeholder="Search deals, contacts, or tasks..."
+          className="w-full bg-slate-900/40 border border-slate-900 rounded-lg pl-9 pr-12 py-1.5 text-xs text-slate-200 placeholder:text-slate-650 focus:outline-none focus:border-primary transition-all focus:bg-slate-950"
+        />
+        <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none inline-flex h-5 select-none items-center gap-0.5 rounded border border-slate-800 bg-slate-950 px-1.5 font-mono text-[9px] font-medium text-slate-500">
+          <span className="text-[10px]">⌘</span>K
+        </kbd>
       </div>
 
       <DropdownMenu>

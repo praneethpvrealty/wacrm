@@ -191,27 +191,27 @@ export function ConversationList({
     // w-full on mobile so the list occupies the whole viewport when it's
     // the single pane showing; fixed 320px on desktop where it shares the
     // row with the thread + contact sidebar.
-    <div className="flex h-full w-full flex-col border-r border-slate-800 bg-slate-900 lg:w-80 min-h-0 overflow-hidden">
+    <div className="flex h-full w-full flex-col border-r border-slate-900/60 bg-slate-950/45 backdrop-blur-xl lg:w-80 min-h-0 overflow-hidden">
       {/* Search + Filter */}
-      <div className="space-y-2 border-b border-slate-800 p-3">
+      <div className="space-y-2.5 border-b border-slate-900/60 p-3.5">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
           <Input
             value={search}
             onChange={handleSearchChange}
             placeholder="Search conversations..."
-            className="border-slate-700 bg-slate-800 pl-9 text-sm text-white placeholder-slate-500 focus:border-primary/50"
+            className="border-slate-850 bg-slate-950/40 pl-9 text-sm text-white placeholder-slate-550 focus:border-primary/50 rounded-xl transition-all"
           />
         </div>
 
         <DropdownMenu>
-          <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 gap-1 px-2 text-xs text-slate-400 hover:text-white rounded-md hover:bg-slate-800">
+          <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-350 hover:text-white rounded-xl border border-slate-900 bg-slate-950/20 hover:bg-slate-900/50 cursor-pointer transition-all">
               {activeFilter?.label ?? "All"}
               <ChevronDown className="h-3 w-3" />
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="start"
-            className="border-slate-700 bg-slate-800"
+            className="border-slate-900 bg-slate-950/95 backdrop-blur-xl"
           >
             {FILTER_OPTIONS.map((opt) => (
               <DropdownMenuItem
@@ -293,16 +293,16 @@ function ConversationItem({
   return (
     <div
       className={cn(
-        "group relative flex w-full items-start gap-3 px-3 py-3 text-left transition-colors hover:bg-slate-800/50",
-        isActive && "border-l-2 border-primary bg-slate-800/70"
+        "group relative flex w-full items-start gap-3 px-3.5 py-3.5 text-left transition-all hover:bg-slate-900/40 hover:pl-4.5 border-l-2 border-transparent select-none cursor-pointer duration-200",
+        isActive && "border-l-2 border-primary bg-primary/8 text-white hover:pl-3.5"
       )}
     >
       <button
         onClick={handleClick}
-        className="flex flex-1 items-start gap-3 min-w-0"
+        className="flex flex-1 items-start gap-3 min-w-0 text-left"
       >
         {/* Avatar */}
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-700 text-sm font-medium text-white">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-800 border border-slate-750 text-sm font-bold text-slate-300">
           {contact?.avatar_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -359,7 +359,7 @@ function ConversationItem({
         >
           <MoreVertical className="h-3.5 w-3.5" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="border-slate-700 bg-slate-800 min-w-36">
+        <DropdownMenuContent align="end" className="border-slate-900 bg-slate-950/95 backdrop-blur-xl min-w-36">
           <DropdownMenuItem
             onClick={(e) => { setMenuOpen(false); onArchiveToggle(conversation, e); }}
             className="gap-2 text-sm text-slate-300"

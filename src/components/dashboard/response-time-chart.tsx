@@ -44,8 +44,8 @@ export function ResponseTimeChart({
     })) ?? []
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900">
-      <header className="flex items-center justify-between gap-3 border-b border-slate-800 px-5 py-4">
+    <section className="rounded-2xl border border-slate-800/80 bg-slate-900/45 backdrop-blur-sm shadow-md hover:border-primary/20 transition-all duration-300 relative group overflow-hidden">
+      <header className="flex items-center justify-between gap-3 border-b border-slate-900/60 px-5 py-4">
         <div>
           <h2 className="text-sm font-semibold text-white">
             Average First Response Time

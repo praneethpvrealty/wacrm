@@ -640,6 +640,7 @@ export interface ShowcaseSettings {
   currency?: string;
   meta_pixel_id?: string | null;
   subdomain?: string | null;
+  theme?: string;
   created_at: string;
   updated_at: string;
 }

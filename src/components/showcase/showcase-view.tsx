@@ -64,6 +64,20 @@ export function ShowcaseView({
   initialCategory
 }: ShowcaseViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Dynamic Theme Resolver
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlTheme = urlParams.get('theme');
+    const resolvedTheme = urlTheme || settings?.theme || 'violet';
+    
+    const validThemes = ['violet', 'emerald', 'cobalt', 'amber', 'rose'];
+    if (validThemes.includes(resolvedTheme)) {
+      document.documentElement.dataset.theme = resolvedTheme;
+    }
+  }, [settings?.theme]);
+
   const [selectedType, setSelectedType] = useState('All');
   const [selectedListingType, setSelectedListingType] = useState<'All' | 'Sale' | 'Rent'>('All');
   const [minBeds, setMinBeds] = useState('All');
@@ -908,18 +922,19 @@ export function ShowcaseView({
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-primary selection:text-white">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-primary selection:text-white relative overflow-hidden">
       {/* Decorative Radial Background Lights */}
-      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[100px] pointer-events-none" />
-      <div className="absolute top-1/3 right-1/4 w-[400px] h-[400px] bg-indigo-500/5 rounded-full blur-[80px] pointer-events-none" />
+      <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-primary/8 rounded-full blur-[130px] pointer-events-none" />
+      <div className="absolute top-1/3 right-1/4 w-[500px] h-[500px] bg-indigo-500/8 rounded-full blur-[110px] pointer-events-none" />
+      
       {/* Header */}
-      <header className="sticky top-0 z-30 w-full border-b border-slate-900 bg-slate-950/80 backdrop-blur-md">
+      <header className="sticky top-0 z-30 w-full border-b border-slate-900/60 bg-slate-950/70 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center font-black text-white text-lg tracking-tighter">
-              A
+          <div className="flex items-center gap-2.5">
+            <div className="h-8.5 w-8.5 rounded-xl bg-gradient-to-br from-primary to-indigo-650 flex items-center justify-center font-black text-white text-base tracking-tighter shadow-md shadow-primary/20">
+              {siteName.charAt(0).toUpperCase()}
             </div>
-            <span className="text-lg font-bold bg-gradient-to-r from-white via-slate-200 to-primary bg-clip-text text-transparent">
+            <span className="text-base font-black tracking-tight bg-gradient-to-r from-white via-slate-150 to-slate-400 bg-clip-text text-transparent">
               {siteName}
             </span>
           </div>
@@ -929,9 +944,9 @@ export function ShowcaseView({
               <a
                 href={`tel:${displayPhone.replace(/\s+/g, '')}`}
                 onClick={() => trackPixelEvent('Contact', { contact_method: 'phone' })}
-                className="hidden md:flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors"
+                className="hidden md:flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-all font-semibold"
               >
-                <Phone className="size-3.5 text-primary" />
+                <Phone className="size-3.5 text-primary shrink-0" />
                 {displayPhone}
               </a>
             )}
@@ -939,7 +954,7 @@ export function ShowcaseView({
               variant="outline"
               size="sm"
               onClick={openRequirementsModal}
-              className="border-primary/30 bg-primary/10 hover:bg-primary/20 text-primary hover:text-primary-hover text-xs font-bold px-4 cursor-pointer"
+              className="border-primary/20 bg-primary/8 hover:bg-primary/15 text-primary hover:text-primary-hover text-xs font-bold px-4 rounded-xl cursor-pointer transition-all"
             >
               Share Requirements
             </Button>
@@ -947,7 +962,7 @@ export function ShowcaseView({
               variant="outline"
               size="sm"
               onClick={() => window.location.href = '/dashboard'}
-              className="border-slate-800 bg-slate-900/50 hover:bg-slate-800 text-slate-200 text-xs font-semibold px-4 cursor-pointer"
+              className="border-slate-900 bg-slate-900/40 hover:bg-slate-850 text-slate-300 hover:text-white text-xs font-bold px-4 rounded-xl cursor-pointer transition-all"
             >
               Portal Login
             </Button>
@@ -962,27 +977,27 @@ export function ShowcaseView({
         <div className="text-center max-w-3xl mx-auto mb-12 animate-fade-in">
           <h1 className="text-4xl sm:text-5xl font-black text-white tracking-tight leading-tight">
             Discover Your Dream{' '}
-            <span className="bg-gradient-to-r from-primary via-indigo-400 to-indigo-500 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-primary via-indigo-400 to-primary/80 bg-clip-text text-transparent">
               Inventory & Properties
             </span>
           </h1>
-          <p className="mt-4 text-base text-slate-400 font-medium">
+          <p className="mt-4 text-sm sm:text-base text-slate-400 font-medium leading-relaxed">
             Browse through our handpicked collection of premium villa plots, residential land, apartments, and commercial spaces. Handled directly by agents in our custom CRM.
           </p>
         </div>
 
         {/* Filter Controls Bar */}
-        <div className="bg-slate-900/40 border border-slate-900 rounded-2xl p-5 mb-8 backdrop-blur-md shadow-xl flex flex-col gap-4">
+        <div className="bg-slate-900/35 border border-slate-900/60 rounded-3xl p-5 mb-8 backdrop-blur-md shadow-xl flex flex-col gap-4 hover:border-slate-800/80 transition-all duration-300">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
             
             {/* Search Input */}
             <div className="relative lg:col-span-4">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-slate-500" />
               <Input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder='Search properties — "2 BHK villa in Domlur under 2 Cr" or "price > 50 Cr"'
-                className="pl-10 bg-slate-950 border-slate-800 text-white placeholder:text-slate-650 focus:border-primary focus:ring-1 focus:ring-primary w-full"
+                placeholder='Search properties — "2 BHK villa" or "price > 50 Cr"'
+                className="pl-11 bg-slate-950/60 border-slate-900 text-white placeholder:text-slate-650 focus:border-primary focus:ring-1 focus:ring-primary w-full rounded-xl transition-all"
               />
             </div>
 
@@ -992,7 +1007,7 @@ export function ShowcaseView({
               <select
                 value={selectedListingType}
                 onChange={(e) => setSelectedListingType(e.target.value as 'All' | 'Sale' | 'Rent')}
-                className="bg-slate-950 border border-slate-800 rounded-lg text-slate-350 text-sm p-2 w-full focus:outline-none focus:border-primary"
+                className="bg-slate-950/60 border border-slate-900 rounded-xl text-slate-350 text-sm p-2.5 w-full focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all cursor-pointer"
               >
                 <option value="All">All Listings</option>
                 <option value="Sale">For Sale</option>
@@ -1006,7 +1021,7 @@ export function ShowcaseView({
               <select
                 value={minBeds}
                 onChange={(e) => setMinBeds(e.target.value)}
-                className="bg-slate-950 border border-slate-800 rounded-lg text-slate-350 text-sm p-2 w-full focus:outline-none focus:border-primary"
+                className="bg-slate-950/60 border border-slate-900 rounded-xl text-slate-350 text-sm p-2.5 w-full focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all cursor-pointer"
               >
                 <option value="All">All Bedrooms</option>
                 <option value="1">1+ BHK</option>
@@ -1022,7 +1037,7 @@ export function ShowcaseView({
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="bg-slate-950 border border-slate-800 rounded-lg text-slate-350 text-sm p-2 w-full focus:outline-none focus:border-primary"
+                className="bg-slate-950/60 border border-slate-900 rounded-xl text-slate-350 text-sm p-2.5 w-full focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all cursor-pointer"
               >
                 <option value="newest">Newest Listed</option>
                 <option value="price-low">Price: Low to High</option>
@@ -1033,16 +1048,16 @@ export function ShowcaseView({
           </div>
 
           {/* Type Pills */}
-          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-900/60 overflow-x-auto scrollbar-none">
-            <span className="text-xs text-slate-500 font-bold uppercase tracking-wider mr-2">Category:</span>
+          <div className="flex flex-wrap items-center gap-2 pt-2.5 border-t border-slate-900/60 overflow-x-auto scrollbar-none">
+            <span className="text-xs text-slate-550 font-bold uppercase tracking-wider mr-2">Category:</span>
             {propertyTypes.map((type) => (
               <button
                 key={type}
                 onClick={() => setSelectedType(type)}
-                className={`text-xs px-3 py-1.5 rounded-full border transition-all cursor-pointer font-semibold ${
+                className={`text-xs px-3.5 py-1.5 rounded-full border transition-all cursor-pointer font-bold ${
                   selectedType === type
-                    ? 'bg-primary text-primary-foreground border-primary font-bold shadow-md shadow-primary/20'
-                    : 'bg-slate-950 border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
+                    ? 'bg-primary text-primary-foreground border-primary shadow-md shadow-primary/20'
+                    : 'bg-slate-950 border-slate-900 text-slate-400 hover:text-white hover:border-slate-700'
                 }`}
               >
                 {type}
@@ -1052,23 +1067,23 @@ export function ShowcaseView({
         </div>
 
         {/* CTA Requirements Ingestion Banner */}
-        <div className="relative overflow-hidden bg-gradient-to-r from-slate-900/60 to-indigo-950/20 border border-slate-800 rounded-3xl p-6 sm:p-8 mb-12 shadow-2xl backdrop-blur-md">
+        <div className="relative overflow-hidden bg-gradient-to-r from-slate-900/40 via-indigo-950/10 to-slate-900/20 border border-slate-900/60 rounded-3xl p-6 sm:p-8 mb-12 shadow-2xl backdrop-blur-xl hover:border-slate-800/80 transition-all duration-500">
           {/* Decorative glows */}
-          <div className="absolute -top-20 -right-20 w-60 h-60 bg-primary/10 rounded-full blur-[60px]" />
-          <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-indigo-500/10 rounded-full blur-[50px]" />
+          <div className="absolute -top-20 -right-20 w-60 h-60 bg-primary/10 rounded-full blur-[80px] pointer-events-none" />
+          <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-indigo-500/10 rounded-full blur-[70px] pointer-events-none" />
           
           <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="max-w-2xl text-left">
               <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
                 Can&apos;t find your ideal property?
               </h2>
-              <p className="mt-2 text-slate-400 text-sm leading-relaxed">
+              <p className="mt-2 text-slate-405 text-sm leading-relaxed font-medium">
                 Tell us your specific requirements, and our team will match you with exclusive, off-market listings. Get notified directly on WhatsApp!
               </p>
             </div>
             <Button
               onClick={openRequirementsModal}
-              className="bg-primary hover:bg-primary-hover text-white text-xs font-bold px-6 py-5 rounded-xl hover:scale-102 transition-all shadow-lg shadow-primary/25 cursor-pointer shrink-0"
+              className="bg-primary hover:bg-primary-hover text-white text-xs font-bold px-6 py-5 rounded-xl hover:scale-102 hover:shadow-primary/30 transition-all shadow-lg shadow-primary/25 cursor-pointer shrink-0"
             >
               Submit Requirements
             </Button>
@@ -1128,10 +1143,10 @@ export function ShowcaseView({
               return (
                 <div
                   key={property.id}
-                  className={`flex flex-col rounded-2xl border bg-slate-900/30 overflow-hidden hover:border-slate-800 hover:shadow-2xl hover:shadow-primary/5 transition-all duration-500 group relative ${
+                  className={`flex flex-col rounded-3xl border bg-slate-900/20 overflow-hidden hover:border-slate-805 hover:shadow-2xl hover:shadow-primary/4 transition-all duration-500 group relative ${
                     interestStatus[property.id] === 'interested'
-                      ? 'border-emerald-500/30 ring-1 ring-emerald-500/20 shadow-lg shadow-emerald-950/10'
-                      : 'border-slate-900'
+                      ? 'border-emerald-500/35 ring-1 ring-emerald-500/20 shadow-lg shadow-emerald-950/10'
+                      : 'border-slate-900/60'
                   }`}
                 >
                   {/* Image Container */}
@@ -1153,6 +1168,9 @@ export function ShowcaseView({
                       </div>
                     )}
 
+                    {/* Subtle gradient overlay at the bottom of the image */}
+                    <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-slate-950/60 to-transparent pointer-events-none" />
+
                     {/* Overlay Category Tag */}
                     <div className="absolute top-3 left-3 bg-slate-950/80 backdrop-blur-md px-2.5 py-0.5 rounded-full border border-slate-800/80 text-[10px] font-extrabold tracking-wider uppercase text-primary">
                       {property.type}
@@ -1173,7 +1191,7 @@ export function ShowcaseView({
                           {property.project ? `🏢 ${property.project}` : ''}
                         </span>
                         {property.property_code && (
-                          <span className="text-[9px] font-mono font-bold text-slate-400 bg-slate-950/40 px-1.5 py-0.5 rounded shrink-0">
+                          <span className="text-[9px] font-mono font-bold text-slate-400 bg-slate-950/40 px-1.5 py-0.5 rounded shrink-0 border border-slate-900/30">
                             {property.property_code}
                           </span>
                         )}
@@ -1186,7 +1204,7 @@ export function ShowcaseView({
                         {property.title}
                       </h3>
                       <div className="flex items-center text-xs text-slate-400 gap-1 mt-1 mb-3">
-                        <MapPin className="size-3.5 shrink-0 text-slate-650" />
+                        <MapPin className="size-3.5 shrink-0 text-slate-655" />
                         <span className="truncate">
                           {property.sublocality && property.city
                             ? `${property.sublocality}, ${property.city}`
@@ -1198,24 +1216,24 @@ export function ShowcaseView({
                       <div className="grid grid-cols-3 gap-2 py-3 border-y border-slate-900/60 text-xs text-slate-350 mb-4 font-semibold">
                         {['Flat/ Apartment', 'Residential House', 'Villa', 'Builder Floor Apartment', 'Penthouse', 'Studio Apartment', 'Farm House', 'House'].includes(property.type) ? (
                           <>
-                            <div className="flex flex-col items-center justify-center bg-slate-950/20 py-1 rounded border border-slate-900/20">
+                            <div className="flex flex-col items-center justify-center bg-slate-955/40 py-2 rounded-xl border border-slate-900/60">
                               <BedDouble className="size-3.5 text-slate-500 mb-0.5" />
                               <span>{property.bedrooms ? `${property.bedrooms} BHK` : '--'}</span>
                             </div>
-                            <div className="flex flex-col items-center justify-center bg-slate-950/20 py-1 rounded border border-slate-900/20 border-x">
+                            <div className="flex flex-col items-center justify-center bg-slate-955/40 py-2 rounded-xl border border-slate-900/60">
                               <Bath className="size-3.5 text-slate-500 mb-0.5" />
                               <span>{property.bathrooms ? `${property.bathrooms} Bath` : '--'}</span>
                             </div>
                           </>
                         ) : (
                           <>
-                            <div className="flex flex-col items-center justify-center bg-slate-950/20 py-1 rounded border border-slate-900/20 col-span-2">
+                            <div className="flex flex-col items-center justify-center bg-slate-955/40 py-2 rounded-xl border border-slate-900/60 col-span-2">
                               <span className="text-[10px] text-slate-500">Zoning</span>
                               <span className="truncate max-w-full text-slate-300">{property.land_zone || 'Residential'}</span>
                             </div>
                           </>
                         )}
-                        <div className="flex flex-col items-center justify-center bg-slate-950/20 py-1 rounded border border-slate-900/20">
+                        <div className="flex flex-col items-center justify-center bg-slate-955/40 py-2 rounded-xl border border-slate-900/60">
                           <Maximize2 className="size-3.5 text-slate-500 mb-0.5" />
                           <span className="truncate max-w-full">
                             {isLand
@@ -1234,7 +1252,7 @@ export function ShowcaseView({
                       {/* Quick Feedback Bar — hidden in agent mode */}
                       {!isAgentMode && (
                       <div className="flex items-center justify-between border-b border-slate-900/60 pb-3 mb-3 text-xs">
-                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Are you interested?</span>
+                        <span className="text-[10px] text-slate-550 font-bold uppercase tracking-wider">Are you interested?</span>
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
@@ -1242,10 +1260,10 @@ export function ShowcaseView({
                               e.stopPropagation();
                               handleQuickInterestClick(property);
                             }}
-                            className={`flex items-center gap-1 px-2 py-1 rounded-md transition-all font-bold text-[10px] cursor-pointer ${
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all font-bold text-[10px] cursor-pointer ${
                               interestStatus[property.id] === 'interested'
                                 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                                : 'bg-slate-950 hover:bg-slate-900 border border-slate-850 text-slate-400 hover:text-slate-200'
+                                : 'bg-slate-950 border border-slate-900 text-slate-400 hover:text-slate-200'
                             }`}
                           >
                             <ThumbsUp className="size-3" />
@@ -1258,7 +1276,7 @@ export function ShowcaseView({
                               updateInterestStatus(property.id, 'not_interested');
                               toast.info('Property hidden. You can undo this anytime.');
                             }}
-                            className="flex items-center gap-1 px-2 py-1 rounded-md bg-slate-950 hover:bg-slate-900 border border-slate-850 text-slate-400 hover:text-red-400 hover:border-red-500/30 transition-all font-semibold text-[10px] cursor-pointer"
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-900 border border-slate-900 text-slate-400 hover:text-red-400 hover:border-red-500/30 transition-all font-semibold text-[10px] cursor-pointer"
                           >
                             <ThumbsDown className="size-3" />
                             <span>No</span>
@@ -1270,7 +1288,7 @@ export function ShowcaseView({
                       {/* Price & Primary CTA */}
                       <div className="flex items-center justify-between mt-2 pt-2 gap-2">
                         <div className="flex flex-col">
-                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                          <span className="text-[10px] font-bold text-slate-550 uppercase tracking-wider">
                             {property.listing_type === 'Rent' ? 'Rent' : 'Price'}
                           </span>
                           <span className="text-lg font-black text-white leading-tight">
@@ -1289,7 +1307,7 @@ export function ShowcaseView({
                               onClick={() => trackWhatsAppInquiry(property)}
                               target="_blank"
                               rel="noreferrer"
-                              className="h-9 w-9 rounded-lg bg-green-600 hover:bg-green-500 text-white flex items-center justify-center hover:scale-105 transition-all shadow-md shadow-green-950/40 cursor-pointer"
+                              className="h-9 w-9 rounded-xl bg-green-600 hover:bg-green-550 text-white flex items-center justify-center hover:scale-105 transition-all shadow-md shadow-green-950/40 cursor-pointer"
                               title="Inquire via WhatsApp"
                             >
                               <MessageCircle className="size-4.5 fill-white text-green-650" />
@@ -1298,7 +1316,7 @@ export function ShowcaseView({
                           <Button
                             size="icon"
                             onClick={(e) => handleShareListing(property, e)}
-                            className="h-9 w-9 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-850 text-slate-300 hover:text-white flex items-center justify-center hover:scale-105 transition-all shadow-md cursor-pointer"
+                            className="h-9 w-9 rounded-xl bg-slate-950/60 border border-slate-900 hover:bg-slate-850 text-slate-300 hover:text-white flex items-center justify-center hover:scale-105 transition-all shadow-md cursor-pointer"
                             title="Share Listing"
                           >
                             <Share2 className="size-4" />
@@ -1306,7 +1324,7 @@ export function ShowcaseView({
                           <Button
                             size="sm"
                             onClick={() => openPropertyModal(property)}
-                            className="bg-slate-900 border border-slate-800 hover:bg-slate-850 text-white text-xs font-semibold cursor-pointer"
+                            className="bg-slate-950/60 border border-slate-900 hover:bg-slate-850 text-white text-xs font-semibold rounded-xl cursor-pointer"
                           >
                             Details
                           </Button>
@@ -1336,11 +1354,10 @@ export function ShowcaseView({
           </div>
         </div>
       </footer>
-
-      {/* Property Detail Modal */}
+         {/* Property Detail Modal */}
       {selectedProperty && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-          <div className="relative max-w-4xl w-full bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col lg:flex-row my-8 animate-zoom-in max-h-[90vh]">
+          <div className="relative max-w-4xl w-full bg-slate-900/85 border border-slate-900/60 rounded-3xl overflow-hidden shadow-2xl flex flex-col lg:flex-row my-8 animate-zoom-in max-h-[90vh] backdrop-blur-xl">
             
             {/* Close Button */}
             <button
@@ -1429,7 +1446,7 @@ export function ShowcaseView({
                     {selectedProperty.title}
                   </h2>
                   <div className="flex items-center text-xs text-slate-400 gap-1 mt-1">
-                    <MapPin className="size-3.5 text-slate-500" />
+                    <MapPin className="size-3.5 text-slate-555" />
                     <span>
                       {selectedProperty.sublocality && selectedProperty.city
                         ? `${selectedProperty.sublocality}, ${selectedProperty.city}`
@@ -1439,7 +1456,7 @@ export function ShowcaseView({
                 </div>
 
                 {/* Price Box */}
-                <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="bg-slate-950/65 border border-slate-900/80 p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 backdrop-blur-md">
                   <div className="flex flex-col">
                     <span className="text-[10px] text-slate-550 font-bold uppercase tracking-wider">
                       {selectedProperty.listing_type === 'Rent' ? 'Rent' : 'Price'}
@@ -1471,9 +1488,9 @@ export function ShowcaseView({
                       onClick={() => trackWhatsAppInquiry(selectedProperty)}
                       target="_blank"
                       rel="noreferrer"
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2.5 rounded-lg flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-emerald-950/20 hover:scale-[1.02] transition-all shrink-0"
+                      className="bg-green-600 hover:bg-green-550 text-white text-xs font-bold px-5 py-3 rounded-xl flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-green-950/30 hover:scale-[1.02] transition-all shrink-0 animate-pulse-slow"
                     >
-                      <MessageCircle className="size-4 fill-white text-emerald-600" />
+                      <MessageCircle className="size-4 fill-white text-green-600" />
                       WhatsApp Inquiry
                     </a>
                   )}

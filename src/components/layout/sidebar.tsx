@@ -173,7 +173,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       <aside
         className={cn(
           // Mobile: fixed drawer that slides in from the left.
-          "fixed inset-y-0 left-0 z-40 flex h-full w-64 flex-col border-r border-slate-800 bg-slate-900",
+          "fixed inset-y-0 left-0 z-40 flex h-full w-64 flex-col border-r border-slate-900/60 bg-slate-950/45 backdrop-blur-xl",
           "transition-transform duration-200 ease-out will-change-transform",
           open ? "translate-x-0" : "-translate-x-full",
           // Desktop: static, always visible — reset all the mobile framing.
@@ -181,29 +181,32 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         )}
         aria-label="Primary"
       >
+        {/* Decorative ambient glow */}
+        <div className="absolute top-0 left-0 right-0 h-48 bg-gradient-to-b from-primary/8 to-transparent pointer-events-none blur-3xl" />
+
         {/* Logo row. On mobile we put a close button here; on desktop the
             close button is hidden since the sidebar is always-visible. */}
-        <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-slate-800 px-4">
+        <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-slate-900/60 px-4 bg-slate-950/20 backdrop-blur-sm relative z-10">
           <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-indigo-650 text-white shadow-md shadow-primary/20">
               <MessageSquare className="h-4 w-4" />
             </div>
-            <span className="text-sm font-semibold text-white">
-              CRM Template for WhatsApp
+            <span className="text-[11px] font-black tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+              CONVOREAL waCRM
             </span>
           </Link>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close menu"
-            className="flex h-9 w-9 items-center justify-center rounded-md text-slate-400 hover:bg-slate-800 hover:text-white lg:hidden"
+            className="flex h-9 w-9 items-center justify-center rounded-md text-slate-400 hover:bg-slate-800/40 hover:text-white lg:hidden"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Main navigation */}
-        <nav className="flex-1 overflow-y-auto px-3 py-4">
+        <nav className="flex-1 overflow-y-auto px-3 py-4 relative z-10">
           <ul className="flex flex-col gap-1">
             {navItems.map((item) => {
               const isActive =
@@ -219,18 +222,18 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     href={item.href}
                     className={cn(
                       // Taller on mobile so fingers can hit the row reliably (≥44px).
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",
+                      "flex items-center gap-3 px-3 py-2.5 text-sm font-semibold transition-all duration-300 lg:py-2",
                       isActive
-                        ? "bg-primary/10 text-primary"
-                        : "text-slate-400 hover:bg-slate-800 hover:text-white",
+                        ? "bg-primary/10 text-white border border-primary/25 shadow-md shadow-primary/5 rounded-xl"
+                        : "text-slate-400 hover:text-white hover:bg-slate-900/40 hover:pl-4 rounded-xl border border-transparent",
                     )}
                   >
-                    <item.icon className="h-4 w-4" />
-                    <span className="flex-1">{item.label}</span>
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    <span className="flex-1 truncate">{item.label}</span>
                     {item.beta && (
                       <span
                         aria-label="Beta feature"
-                        className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300"
+                        className="rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider text-amber-300 shrink-0"
                       >
                         Beta
                       </span>
@@ -238,7 +241,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     {showUnreadDot && (
                       <span
                         aria-label={`${totalUnread} unread conversation${totalUnread === 1 ? "" : "s"}`}
-                        className="relative flex h-2 w-2"
+                        className="relative flex h-2 w-2 shrink-0"
                       >
                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
                         <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
@@ -250,7 +253,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             })}
           </ul>
 
-          <div className="my-4 border-t border-slate-800" />
+          <div className="my-4 border-t border-slate-900/60" />
 
           <ul className="flex flex-col gap-1">
             {bottomNavItems.map((item) => {
@@ -260,23 +263,46 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                   <Link
                     href={item.href}
                     className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",
+                      "flex items-center gap-3 px-3 py-2.5 text-sm font-semibold transition-all duration-300 lg:py-2",
                       isActive
-                        ? "bg-primary/10 text-primary"
-                        : "text-slate-400 hover:bg-slate-800 hover:text-white",
+                        ? "bg-primary/10 text-white border border-primary/25 shadow-md shadow-primary/5 rounded-xl"
+                        : "text-slate-400 hover:text-white hover:bg-slate-900/40 hover:pl-4 rounded-xl border border-transparent",
                     )}
                   >
-                    <item.icon className="h-4 w-4" />
-                    {item.label}
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    <span className="flex-1 truncate">{item.label}</span>
                   </Link>
                 </li>
               );
             })}
           </ul>
+
+          {/* Quick Access section */}
+          <div className="my-6 border-t border-slate-900/60 pt-4 px-1">
+            <h3 className="text-[10px] font-black text-slate-550 uppercase tracking-widest mb-3 px-3">
+              Quick Access
+            </h3>
+            <div className="flex flex-col gap-1.5">
+              {[
+                { label: "New Deals", href: "/pipelines" },
+                { label: "Pending Quotes", href: "/inbox" },
+                { label: "Priority Tasks", href: "/dashboard" },
+                { label: "Follow-ups", href: "/contacts" },
+              ].map((qa) => (
+                <Link
+                  key={qa.label}
+                  href={qa.href}
+                  className="w-full text-left text-xs font-bold text-slate-450 hover:text-white bg-slate-900/15 hover:bg-slate-900/45 border border-slate-900/60 hover:border-slate-800 px-4 py-2 rounded-xl transition-all duration-200 cursor-pointer"
+                >
+                  {qa.label}
+                </Link>
+              ))}
+            </div>
+          </div>
         </nav>
 
         {/* User section */}
-        <div className="shrink-0 border-t border-slate-800 p-3">
+        <div className="shrink-0 border-t border-slate-900/60 p-3 bg-slate-950/10 backdrop-blur-sm relative z-10">
           {/* Account name display — only surfaced when the user is
               opted into the account_sharing beta flag. For solo
               users (the default) the account is named after them,

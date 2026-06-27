@@ -30,6 +30,7 @@ export function ShowcaseSettingsPanel() {
   );
   const [metaPixelId, setMetaPixelId] = useState('');
   const [subdomain, setSubdomain] = useState('');
+  const [theme, setTheme] = useState('violet');
 
 
   useEffect(() => {
@@ -57,7 +58,7 @@ export function ShowcaseSettingsPanel() {
           setWhatsappTemplate(data.whatsapp_message_template || '');
           setMetaPixelId(data.meta_pixel_id || '');
           setSubdomain(data.subdomain || '');
-
+          setTheme(data.theme || 'violet');
         }
       } catch (err) {
         console.error('Unexpected error loading showcase settings:', err);
@@ -83,6 +84,7 @@ export function ShowcaseSettingsPanel() {
         whatsapp_message_template: whatsappTemplate.trim(),
         meta_pixel_id: metaPixelId.trim() || null,
         subdomain: subdomain.trim().toLowerCase() || null,
+        theme: theme,
         updated_at: new Date().toISOString(),
       };
 
@@ -359,6 +361,29 @@ export function ShowcaseSettingsPanel() {
             </div>
             <p className="text-[11px] text-slate-400">
               Paste your Meta Pixel ID or Dataset ID from Events Manager here. Fires ViewContent and Lead events to track listing views and conversions.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="theme" className="text-slate-350 font-medium">
+              Showcase Theme Accent Color
+            </Label>
+            <div className="relative">
+              <select
+                id="theme"
+                value={theme}
+                onChange={(e) => setTheme(e.target.value)}
+                className="bg-slate-950 border border-slate-800 rounded-lg text-white text-sm p-2.5 w-full focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+              >
+                <option value="violet">Violet (Default)</option>
+                <option value="emerald">Emerald</option>
+                <option value="cobalt">Cobalt</option>
+                <option value="amber">Amber</option>
+                <option value="rose">Rose</option>
+              </select>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Select the default color branding theme for your public showcase URL.
             </p>
           </div>
 

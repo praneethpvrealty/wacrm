@@ -54,8 +54,8 @@ export function ActivityFeed({ items, loading }: ActivityFeedProps) {
     i === 0 || totalLoaded > PAGE_SIZES[i - 1]
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900">
-      <header className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
+    <section className="rounded-2xl border border-slate-800/80 bg-slate-900/45 backdrop-blur-sm shadow-md hover:border-primary/20 transition-all duration-300 relative group overflow-hidden">
+      <header className="flex items-center justify-between border-b border-slate-900/60 px-5 py-4">
         <h2 className="text-sm font-semibold text-white">Recent Activity</h2>
         <Link
           href="/inbox"
@@ -81,7 +81,7 @@ export function ActivityFeed({ items, loading }: ActivityFeedProps) {
         </div>
       ) : (
         <>
-          <ul className="divide-y divide-slate-800">
+          <ul className="divide-y divide-slate-900/60">
             {visible.map((it, i) => {
               const theme = KIND_THEME[it.kind]
               const Icon = theme.icon

@@ -46,8 +46,8 @@ export function ConversationsChart({ series, loading, range, onRangeChange }: Co
   }, [data])
 
   return (
-    <section className="flex h-full flex-col rounded-xl border border-slate-800 bg-slate-900">
-      <header className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
+    <section className="flex h-full flex-col rounded-2xl border border-slate-800/80 bg-slate-900/45 backdrop-blur-sm shadow-md hover:border-primary/20 transition-all duration-300 relative group overflow-hidden">
+      <header className="flex items-center justify-between border-b border-slate-900/60 px-5 py-4">
         <div>
           <h2 className="text-sm font-semibold text-white">Conversations Over Time</h2>
           <p className="mt-0.5 text-xs text-slate-500">Daily message volume by direction</p>
@@ -85,7 +85,7 @@ export function ConversationsChart({ series, loading, range, onRangeChange }: Co
         )}
       </div>
 
-      <footer className="flex items-center gap-4 border-t border-slate-800 px-5 py-3 text-xs text-slate-400">
+      <footer className="flex items-center gap-4 border-t border-slate-900/60 px-5 py-3 text-xs text-slate-400">
         <LegendDot color="#3b82f6" label="Incoming" />
         <LegendDot color="#7c3aed" label="Outgoing" />
       </footer>
@@ -128,6 +128,12 @@ function LineSvg({
 
   const incomingPath = data.map((p, i) => `${i === 0 ? 'M' : 'L'}${xFor(i)},${yFor(p.incoming)}`).join(' ')
   const outgoingPath = data.map((p, i) => `${i === 0 ? 'M' : 'L'}${xFor(i)},${yFor(p.outgoing)}`).join(' ')
+  const incomingAreaPath = data.length > 0
+    ? `${incomingPath} L${xFor(data.length - 1)},${PADDING.top + chartH} L${xFor(0)},${PADDING.top + chartH} Z`
+    : ''
+  const outgoingAreaPath = data.length > 0
+    ? `${outgoingPath} L${xFor(data.length - 1)},${PADDING.top + chartH} L${xFor(0)},${PADDING.top + chartH} Z`
+    : ''
 
   // Mouse-move: use the SVG's current screen-CTM to map clientX
   // back to viewBox coordinates. The previous rect-based math
@@ -197,6 +203,16 @@ function LineSvg({
         role="img"
         aria-label="Conversations per day"
       >
+        <defs>
+          <linearGradient id="incoming-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+          </linearGradient>
+          <linearGradient id="outgoing-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#7c3aed" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="#7c3aed" stopOpacity="0" />
+          </linearGradient>
+        </defs>
         {/* Y-axis gridlines + labels */}
         {ticks.map((t) => {
           const y = yFor(t)
@@ -236,6 +252,21 @@ function LineSvg({
               {shortDayLabel(p.day)}
             </text>
           ) : null,
+        )}
+
+        {/* Outgoing Area Fill */}
+        {outgoingAreaPath && (
+          <path
+            d={outgoingAreaPath}
+            fill="url(#outgoing-grad)"
+          />
+        )}
+        {/* Incoming Area Fill */}
+        {incomingAreaPath && (
+          <path
+            d={incomingAreaPath}
+            fill="url(#incoming-grad)"
+          />
         )}
 
         {/* Outgoing polyline (violet) */}

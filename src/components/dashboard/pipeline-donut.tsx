@@ -14,8 +14,8 @@ interface PipelineDonutProps {
 
 export function PipelineDonut({ data, loading, currency = 'INR' }: PipelineDonutProps) {
   return (
-    <section className="flex h-full flex-col rounded-xl border border-slate-800 bg-slate-900">
-      <header className="border-b border-slate-800 px-5 py-4">
+    <section className="flex h-full flex-col rounded-2xl border border-slate-800/80 bg-slate-900/45 backdrop-blur-sm shadow-md hover:border-primary/20 transition-all duration-300 relative group overflow-hidden">
+      <header className="border-b border-slate-900/60 px-5 py-4">
         <h2 className="text-sm font-semibold text-white">Pipeline Value</h2>
         <p className="mt-0.5 text-xs text-slate-500">
           Open deals by stage

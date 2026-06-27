@@ -233,7 +233,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
 
   if (!contact) {
     return (
-      <div className="flex h-full w-70 items-center justify-center border-l border-slate-800 bg-slate-900">
+      <div className="flex h-full w-70 items-center justify-center border-l border-slate-900/60 bg-slate-950/45 backdrop-blur-xl">
         <p className="text-sm text-slate-500">Select a conversation</p>
       </div>
     );
@@ -243,7 +243,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
   const initials = displayName.charAt(0).toUpperCase();
 
   return (
-    <div className="flex h-full w-70 flex-col border-l border-slate-800 bg-slate-900">
+    <div className="flex h-full w-70 flex-col border-l border-slate-900/60 bg-slate-950/45 backdrop-blur-xl">
       <ScrollArea className="flex-1">
         <div className="p-4">
           {/* Contact Info */}

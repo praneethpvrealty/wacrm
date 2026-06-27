@@ -83,7 +83,7 @@ export function MessageComposer({
   );
 
   return (
-    <div className="border-t border-slate-800 bg-slate-900 p-3">
+    <div className="border-t border-slate-900/60 bg-slate-950/70 backdrop-blur-md p-4 relative z-10">
       {replyTo && (
         <div className="mb-2">
           <ReplyQuote
@@ -117,7 +117,7 @@ export function MessageComposer({
           canAct={!readOnly}
           gateReason="send messages"
           title={readOnly ? undefined : "Send Message"}
-          className="h-9 w-9 shrink-0 p-0 text-slate-400 hover:text-white"
+          className="h-9 w-9 shrink-0 p-0 text-slate-400 hover:text-white rounded-xl bg-slate-950/40 border border-slate-900 hover:bg-slate-900/50 hover:scale-105 transition-all cursor-pointer flex items-center justify-center"
           onClick={onOpenTemplates}
         >
           <LayoutTemplate className="h-4 w-4" />
@@ -142,7 +142,7 @@ export function MessageComposer({
           // The placeholder text also surfaces the read-only state.
           title={readOnly ? "Read-only — your role can't send messages" : undefined}
           className={cn(
-            "flex-1 resize-none rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition-colors focus:border-primary/50",
+            "flex-1 resize-none rounded-xl border border-slate-850 bg-slate-950/45 px-4 py-2.5 text-sm text-white placeholder-slate-550 outline-none transition-colors focus:border-primary/50 focus:bg-slate-950/80 focus:ring-1 focus:ring-primary/20",
             (sessionExpired || readOnly) && "cursor-not-allowed opacity-50"
           )}
         />
@@ -153,7 +153,7 @@ export function MessageComposer({
           gateReason="send messages"
           disabled={!text.trim() || sessionExpired || sending}
           onClick={handleSend}
-          className="h-9 w-9 shrink-0 bg-primary p-0 hover:bg-primary/90 disabled:opacity-40"
+          className="h-9 w-9 shrink-0 bg-primary p-0 hover:bg-primary-hover disabled:opacity-40 rounded-xl transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-md shadow-primary/20 flex items-center justify-center text-white"
         >
           <Send className="h-4 w-4" />
         </GatedButton>

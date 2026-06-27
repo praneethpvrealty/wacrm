@@ -2310,6 +2310,13 @@ CREATE POLICY email_sync_logs_delete ON email_sync_logs FOR DELETE USING (is_acc
 -- Index on account_id and created_at for fast retrieval in the UI settings panel log viewer
 CREATE INDEX IF NOT EXISTS idx_email_sync_logs_account_created ON email_sync_logs(account_id, created_at DESC);
 
+-- ============================================================
+-- 065_add_theme_to_showcase_settings.sql — Add theme column
+-- ============================================================
+ALTER TABLE showcase_settings ADD COLUMN IF NOT EXISTS theme TEXT NOT NULL DEFAULT 'violet';
+COMMENT ON COLUMN showcase_settings.theme IS
+  'Theme accent color used on the public property showcase portal. Supported values: violet, emerald, cobalt, amber, rose.';
+
 
 
 

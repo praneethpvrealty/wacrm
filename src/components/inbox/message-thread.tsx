@@ -763,16 +763,22 @@ export function MessageThread({
   // pattern under the user's eye.
   if (!conversation || !contact) {
     return (
-      <div className={cn("flex flex-1 flex-col items-center justify-center", DOODLE_BG_CLASSES)}>
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-800">
-          <MessageSquare className="h-8 w-8 text-slate-600" />
+      <div className={cn("flex flex-1 flex-col items-center justify-center relative overflow-hidden", DOODLE_BG_CLASSES)}>
+        {/* Ambient background glows */}
+        <div className="absolute top-1/4 left-1/4 w-[300px] h-[300px] bg-primary/8 rounded-full blur-[80px] pointer-events-none" />
+        <div className="absolute bottom-1/4 right-1/4 w-[250px] h-[250px] bg-indigo-500/5 rounded-full blur-[70px] pointer-events-none" />
+        
+        <div className="relative z-10 flex flex-col items-center justify-center">
+          <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 via-primary/5 to-transparent border border-primary/25 shadow-lg shadow-primary/5">
+            <MessageSquare className="h-8 w-8 text-primary" />
+          </div>
+          <h3 className="mt-6 text-base font-extrabold text-white tracking-tight">
+            Select a conversation
+          </h3>
+          <p className="mt-1.5 text-xs text-slate-400 font-medium max-w-xs text-center leading-relaxed">
+            Choose a conversation from the left to view messaging threads, respond directly, or trigger workflows.
+          </p>
         </div>
-        <h3 className="mt-4 text-sm font-medium text-slate-400">
-          Select a conversation
-        </h3>
-        <p className="mt-1 text-xs text-slate-600">
-          Choose a conversation from the left to start messaging
-        </p>
       </div>
     );
   }
@@ -789,10 +795,9 @@ export function MessageThread({
     : "Assign";
 
   return (
-    <div className={cn("flex flex-1 flex-col", DOODLE_BG_CLASSES)}>
-      {/* Header — solid bg-slate-900 sits on top of the doodle so the
-          name/avatar/dropdowns stay legible. */}
-      <div className="flex items-center justify-between gap-2 border-b border-slate-800 bg-slate-900 px-3 py-3 sm:px-4">
+    <div className={cn("flex flex-1 flex-col relative", DOODLE_BG_CLASSES)}>
+      {/* Header — translucent backdrop-blur seats on top of the doodle */}
+      <div className="flex items-center justify-between gap-2 border-b border-slate-900/60 bg-slate-950/70 backdrop-blur-md px-3 py-3 sm:px-4 relative z-10">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           {/* Back-to-list button — mobile only. Hidden on lg+ where the
               conversation list is always visible next to the thread. */}
