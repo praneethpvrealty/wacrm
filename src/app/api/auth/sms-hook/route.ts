@@ -6,7 +6,9 @@ import { sendTextMessage } from '@/lib/whatsapp/meta-api';
 
 export async function POST(request: Request) {
   try {
-    const secret = process.env.SUPABASE_SMS_HOOK_SECRET;
+    const rawSecret = process.env.SUPABASE_SMS_HOOK_SECRET;
+    // Strip surrounding quotes if present from configuration environment inputs
+    const secret = rawSecret?.replace(/^"|"$/g, '');
     const signatureHeader = request.headers.get('x-supabase-signature');
 
     if (!secret || !signatureHeader) {
