@@ -619,6 +619,7 @@ DECLARE
   v_existing_profile RECORD;
   v_clean_phone TEXT;
   v_matched BOOLEAN := FALSE;
+  v_avatar_url TEXT := NULL;
 BEGIN
   v_full_name := COALESCE(NEW.raw_user_meta_data->>'full_name', '');
   
@@ -642,6 +643,7 @@ BEGIN
       -- Map to the existing account and role
       v_account_id := v_existing_profile.account_id;
       v_account_role := COALESCE(v_existing_profile.account_role, 'agent');
+      v_avatar_url := v_existing_profile.avatar_url;
       
       -- If new user has no full name, inherit from existing profile
       IF v_full_name = '' THEN
@@ -668,7 +670,7 @@ BEGIN
     NEW.phone, 
     v_account_id, 
     v_account_role,
-    CASE WHEN v_matched THEN v_existing_profile.avatar_url ELSE NULL END
+    v_avatar_url
   );
 
   RETURN NEW;
