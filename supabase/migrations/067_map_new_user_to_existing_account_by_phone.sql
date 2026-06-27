@@ -17,6 +17,7 @@ DECLARE
   v_account_role TEXT;
   v_existing_profile RECORD;
   v_clean_phone TEXT;
+  v_matched BOOLEAN := FALSE;
 BEGIN
   v_full_name := COALESCE(NEW.raw_user_meta_data->>'full_name', '');
   
@@ -34,18 +35,21 @@ BEGIN
     FROM public.profiles 
     WHERE regexp_replace(phone, '\D', '', 'g') LIKE '%' || v_clean_phone
     LIMIT 1;
+    
+    IF FOUND THEN
+      v_matched := TRUE;
+      -- Map to the existing account and role
+      v_account_id := v_existing_profile.account_id;
+      v_account_role := COALESCE(v_existing_profile.account_role, 'agent');
+      
+      -- If new user has no full name, inherit from existing profile
+      IF v_full_name = '' THEN
+        v_full_name := COALESCE(v_existing_profile.full_name, '');
+      END IF;
+    END IF;
   END IF;
 
-  IF v_existing_profile.account_id IS NOT NULL THEN
-    -- Map to the existing account and role
-    v_account_id := v_existing_profile.account_id;
-    v_account_role := COALESCE(v_existing_profile.account_role, 'agent');
-    
-    -- If new user has no full name, inherit from existing profile
-    IF v_full_name = '' THEN
-      v_full_name := COALESCE(v_existing_profile.full_name, '');
-    END IF;
-  ELSE
+  IF NOT v_matched THEN
     -- Create a new account
     INSERT INTO public.accounts (name, owner_user_id)
     VALUES (COALESCE(NULLIF(v_full_name, ''), NEW.email, 'My account'), NEW.id)
@@ -63,7 +67,7 @@ BEGIN
     NEW.phone, 
     v_account_id, 
     v_account_role,
-    CASE WHEN v_existing_profile.account_id IS NOT NULL THEN v_existing_profile.avatar_url ELSE NULL END
+    CASE WHEN v_matched THEN v_existing_profile.avatar_url ELSE NULL END
   );
 
   RETURN NEW;
