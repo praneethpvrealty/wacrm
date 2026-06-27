@@ -172,8 +172,6 @@ export function ShowcaseView({
       categoryToSet = urlCategory;
     } else if (initialCategory) {
       categoryToSet = initialCategory;
-    } else if (savedState?.selectedType) {
-      categoryToSet = savedState.selectedType;
     }
 
     if (urlListingType === 'Sale' || urlListingType === 'Rent') {
@@ -1066,30 +1064,6 @@ export function ShowcaseView({
           </div>
         </div>
 
-        {/* CTA Requirements Ingestion Banner */}
-        <div className="relative overflow-hidden bg-gradient-to-r from-slate-900/40 via-indigo-950/10 to-slate-900/20 border border-slate-900/60 rounded-3xl p-6 sm:p-8 mb-12 shadow-2xl backdrop-blur-xl hover:border-slate-800/80 transition-all duration-500">
-          {/* Decorative glows */}
-          <div className="absolute -top-20 -right-20 w-60 h-60 bg-primary/10 rounded-full blur-[80px] pointer-events-none" />
-          <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-indigo-500/10 rounded-full blur-[70px] pointer-events-none" />
-          
-          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="max-w-2xl text-left">
-              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                Can&apos;t find your ideal property?
-              </h2>
-              <p className="mt-2 text-slate-405 text-sm leading-relaxed font-medium">
-                Tell us your specific requirements, and our team will match you with exclusive, off-market listings. Get notified directly on WhatsApp!
-              </p>
-            </div>
-            <Button
-              onClick={openRequirementsModal}
-              className="bg-primary hover:bg-primary-hover text-white text-xs font-bold px-6 py-5 rounded-xl hover:scale-102 hover:shadow-primary/30 transition-all shadow-lg shadow-primary/25 cursor-pointer shrink-0"
-            >
-              Submit Requirements
-            </Button>
-          </div>
-        </div>
-
         {/* Listings Result Grid */}
         {filteredProperties.length === 0 ? (
           <div className="flex flex-col items-center justify-center text-center py-20 border border-dashed border-slate-900 rounded-3xl bg-slate-900/10">
@@ -1337,6 +1311,30 @@ export function ShowcaseView({
             })}
           </div>
         )}
+
+        {/* CTA Requirements Ingestion Banner */}
+        <div className="relative overflow-hidden bg-gradient-to-r from-slate-900/40 via-indigo-950/10 to-slate-900/20 border border-slate-900/60 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl hover:border-slate-800/80 transition-all duration-500 mt-12">
+          {/* Decorative glows */}
+          <div className="absolute -top-20 -right-20 w-60 h-60 bg-primary/10 rounded-full blur-[80px] pointer-events-none" />
+          <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-indigo-500/10 rounded-full blur-[70px] pointer-events-none" />
+          
+          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="max-w-2xl text-left">
+              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                Can&apos;t find your ideal property?
+              </h2>
+              <p className="mt-2 text-slate-405 text-sm leading-relaxed font-medium">
+                Tell us your specific requirements, and our team will match you with exclusive, off-market listings. Get notified directly on WhatsApp!
+              </p>
+            </div>
+            <Button
+              onClick={openRequirementsModal}
+              className="bg-primary hover:bg-primary-hover text-white text-xs font-bold px-6 py-5 rounded-xl hover:scale-102 hover:shadow-primary/30 transition-all shadow-lg shadow-primary/25 cursor-pointer shrink-0"
+            >
+              Submit Requirements
+            </Button>
+          </div>
+        </div>
       </main>
 
       {/* Footer */}
