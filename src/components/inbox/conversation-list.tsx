@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationStatus } from "@/types";
@@ -55,9 +56,26 @@ export function ConversationList({
   onArchiveChange,
   resyncToken = 0,
 }: ConversationListProps) {
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<FilterValue>("all");
+  const searchParams = useSearchParams();
+  const initialFilter = (searchParams.get("filter") as FilterValue) || "all";
+  const initialSearch = searchParams.get("search") || "";
+
+  const [search, setSearch] = useState(initialSearch);
+  const [filter, setFilter] = useState<FilterValue>(
+    FILTER_OPTIONS.some((o) => o.value === initialFilter) ? initialFilter : "all"
+  );
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const filterParam = searchParams.get("filter") as FilterValue;
+    if (filterParam && FILTER_OPTIONS.some((o) => o.value === filterParam)) {
+      setFilter(filterParam);
+    }
+    const searchParam = searchParams.get("search");
+    if (searchParam !== null) {
+      setSearch(searchParam);
+    }
+  }, [searchParams]);
 
   // Keep the latest callback in a ref so the fetch effect below can
   // have a stable, empty-dep identity. Previously the fetch useCallback

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { Pipeline, PipelineStage, Deal } from "@/types";
@@ -84,11 +85,16 @@ export default function PipelinesPage() {
   const [creating, setCreating] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // Deal form state is lifted here so both the top-bar "Add Deal" and
-  // the per-column "+" trigger the same Sheet.
   const [dealFormOpen, setDealFormOpen] = useState(false);
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
   const [defaultStageId, setDefaultStageId] = useState<string>("");
+
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get("new") === "true") {
+      setDealFormOpen(true);
+    }
+  }, [searchParams]);
 
   // Brokerage prompt on drag/move state
   const [brokeragePromptDeal, setBrokeragePromptDeal] = useState<Deal | null>(null);

@@ -14,17 +14,7 @@ export async function POST(request: Request) {
       request.headers.get('webhook-signature') || 
       request.headers.get('x-webhook-signature');
 
-    const headerKeys = Array.from(request.headers.keys());
-
-    console.log('[SMS Hook Debug]', {
-      hasRawSecret: !!rawSecret,
-      rawSecretLength: rawSecret?.length,
-      hasCleanSecret: !!secretStr,
-      cleanSecretLength: secretStr.length,
-      hasSignatureHeader: !!signatureHeader,
-      signatureHeaderValue: signatureHeader,
-      receivedHeaders: headerKeys,
-    });
+    console.log('[SMS Hook] Received webhook request');
 
     if (!secretStr || !signatureHeader) {
       console.error('[SMS Hook] Missing secret or signature header');
@@ -96,19 +86,7 @@ export async function POST(request: Request) {
         .update(message)
         .digest('base64');
 
-      console.log('[SMS Hook Debug] Key comparison:', {
-        keyType: typeof key,
-        keyLength: key.length,
-        receivedSignature: signature,
-        expectedHex: expectedSignatureHex,
-        expectedBase64: expectedSignatureBase64,
-        webhookId,
-        timestamp,
-        bodyTextLength: bodyText?.length,
-        bodyTextPreview: bodyText?.substring(0, 100),
-        isSvixFormat,
-        messageSigned: message,
-      });
+
 
       // Secure comparison for hex
       try {

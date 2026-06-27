@@ -269,6 +269,21 @@ export default function ContactsPage() {
   const [allAreas, setAllAreas] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<string>('created_desc');
 
+  useEffect(() => {
+    const searchParam = searchParams?.get('search');
+    if (searchParam !== null && searchParam !== undefined) {
+      setSearch(searchParam);
+    }
+    const classificationParam = searchParams?.get('classification');
+    if (classificationParam) {
+      setFilterClassification(classificationParam);
+    }
+    const tagParam = searchParams?.get('tag');
+    if (tagParam) {
+      setFilterTag(tagParam);
+    }
+  }, [searchParams]);
+
   // Modals
   const [formOpen, setFormOpen] = useState(false);
   const [editContact, setEditContact] = useState<Contact | null>(null);

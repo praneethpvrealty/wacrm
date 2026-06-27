@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -92,6 +93,17 @@ export default function CalendarPage() {
   const [contacts, setContacts] = useState<SimpleContact[]>([]);
   const [properties, setProperties] = useState<SimpleProperty[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const searchParams = useSearchParams();
+  const [todoFilter, setTodoFilter] = useState<"all" | "priority">("all");
+
+  useEffect(() => {
+    if (searchParams.get("filter") === "priority") {
+      setTodoFilter("priority");
+    } else {
+      setTodoFilter("all");
+    }
+  }, [searchParams]);
 
   // Modals state
   const [isApptModalOpen, setIsApptModalOpen] = useState(false);
@@ -243,7 +255,12 @@ export default function CalendarPage() {
       isAppointment: true,
     }));
 
-    return [...todos, ...apptTodos].sort((a, b) => {
+    const all = [...todos, ...apptTodos];
+    const filtered = todoFilter === "priority"
+      ? all.filter((t) => t.priority === "high" || t.priority === "medium")
+      : all;
+
+    return filtered.sort((a, b) => {
       if (a.completed !== b.completed) {
         return a.completed ? 1 : -1;
       }
@@ -251,7 +268,7 @@ export default function CalendarPage() {
       const dateB = b.due_date ? new Date(b.due_date).getTime() : 0;
       return dateA - dateB;
     });
-  }, [todos, appointments]);
+  }, [todos, appointments, todoFilter]);
 
   // Group appointments by date string
   const appointmentsByDate = useMemo(() => {
@@ -872,9 +889,19 @@ export default function CalendarPage() {
       <div className="flex w-full flex-col gap-6 lg:w-80 shrink-0">
         {/* To-Do panel */}
         <div className="flex flex-1 flex-col rounded-xl border border-slate-800 bg-slate-900/50 p-6 backdrop-blur overflow-hidden">
-          <div className="mb-4 flex items-center gap-2">
-            <ListTodo className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-bold text-white">To-Do Task List</h2>
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <ListTodo className="h-5 w-5 text-primary" />
+              <h2 className="text-sm font-bold text-white">To-Do Task List</h2>
+            </div>
+            <select
+              value={todoFilter}
+              onChange={(e) => setTodoFilter(e.target.value as "all" | "priority")}
+              className="rounded border border-slate-800 bg-slate-950 px-2 py-0.5 text-[10px] font-bold text-slate-400 focus:outline-none cursor-pointer"
+            >
+              <option value="all">All Tasks</option>
+              <option value="priority">Priority Only</option>
+            </select>
           </div>
 
           {/* Quick task add form */}

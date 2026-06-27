@@ -286,10 +286,10 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             </h3>
             <div className="flex flex-col gap-1.5">
               {[
-                { label: "New Deals", href: "/pipelines" },
-                { label: "Pending Quotes", href: "/inbox" },
-                { label: "Priority Tasks", href: "/dashboard" },
-                { label: "Follow-ups", href: "/contacts" },
+                { label: "New Deals", href: "/pipelines?new=true" },
+                { label: "Pending Quotes", href: "/inbox?filter=pending" },
+                { label: "Priority Tasks", href: "/calendar?filter=priority" },
+                { label: "Follow-ups", href: "/contacts?search=follow-up" },
               ].map((qa) => (
                 <Link
                   key={qa.label}
