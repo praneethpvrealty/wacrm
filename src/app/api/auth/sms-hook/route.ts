@@ -129,7 +129,6 @@ export async function POST(request: Request) {
 
     // Parse the JSON payload
     const body = JSON.parse(bodyText);
-    const user = body.user;
 
     // Retrieve phone and message/otp code
     const phone = body.phone || body.sms?.phone;
@@ -159,81 +158,93 @@ export async function POST(request: Request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    // Resolve tenant account_id
-    let accountId: string | null = null;
-    if (user?.id) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('account_id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      if (profile?.account_id) {
-        accountId = profile.account_id;
-      }
+    // ─────────────────────────────────────────────────────────────
+    // OTP Sender Resolution: Always use the admin/super_admin
+    // account's Official API credentials to send OTPs.
+    // This ensures a single, reliable sender regardless of
+    // whether the recipient tenant is in Sandbox or Official API mode.
+    // ─────────────────────────────────────────────────────────────
+
+    let otpSenderAccountId: string | null = null;
+
+    // 1. Find the super_admin account (the designated OTP sender)
+    const { data: adminProfiles } = await supabase
+      .from('profiles')
+      .select('account_id')
+      .eq('role', 'super_admin')
+      .order('created_at', { ascending: true })
+      .limit(1);
+
+    if (adminProfiles && adminProfiles.length > 0) {
+      otpSenderAccountId = (adminProfiles[0] as { account_id: string }).account_id;
     }
 
-    // Fallback to the default system configuration if no account matches
-    if (!accountId) {
-      // 1. Try to read explicit fallback_whatsapp_account_id from system_settings
+    // 2. Fallback: read explicit fallback_whatsapp_account_id from system_settings
+    if (!otpSenderAccountId) {
       const { data: settings } = await supabase
         .from('system_settings')
         .select('value')
         .eq('key', 'fallback_whatsapp_account_id')
         .maybeSingle();
 
-      if (settings?.value) {
-        accountId = settings.value as string;
-      }
-
-      // 2. Fall back to the first available config as a legacy fallback
-      if (!accountId) {
-        const { data: configs } = await supabase
-          .from('whatsapp_config')
-          .select('account_id')
-          .limit(1);
-        if (configs && configs.length > 0) {
-          accountId = configs[0].account_id;
-        }
+      const fallbackId = (settings as unknown as { value?: string | null })?.value;
+      if (fallbackId && typeof fallbackId === 'string') {
+        otpSenderAccountId = fallbackId;
       }
     }
 
-    if (!accountId) {
-      console.error('[SMS Hook] No active WhatsApp config found in database');
-      return NextResponse.json({ error: 'WhatsApp config not found' }, { status: 500 });
+    // 3. Last resort: the first Official API config in the database
+    if (!otpSenderAccountId) {
+      const { data: officialConfigs } = await supabase
+        .from('whatsapp_config')
+        .select('account_id')
+        .eq('integration_type', 'official_api')
+        .not('phone_number_id', 'is', null)
+        .not('access_token', 'is', null)
+        .limit(1);
+
+      if (officialConfigs && officialConfigs.length > 0) {
+        otpSenderAccountId = (officialConfigs[0] as { account_id: string }).account_id;
+      }
     }
 
-    // Fetch the account's WhatsApp API keys
-    const { data: config, error: configError } = await supabase
+    if (!otpSenderAccountId) {
+      console.error('[SMS Hook] No admin or fallback Official API WhatsApp config found. Cannot send OTP.');
+      return NextResponse.json({ error: 'No OTP sender configured' }, { status: 500 });
+    }
+
+    // Load the admin/sender account's WhatsApp credentials
+    const { data: senderConfig, error: senderConfigError } = await supabase
       .from('whatsapp_config')
       .select('phone_number_id, access_token, integration_type')
-      .eq('account_id', accountId)
+      .eq('account_id', otpSenderAccountId)
       .maybeSingle();
 
-    if (configError) {
-      console.error('[SMS Hook] Failed to load WhatsApp config:', configError);
-      return NextResponse.json({ error: 'Failed to load credentials' }, { status: 500 });
+    if (senderConfigError) {
+      console.error('[SMS Hook] Failed to load sender WhatsApp config:', senderConfigError);
+      return NextResponse.json({ error: 'Failed to load sender credentials' }, { status: 500 });
     }
 
-    let phoneNumberId: string
-    let decryptedToken: string
+    let phoneNumberId: string;
+    let decryptedToken: string;
 
-    // Sandbox mode: use system-wide shared credentials
-    if (config?.integration_type === 'sandbox') {
+    if (senderConfig?.integration_type === 'sandbox') {
+      // Even the "admin" account is in sandbox — try the system-wide fallback
       const sandboxSystem = await getSandboxSystemConfig();
       if (!sandboxSystem.enabled || !sandboxSystem.access_token || !sandboxSystem.phone_number_id) {
-        console.error('[SMS Hook] Sandbox tenant but system sandbox is not configured');
+        console.error('[SMS Hook] Admin account is sandbox but system sandbox is not configured');
         return NextResponse.json({ error: 'Sandbox system not configured' }, { status: 500 });
       }
       phoneNumberId = sandboxSystem.phone_number_id;
       decryptedToken = decrypt(sandboxSystem.access_token);
     } else {
-      // Official API: use tenant's own credentials
-      if (!config?.phone_number_id || !config?.access_token) {
-        console.error('[SMS Hook] Failed to load WhatsApp credentials: missing phone_number_id or access_token');
-        return NextResponse.json({ error: 'Failed to load credentials' }, { status: 500 });
+      // Official API sender
+      if (!senderConfig?.phone_number_id || !senderConfig?.access_token) {
+        console.error('[SMS Hook] Admin Official API config missing phone_number_id or access_token');
+        return NextResponse.json({ error: 'Admin sender credentials incomplete' }, { status: 500 });
       }
-      phoneNumberId = config.phone_number_id;
-      decryptedToken = decrypt(config.access_token);
+      phoneNumberId = senderConfig.phone_number_id;
+      decryptedToken = decrypt(senderConfig.access_token);
     }
 
     // Send the OTP via WhatsApp template message, with a free-form text fallback.
