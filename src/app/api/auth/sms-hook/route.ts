@@ -220,7 +220,7 @@ export async function POST(request: Request) {
     // Production numbers require an approved template (e.g. 'whatsapp_otp') to send messages
     // outside the 24-hour customer window.
     const cleanPhone = phone.replace('+', ''); // WhatsApp API prefers numbers without prefix symbol
-    try {
+    const sendPromise = (async () => {
       try {
         console.log(`[SMS Hook] Attempting to send OTP template 'whatsapp_otp' with copy-code button parameter to: ${cleanPhone}`);
         await sendTemplateMessage({
@@ -228,6 +228,7 @@ export async function POST(request: Request) {
           accessToken: decryptedToken,
           to: cleanPhone,
           templateName: 'whatsapp_otp',
+          language: 'en',
           messageParams: {
             body: [otpCode],
             buttonParams: {
@@ -242,22 +243,36 @@ export async function POST(request: Request) {
           accessToken: decryptedToken,
           to: cleanPhone,
           templateName: 'whatsapp_otp',
+          language: 'en',
           params: [otpCode],
         });
       }
       console.log(`[SMS Hook] Verification code ${otpCode} successfully sent via template to: ${cleanPhone}`);
-    } catch (templateError) {
+    })().catch(async (templateError) => {
       console.warn('[SMS Hook] Template sending failed, falling back to free-form text message:', templateError);
-      
-      // Fallback for Sandbox / Test numbers where custom templates may not be registered.
-      await sendTextMessage({
-        phoneNumberId: config.phone_number_id,
-        accessToken: decryptedToken,
-        to: cleanPhone,
-        text: `Your convoReal CRM verification code is: *${otpCode}*\n\nIt is valid for 5 minutes.`,
-      });
-      console.log(`[SMS Hook] Verification code ${otpCode} successfully sent via fallback text message to: ${cleanPhone}`);
+      try {
+        await sendTextMessage({
+          phoneNumberId: config.phone_number_id,
+          accessToken: decryptedToken,
+          to: cleanPhone,
+          text: `Your convoReal CRM verification code is: *${otpCode}*\n\nIt is valid for 5 minutes.`,
+        });
+        console.log(`[SMS Hook] Verification code ${otpCode} successfully sent via fallback text message to: ${cleanPhone}`);
+      } catch (fallbackError) {
+        console.error('[SMS Hook] Fallback text sending failed:', fallbackError);
+      }
+    });
+
+    // Wait up to 1.8 seconds for the send operation to finish.
+    // If it takes longer, return success immediately and let it finish in the background
+    // to prevent exceeding Supabase's strict 5-second SMS hook timeout limit.
+    const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 1800, 'timeout'));
+
+    const result = await Promise.race([sendPromise, timeoutPromise]);
+    if (result === 'timeout') {
+      console.warn('[SMS Hook] Request is taking longer than 1.8s. Returning success to Supabase and completing delivery in the background.');
     }
+
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('[SMS Hook] Unexpected error executing webhook handler:', err);

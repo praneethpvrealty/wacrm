@@ -103,6 +103,15 @@ function LoginPageInner() {
     return () => clearInterval(timer);
   }, [countdown]);
 
+  useEffect(() => {
+    if (otpSent) {
+      setTimeout(() => {
+        const firstInput = document.getElementById("otp-0");
+        firstInput?.focus();
+      }, 80);
+    }
+  }, [otpSent]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
