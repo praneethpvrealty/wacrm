@@ -233,25 +233,6 @@ export default function AdminDashboardPage() {
     }
   }
 
-  async function handleBulkMigrate() {
-    const selected = sandboxTenants
-      .filter((t) => (t as unknown as { selected?: boolean }).selected)
-      .map((t) => t.account_id as string);
-
-    if (selected.length === 0) {
-      toast.error('Select at least one tenant to migrate');
-      return;
-    }
-
-    if (!confirm(`Migrate ${selected.length} tenant(s) to Official API using the same credentials? This will apply the SAME phone number and token to ALL selected tenants.`)) {
-      return;
-    }
-
-    // For bulk migration, we need credentials from the first selected tenant or ask admin
-    // In practice, bulk migration should use a prompt for shared credentials
-    toast.info('Bulk migration requires entering credentials. Please migrate tenants individually from their settings page.');
-  }
-
   if (loading) {
     return (
       <div className="flex h-96 items-center justify-center">

@@ -131,7 +131,6 @@ export async function POST(request: Request) {
       waba_id,
       access_token,
       verify_token,
-      pin,
     } = body
 
     if (!Array.isArray(tenant_account_ids) || tenant_account_ids.length === 0) {
