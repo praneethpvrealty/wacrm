@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { User, Mail, Loader2, ArrowRight, Sparkles } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { useAuth } from '@/hooks/use-auth';
+import { AuthProvider, useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export default function ProfileSetupPage() {
+function ProfileSetupPageInner() {
   const { user, profile, loading: authLoading, profileLoading, refreshProfile } = useAuth();
   const supabase = createClient();
 
@@ -217,5 +217,13 @@ export default function ProfileSetupPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function ProfileSetupPage() {
+  return (
+    <AuthProvider>
+      <ProfileSetupPageInner />
+    </AuthProvider>
   );
 }
