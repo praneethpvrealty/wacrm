@@ -131,6 +131,11 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
     !profileLoading &&
     !!profile?.beta_features?.includes(ACCOUNT_SHARING_FLAG);
 
+  const dynamicBottomItems = [
+    ...(profile?.role === 'super_admin' ? [{ href: "/admin", label: "Admin Panel", icon: Shield }] : []),
+    ...bottomNavItems,
+  ];
+
   // Close the drawer when route changes — users opened it to navigate,
   // so once they pick a destination the drawer should get out of the way.
   useEffect(() => {
@@ -258,7 +263,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           <div className="my-4 border-t border-slate-900/60" />
 
           <ul className="flex flex-col gap-1">
-            {bottomNavItems.map((item) => {
+            {dynamicBottomItems.map((item) => {
               const isActive = pathname.startsWith(item.href);
               return (
                 <li key={item.href}>

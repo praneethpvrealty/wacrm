@@ -181,13 +181,15 @@ export function WhatsAppConfig() {
   }, [authLoading, profileLoading, user, accountId, fetchConfig]);
 
   async function handleSave() {
-    if (!phoneNumberId.trim()) {
-      toast.error('Phone Number ID is required');
-      return;
-    }
-    if (!config && (!accessToken.trim() || !tokenEdited)) {
-      toast.error('Access Token is required for initial setup');
-      return;
+    if (integrationType === 'official_api') {
+      if (!phoneNumberId.trim()) {
+        toast.error('Phone Number ID is required');
+        return;
+      }
+      if (!config && (!accessToken.trim() || !tokenEdited)) {
+        toast.error('Access Token is required for initial setup');
+        return;
+      }
     }
 
     try {
@@ -198,25 +200,31 @@ export function WhatsAppConfig() {
       // and writing direct to Supabase stores the token in plaintext,
       // which then fails decryption on every subsequent health check.
       const payload: Record<string, unknown> = {
-        phone_number_id: phoneNumberId.trim(),
-        waba_id: wabaId.trim() || null,
-        verify_token: verifyToken.trim() || null,
-        pin: pin.trim() || null,
-        catalog_id: catalogId.trim() || null,
-        auto_sync_catalog: autoSyncCatalog,
+        phone_number_id: integrationType === 'official_api' ? phoneNumberId.trim() : null,
+        waba_id: integrationType === 'official_api' ? (wabaId.trim() || null) : null,
+        verify_token: integrationType === 'official_api' ? (verifyToken.trim() || null) : null,
+        pin: integrationType === 'official_api' ? (pin.trim() || null) : null,
+        catalog_id: integrationType === 'official_api' ? (catalogId.trim() || null) : null,
+        auto_sync_catalog: integrationType === 'official_api' ? autoSyncCatalog : false,
         integration_type: integrationType,
       };
 
-      if (tokenEdited && accessToken !== MASKED_TOKEN && accessToken.trim()) {
-        payload.access_token = accessToken.trim();
-      } else if (config) {
-        // Existing config — reuse stored encrypted token by decrypting on the
-        // server. But our POST handler requires an access_token to verify
-        // with Meta. If the user didn't change the token, we need to signal
-        // that. Simplest: require token re-entry if they're updating.
-        toast.error('Please re-enter the Access Token to save changes');
-        setSaving(false);
-        return;
+      if (integrationType === 'official_api') {
+        if (tokenEdited && accessToken !== MASKED_TOKEN && accessToken.trim()) {
+          payload.access_token = accessToken.trim();
+        } else if (config && config.integration_type === 'official_api') {
+          // Existing config — reuse stored encrypted token by decrypting on the
+          // server. But our POST handler requires an access_token to verify
+          // with Meta. If the user didn't change the token, we need to signal
+          // that. Simplest: require token re-entry if they're updating.
+          toast.error('Please re-enter the Access Token to save changes');
+          setSaving(false);
+          return;
+        } else {
+          toast.error('Please enter the Access Token to save Official API configuration');
+          setSaving(false);
+          return;
+        }
       }
 
       const res = await fetch('/api/whatsapp/config', {
@@ -360,6 +368,198 @@ export function WhatsAppConfig() {
     navigator.clipboard.writeText(webhookUrl);
     toast.success('Webhook URL copied to clipboard');
   }
+
+  const renderSetupInstructions = () => {
+    if (integrationType === 'sandbox') {
+      return (
+        <Card className="bg-slate-900 border-slate-700 ring-0 ring-transparent">
+          <CardHeader>
+            <CardTitle className="text-white text-base">Sandbox Instructions</CardTitle>
+            <CardDescription className="text-slate-400">
+              Follow these steps to test using the shared Sandbox environment.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Accordion type="single" collapsible>
+              <AccordionItem value="item-1" className="border-slate-700">
+                <AccordionTrigger className="text-slate-300 hover:text-white hover:no-underline">
+                  <span className="flex items-center gap-2">
+                    <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">1</span>
+                    Activate Sandbox Mode
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent className="text-slate-400">
+                  <p className="text-sm">
+                    Click the <strong>Save Configuration</strong> button to set the Sandbox connection method. This activates the Sandbox trial for 7 days.
+                  </p>
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="item-2" className="border-slate-700">
+                <AccordionTrigger className="text-slate-300 hover:text-white hover:no-underline">
+                  <span className="flex items-center gap-2">
+                    <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">2</span>
+                    Join Sandbox on WhatsApp
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent className="text-slate-400">
+                  <p className="text-sm">
+                    Send the text message <code>join sandbox-code</code> to our shared Sandbox number (refer to your Meta dashboard for the sandbox code and number). This registers your number as a test recipient.
+                  </p>
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="item-3" className="border-slate-700">
+                <AccordionTrigger className="text-slate-300 hover:text-white hover:no-underline">
+                  <span className="flex items-center gap-2">
+                    <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">3</span>
+                    Send Test Messages
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent className="text-slate-400">
+                  <p className="text-sm">
+                    Send mock lead messages to the Sandbox number. The CRM parser will automatically ingest them and populate your inbox.
+                  </p>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    if (integrationType === 'web_qr') {
+      return (
+        <Card className="bg-slate-900 border-slate-700 ring-0 ring-transparent">
+          <CardHeader>
+            <CardTitle className="text-white text-base">QR Scan Setup</CardTitle>
+            <CardDescription className="text-slate-400">
+              Connect your personal or standard business phone number instantly.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Accordion type="single" collapsible>
+              <AccordionItem value="item-1" className="border-slate-700">
+                <AccordionTrigger className="text-slate-300 hover:text-white hover:no-underline">
+                  <span className="flex items-center gap-2">
+                    <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">1</span>
+                    Save Connection Type
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent className="text-slate-400">
+                  <p className="text-sm">
+                    Click the <strong>Save Configuration</strong> button below. This registers your choice and activates the QR Scan 2-day trial.
+                  </p>
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="item-2" className="border-slate-700">
+                <AccordionTrigger className="text-slate-300 hover:text-white hover:no-underline">
+                  <span className="flex items-center gap-2">
+                    <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">2</span>
+                    Scan QR Code
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent className="text-slate-400">
+                  <p className="text-sm">
+                    Once saved, go to <strong>Linked Devices</strong> inside your WhatsApp mobile application and scan the generated QR code to start sync.
+                  </p>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    // Default: Official API
+    return (
+      <Card className="bg-slate-900 border-slate-700 ring-0 ring-transparent">
+        <CardHeader>
+          <CardTitle className="text-white text-base">Setup Instructions</CardTitle>
+          <CardDescription className="text-slate-400">
+            Follow these steps to connect your WhatsApp Business API.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Accordion type="single" collapsible>
+            <AccordionItem value="item-1" className="border-slate-700">
+              <AccordionTrigger className="text-slate-300 hover:text-white hover:no-underline">
+                <span className="flex items-center gap-2">
+                  <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">1</span>
+                  Create a Meta App
+                </span>
+              </AccordionTrigger>
+              <AccordionContent className="text-slate-400">
+                <ol className="list-decimal list-inside space-y-1 text-sm">
+                  <li>Go to <span className="text-primary">developers.facebook.com</span></li>
+                  <li>Click &quot;My Apps&quot; and then &quot;Create App&quot;</li>
+                  <li>Select &quot;Business&quot; as the app type</li>
+                  <li>Fill in app details and create</li>
+                </ol>
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="item-2" className="border-slate-700">
+              <AccordionTrigger className="text-slate-300 hover:text-white hover:no-underline">
+                <span className="flex items-center gap-2">
+                  <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">2</span>
+                  Add WhatsApp Product
+                </span>
+              </AccordionTrigger>
+              <AccordionContent className="text-slate-400">
+                <ol className="list-decimal list-inside space-y-1 text-sm">
+                  <li>In your app dashboard, click &quot;Add Product&quot;</li>
+                  <li>Find &quot;WhatsApp&quot; and click &quot;Set Up&quot;</li>
+                  <li>Follow the setup wizard to link your business</li>
+                </ol>
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="item-3" className="border-slate-700">
+              <AccordionTrigger className="text-slate-300 hover:text-white hover:no-underline">
+                <span className="flex items-center gap-2">
+                  <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">3</span>
+                  Get API Credentials
+                </span>
+              </AccordionTrigger>
+              <AccordionContent className="text-slate-400">
+                <p className="text-sm">
+                  Copy the Phone Number ID and Permanent Access Token, then paste them into the credentials form on this page.
+                </p>
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="item-4" className="border-slate-700">
+              <AccordionTrigger className="text-slate-300 hover:text-white hover:no-underline">
+                <span className="flex items-center gap-2">
+                  <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">4</span>
+                  Configure Webhooks
+                </span>
+              </AccordionTrigger>
+              <AccordionContent className="text-slate-400">
+                <p className="text-sm">
+                  In WhatsApp Configuration, paste the Webhook URL and verify token from this page, and subscribe to the <code>messages</code> webhook event.
+                </p>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+
+          <div className="mt-4 pt-4 border-t border-slate-700">
+            <a
+              href="https://developers.facebook.com/docs/whatsapp/cloud-api/get-started"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 transition-colors"
+            >
+              <ExternalLink className="size-3.5" />
+              Meta WhatsApp API Documentation
+            </a>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
 
   if (loading) {
     return (
@@ -608,144 +808,192 @@ export function WhatsAppConfig() {
           </CardContent>
         </Card>
 
-        {/* API Credentials */}
-        <Card className="bg-slate-900 border-slate-700 ring-0 ring-transparent">
-          <CardHeader>
-            <CardTitle className="text-white">API Credentials</CardTitle>
-            <CardDescription className="text-slate-400">
-              Enter your Meta WhatsApp Business API credentials.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-slate-300">Phone Number ID</Label>
-              <Input
-                placeholder="e.g. 100234567890123"
-                value={phoneNumberId}
-                onChange={(e) => setPhoneNumberId(e.target.value)}
-                className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-slate-300">WhatsApp Business Account ID</Label>
-              <Input
-                placeholder="e.g. 100234567890456"
-                value={wabaId}
-                onChange={(e) => setWabaId(e.target.value)}
-                className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-slate-300">Permanent Access Token</Label>
-              <div className="relative">
+        {/* API Credentials (Only shown for Official API) */}
+        {integrationType === 'official_api' && (
+          <Card className="bg-slate-900 border-slate-700 ring-0 ring-transparent">
+            <CardHeader>
+              <CardTitle className="text-white">API Credentials</CardTitle>
+              <CardDescription className="text-slate-400">
+                Enter your Meta WhatsApp Business API credentials.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-slate-300">Phone Number ID</Label>
                 <Input
-                  type={showToken ? 'text' : 'password'}
-                  placeholder="Enter your access token"
-                  value={accessToken}
-                  onChange={(e) => {
-                    setAccessToken(e.target.value);
-                    setTokenEdited(true);
-                  }}
-                  onFocus={() => {
-                    if (accessToken === MASKED_TOKEN) {
-                      setAccessToken('');
+                  placeholder="e.g. 100234567890123"
+                  value={phoneNumberId}
+                  onChange={(e) => setPhoneNumberId(e.target.value)}
+                  className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-slate-300">WhatsApp Business Account ID</Label>
+                <Input
+                  placeholder="e.g. 100234567890456"
+                  value={wabaId}
+                  onChange={(e) => setWabaId(e.target.value)}
+                  className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-slate-300">Permanent Access Token</Label>
+                <div className="relative">
+                  <Input
+                    type={showToken ? 'text' : 'password'}
+                    placeholder="Enter your access token"
+                    value={accessToken}
+                    onChange={(e) => {
+                      setAccessToken(e.target.value);
                       setTokenEdited(true);
-                    }
-                  }}
-                  className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowToken(!showToken)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
-                >
-                  {showToken ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                </button>
-              </div>
-              {config && !tokenEdited && (
-                <p className="text-xs text-slate-500">
-                  Token is hidden for security. Re-enter it to update configuration.
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-slate-300">Webhook Verify Token</Label>
-              <Input
-                placeholder="Create a custom verify token"
-                value={verifyToken}
-                onChange={(e) => setVerifyToken(e.target.value)}
-                className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
-              />
-              <p className="text-xs text-slate-500">
-                A custom string you create. Must match the token you set in Meta webhook settings.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-slate-300">Meta Commerce Catalog ID (Optional)</Label>
-              <Input
-                placeholder="e.g. 100234567890999"
-                value={catalogId}
-                onChange={(e) => setCatalogId(e.target.value)}
-                className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
-              />
-              <p className="text-xs text-slate-500">
-                Required for sending property listings directly as WhatsApp Product cards. Find this in Facebook Commerce Manager.
-              </p>
-            </div>
-
-            {catalogId.trim() && (
-              <div className="flex items-center gap-2 pt-1">
-                <input
-                  type="checkbox"
-                  id="auto-sync-catalog"
-                  checked={autoSyncCatalog}
-                  onChange={(e) => setAutoSyncCatalog(e.target.checked)}
-                  className="rounded border-slate-700 bg-slate-800 text-primary focus:ring-0 focus:ring-offset-0 h-4 w-4 cursor-pointer"
-                />
-                <Label htmlFor="auto-sync-catalog" className="text-slate-350 text-xs font-semibold cursor-pointer select-none">
-                  Auto-sync properties to Meta Catalog on creation/update
-                </Label>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label className="text-slate-300">
-                Two-step verification PIN
-                {!isRegistered && (
-                  <span className="ml-1 text-red-400">*</span>
+                    }}
+                    onFocus={() => {
+                      if (accessToken === MASKED_TOKEN) {
+                        setAccessToken('');
+                        setTokenEdited(true);
+                      }
+                    }}
+                    className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowToken(!showToken)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                  >
+                    {showToken ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+                {config && !tokenEdited && (
+                  <p className="text-xs text-slate-500">
+                    Token is hidden for security. Re-enter it to update configuration.
+                  </p>
                 )}
-              </Label>
-              <Input
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                placeholder="6-digit PIN from Meta WhatsApp Manager"
-                value={pin}
-                onChange={(e) =>
-                  setPin(e.target.value.replace(/\D/g, '').slice(0, 6))
-                }
-                className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 tracking-widest"
-              />
-              <p className="text-xs text-slate-500 leading-relaxed">
-                Required the first time you connect a number, and any
-                time you swap to a different number. Set it in{' '}
-                <strong className="text-slate-300">
-                  Meta Business Manager → WhatsApp Accounts → Phone
-                  Numbers → Two-step verification
-                </strong>
-                . Without this PIN, Meta saves your credentials but
-                won&apos;t actually route inbound messages to ConvoReal —
-                the symptom that hits second numbers under a shared
-                WABA. Leave blank to keep an existing registration
-                untouched.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-slate-300">Webhook Verify Token</Label>
+                <Input
+                  placeholder="Create a custom verify token"
+                  value={verifyToken}
+                  onChange={(e) => setVerifyToken(e.target.value)}
+                  className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                />
+                <p className="text-xs text-slate-500">
+                  A custom string you create. Must match the token you set in Meta webhook settings.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-slate-300">Meta Commerce Catalog ID (Optional)</Label>
+                <Input
+                  placeholder="e.g. 100234567890999"
+                  value={catalogId}
+                  onChange={(e) => setCatalogId(e.target.value)}
+                  className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                />
+                <p className="text-xs text-slate-500">
+                  Required for sending property listings directly as WhatsApp Product cards. Find this in Facebook Commerce Manager.
+                </p>
+              </div>
+
+              {catalogId.trim() && (
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="checkbox"
+                    id="auto-sync-catalog"
+                    checked={autoSyncCatalog}
+                    onChange={(e) => setAutoSyncCatalog(e.target.checked)}
+                    className="rounded border-slate-700 bg-slate-800 text-primary focus:ring-0 focus:ring-offset-0 h-4 w-4 cursor-pointer"
+                  />
+                  <Label htmlFor="auto-sync-catalog" className="text-slate-350 text-xs font-semibold cursor-pointer select-none">
+                    Auto-sync properties to Meta Catalog on creation/update
+                  </Label>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label className="text-slate-300">
+                  Two-step verification PIN
+                  {!isRegistered && (
+                    <span className="ml-1 text-red-400">*</span>
+                  )}
+                </Label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="6-digit PIN from Meta WhatsApp Manager"
+                  value={pin}
+                  onChange={(e) =>
+                    setPin(e.target.value.replace(/\D/g, '').slice(0, 6))
+                  }
+                  className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 tracking-widest"
+                />
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Required the first time you connect a number, and any
+                  time you swap to a different number. Set it in{' '}
+                  <strong className="text-slate-300">
+                    Meta Business Manager → WhatsApp Accounts → Phone
+                    Numbers → Two-step verification
+                  </strong>
+                  . Without this PIN, Meta saves your credentials but
+                  won&apos;t actually route inbound messages to ConvoReal —
+                  the symptom that hits second numbers under a shared
+                  WABA. Leave blank to keep an existing registration
+                  untouched.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Sandbox Info */}
+        {integrationType === 'sandbox' && (
+          <Card className="bg-slate-900 border-slate-700 ring-0 ring-transparent">
+            <CardHeader>
+              <CardTitle className="text-white">Sandbox Connection</CardTitle>
+              <CardDescription className="text-slate-400">
+                You are connecting using a shared Sandbox environment.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-xl border border-slate-800 bg-slate-950 p-4 leading-relaxed text-slate-300 text-sm">
+                <p className="mb-2">
+                  No custom API credentials or Meta app creation are required to use the Sandbox.
+                </p>
+                <p className="text-slate-400 text-xs">
+                  Simply save this configuration to initialize your 7-day sandbox trial. 
+                  Once active, you can send test messages to the shared sandbox phone number to test lead parsing.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* QR Scan Info */}
+        {integrationType === 'web_qr' && (
+          <Card className="bg-slate-900 border-slate-700 ring-0 ring-transparent">
+            <CardHeader>
+              <CardTitle className="text-white">QR Scan (WhatsApp Web)</CardTitle>
+              <CardDescription className="text-slate-400">
+                Connect your standard personal/business phone number by scanning a QR code.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-xl border border-slate-800 bg-slate-950 p-4 leading-relaxed text-slate-300 text-sm">
+                <p className="mb-2">
+                  No API credentials, Meta App setup, or permanent tokens are needed for this method.
+                </p>
+                <p className="text-slate-400 text-xs">
+                  Save this configuration to register your 2-day QR scan trial. 
+                  After saving, scan the generated pairing QR code using Linked Devices on your phone.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Webhook URL */}
         <Card className="bg-slate-900 border-slate-700 ring-0 ring-transparent">
@@ -836,97 +1084,7 @@ export function WhatsAppConfig() {
 
       {/* Setup Instructions Sidebar */}
       <div>
-        <Card className="bg-slate-900 border-slate-700 ring-0 ring-transparent">
-          <CardHeader>
-            <CardTitle className="text-white text-base">Setup Instructions</CardTitle>
-            <CardDescription className="text-slate-400">
-              Follow these steps to connect your WhatsApp Business API.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Accordion>
-              <AccordionItem className="border-slate-700">
-                <AccordionTrigger className="text-slate-300 hover:text-white hover:no-underline">
-                  <span className="flex items-center gap-2">
-                    <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">1</span>
-                    Create a Meta App
-                  </span>
-                </AccordionTrigger>
-                <AccordionContent className="text-slate-400">
-                  <ol className="list-decimal list-inside space-y-1 text-sm">
-                    <li>Go to <span className="text-primary">developers.facebook.com</span></li>
-                    <li>Click &quot;My Apps&quot; and then &quot;Create App&quot;</li>
-                    <li>Select &quot;Business&quot; as the app type</li>
-                    <li>Fill in app details and create</li>
-                  </ol>
-                </AccordionContent>
-              </AccordionItem>
-
-              <AccordionItem className="border-slate-700">
-                <AccordionTrigger className="text-slate-300 hover:text-white hover:no-underline">
-                  <span className="flex items-center gap-2">
-                    <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">2</span>
-                    Add WhatsApp Product
-                  </span>
-                </AccordionTrigger>
-                <AccordionContent className="text-slate-400">
-                  <ol className="list-decimal list-inside space-y-1 text-sm">
-                    <li>In your app dashboard, click &quot;Add Product&quot;</li>
-                    <li>Find &quot;WhatsApp&quot; and click &quot;Set Up&quot;</li>
-                    <li>Follow the setup wizard to link your business</li>
-                  </ol>
-                </AccordionContent>
-              </AccordionItem>
-
-              <AccordionItem className="border-slate-700">
-                <AccordionTrigger className="text-slate-300 hover:text-white hover:no-underline">
-                  <span className="flex items-center gap-2">
-                    <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">3</span>
-                    Get API Credentials
-                  </span>
-                </AccordionTrigger>
-                <AccordionContent className="text-slate-400">
-                  <ol className="list-decimal list-inside space-y-1 text-sm">
-                    <li>Go to WhatsApp &gt; API Setup</li>
-                    <li>Copy your <strong className="text-slate-200">Phone Number ID</strong></li>
-                    <li>Copy your <strong className="text-slate-200">WhatsApp Business Account ID</strong></li>
-                    <li>Generate a <strong className="text-slate-200">Permanent Access Token</strong> from Business Settings &gt; System Users</li>
-                  </ol>
-                </AccordionContent>
-              </AccordionItem>
-
-              <AccordionItem className="border-slate-700">
-                <AccordionTrigger className="text-slate-300 hover:text-white hover:no-underline">
-                  <span className="flex items-center gap-2">
-                    <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">4</span>
-                    Configure Webhooks
-                  </span>
-                </AccordionTrigger>
-                <AccordionContent className="text-slate-400">
-                  <ol className="list-decimal list-inside space-y-1 text-sm">
-                    <li>Go to WhatsApp &gt; Configuration</li>
-                    <li>Click &quot;Edit&quot; on the Webhook section</li>
-                    <li>Paste the <strong className="text-slate-200">Webhook Callback URL</strong> from above</li>
-                    <li>Enter the same <strong className="text-slate-200">Verify Token</strong> you set here</li>
-                    <li>Subscribe to &quot;messages&quot; webhook field</li>
-                  </ol>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-
-            <div className="mt-4 pt-4 border-t border-slate-700">
-              <a
-                href="https://developers.facebook.com/docs/whatsapp/cloud-api/get-started"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 transition-colors"
-              >
-                <ExternalLink className="size-3.5" />
-                Meta WhatsApp API Documentation
-              </a>
-            </div>
-          </CardContent>
-        </Card>
+        {renderSetupInstructions()}
       </div>
     </div>
   );

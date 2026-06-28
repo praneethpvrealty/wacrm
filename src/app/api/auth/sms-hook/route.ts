@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { decrypt } from '@/lib/whatsapp/encryption';
-import { sendTextMessage } from '@/lib/whatsapp/meta-api';
+import { sendTextMessage, sendTemplateMessage } from '@/lib/whatsapp/meta-api';
 
 export async function POST(request: Request) {
   try {
@@ -173,12 +173,26 @@ export async function POST(request: Request) {
 
     // Fallback to the default system configuration if no account matches
     if (!accountId) {
-      const { data: configs } = await supabase
-        .from('whatsapp_config')
-        .select('account_id')
-        .limit(1);
-      if (configs && configs.length > 0) {
-        accountId = configs[0].account_id;
+      // 1. Try to read explicit fallback_whatsapp_account_id from system_settings
+      const { data: settings } = await supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'fallback_whatsapp_account_id')
+        .maybeSingle();
+
+      if (settings?.value) {
+        accountId = settings.value as string;
+      }
+
+      // 2. Fall back to the first available config as a legacy fallback
+      if (!accountId) {
+        const { data: configs } = await supabase
+          .from('whatsapp_config')
+          .select('account_id')
+          .limit(1);
+        if (configs && configs.length > 0) {
+          accountId = configs[0].account_id;
+        }
       }
     }
 
@@ -202,16 +216,32 @@ export async function POST(request: Request) {
     // Decrypt the system access token
     const decryptedToken = decrypt(config.access_token);
 
-    // Send the OTP via WhatsApp text message
+    // Send the OTP via WhatsApp template message, with a free-form text fallback.
+    // Production numbers require an approved template (e.g. 'whatsapp_otp') to send messages
+    // outside the 24-hour customer window.
     const cleanPhone = phone.replace('+', ''); // WhatsApp API prefers numbers without prefix symbol
-    await sendTextMessage({
-      phoneNumberId: config.phone_number_id,
-      accessToken: decryptedToken,
-      to: cleanPhone,
-      text: `Your waCRM verification code is: *${otpCode}*\n\nIt is valid for 5 minutes.`,
-    });
-
-    console.log(`[SMS Hook] Verification code ${otpCode} successfully sent to WhatsApp client: ${cleanPhone}`);
+    try {
+      console.log(`[SMS Hook] Attempting to send OTP template 'whatsapp_otp' to: ${cleanPhone}`);
+      await sendTemplateMessage({
+        phoneNumberId: config.phone_number_id,
+        accessToken: decryptedToken,
+        to: cleanPhone,
+        templateName: 'whatsapp_otp',
+        params: [otpCode],
+      });
+      console.log(`[SMS Hook] Verification code ${otpCode} successfully sent via template to: ${cleanPhone}`);
+    } catch (templateError) {
+      console.warn('[SMS Hook] Template sending failed, falling back to free-form text message:', templateError);
+      
+      // Fallback for Sandbox / Test numbers where custom templates may not be registered.
+      await sendTextMessage({
+        phoneNumberId: config.phone_number_id,
+        accessToken: decryptedToken,
+        to: cleanPhone,
+        text: `Your waCRM verification code is: *${otpCode}*\n\nIt is valid for 5 minutes.`,
+      });
+      console.log(`[SMS Hook] Verification code ${otpCode} successfully sent via fallback text message to: ${cleanPhone}`);
+    }
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('[SMS Hook] Unexpected error executing webhook handler:', err);
