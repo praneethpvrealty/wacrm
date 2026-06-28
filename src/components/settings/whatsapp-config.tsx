@@ -380,8 +380,8 @@ export function WhatsAppConfig() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Accordion type="single" collapsible>
-              <AccordionItem value="item-1" className="border-slate-700">
+            <Accordion>
+              <AccordionItem className="border-slate-700">
                 <AccordionTrigger className="text-slate-300 hover:text-white hover:no-underline">
                   <span className="flex items-center gap-2">
                     <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">1</span>
@@ -395,7 +395,7 @@ export function WhatsAppConfig() {
                 </AccordionContent>
               </AccordionItem>
 
-              <AccordionItem value="item-2" className="border-slate-700">
+              <AccordionItem className="border-slate-700">
                 <AccordionTrigger className="text-slate-300 hover:text-white hover:no-underline">
                   <span className="flex items-center gap-2">
                     <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">2</span>
@@ -409,7 +409,7 @@ export function WhatsAppConfig() {
                 </AccordionContent>
               </AccordionItem>
 
-              <AccordionItem value="item-3" className="border-slate-700">
+              <AccordionItem className="border-slate-700">
                 <AccordionTrigger className="text-slate-300 hover:text-white hover:no-underline">
                   <span className="flex items-center gap-2">
                     <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">3</span>
@@ -438,8 +438,8 @@ export function WhatsAppConfig() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Accordion type="single" collapsible>
-              <AccordionItem value="item-1" className="border-slate-700">
+            <Accordion>
+              <AccordionItem className="border-slate-700">
                 <AccordionTrigger className="text-slate-300 hover:text-white hover:no-underline">
                   <span className="flex items-center gap-2">
                     <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">1</span>
@@ -453,7 +453,7 @@ export function WhatsAppConfig() {
                 </AccordionContent>
               </AccordionItem>
 
-              <AccordionItem value="item-2" className="border-slate-700">
+              <AccordionItem className="border-slate-700">
                 <AccordionTrigger className="text-slate-300 hover:text-white hover:no-underline">
                   <span className="flex items-center gap-2">
                     <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">2</span>
@@ -482,8 +482,8 @@ export function WhatsAppConfig() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Accordion type="single" collapsible>
-            <AccordionItem value="item-1" className="border-slate-700">
+          <Accordion>
+            <AccordionItem className="border-slate-700">
               <AccordionTrigger className="text-slate-300 hover:text-white hover:no-underline">
                 <span className="flex items-center gap-2">
                   <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">1</span>
@@ -500,7 +500,7 @@ export function WhatsAppConfig() {
               </AccordionContent>
             </AccordionItem>
 
-            <AccordionItem value="item-2" className="border-slate-700">
+            <AccordionItem className="border-slate-700">
               <AccordionTrigger className="text-slate-300 hover:text-white hover:no-underline">
                 <span className="flex items-center gap-2">
                   <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">2</span>
@@ -516,7 +516,7 @@ export function WhatsAppConfig() {
               </AccordionContent>
             </AccordionItem>
 
-            <AccordionItem value="item-3" className="border-slate-700">
+            <AccordionItem className="border-slate-700">
               <AccordionTrigger className="text-slate-300 hover:text-white hover:no-underline">
                 <span className="flex items-center gap-2">
                   <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">3</span>
@@ -530,7 +530,7 @@ export function WhatsAppConfig() {
               </AccordionContent>
             </AccordionItem>
 
-            <AccordionItem value="item-4" className="border-slate-700">
+            <AccordionItem className="border-slate-700">
               <AccordionTrigger className="text-slate-300 hover:text-white hover:no-underline">
                 <span className="flex items-center gap-2">
                   <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">4</span>
