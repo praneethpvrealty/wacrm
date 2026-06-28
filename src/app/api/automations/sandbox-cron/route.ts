@@ -6,10 +6,19 @@ import {
   buildTrialExpiredEmail,
 } from '@/lib/email'
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+// Lazy-initialized to avoid build-time crash when env vars are missing.
+// Next.js evaluates modules at build time, so we can't create the client
+// until the handler is actually invoked at runtime.
+let _adminClient: ReturnType<typeof createClient> | null = null
+function supabaseAdmin() {
+  if (!_adminClient) {
+    _adminClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+  }
+  return _adminClient
+}
 
 /**
  * GET /api/automations/sandbox-cron
@@ -40,7 +49,7 @@ export async function GET(request: Request) {
 
     // 1. Find trials expiring in 1-2 days (send warning email)
     const warningThreshold = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000)
-    const { data: expiringSoon } = await supabaseAdmin
+    const { data: expiringSoon } = await supabaseAdmin()
       .from('whatsapp_config')
       .select('*, account:accounts(id, name), owner:profiles(user_id, full_name, email)')
       .eq('integration_type', 'sandbox')
@@ -92,7 +101,7 @@ export async function GET(request: Request) {
 
     // 2. Find trials that expired in the last 24 hours (send expired email)
     const expiryWindow = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-    const { data: justExpired } = await supabaseAdmin
+    const { data: justExpired } = await supabaseAdmin()
       .from('whatsapp_config')
       .select('*, account:accounts(id, name), owner:profiles(user_id, full_name, email)')
       .eq('integration_type', 'sandbox')

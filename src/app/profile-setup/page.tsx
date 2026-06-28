@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { User, Mail, Loader2, ArrowRight, Sparkles } from 'lucide-react';
+import { User, Mail, Loader2, ArrowRight, Sparkles, LayoutDashboard, LogOut } from 'lucide-react';
 import { AuthProvider, useAuth } from '@/hooks/use-auth';
+import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -180,6 +181,31 @@ function ProfileSetupPageInner() {
                 </>
               )}
             </Button>
+
+            {/* Navigation footer */}
+            <div className="flex items-center justify-between pt-4 border-t border-slate-800/50 mt-4">
+              <button
+                type="button"
+                onClick={() => { window.location.href = '/dashboard'; }}
+                className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+              >
+                <LayoutDashboard className="size-3.5" />
+                Go to Dashboard
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  const supabase = createClient();
+                  await supabase.auth.signOut();
+                  window.location.href = '/login';
+                }}
+                className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-red-400 transition-colors"
+              >
+                <LogOut className="size-3.5" />
+                Sign Out
+              </button>
+            </div>
           </form>
         </CardContent>
       </Card>
