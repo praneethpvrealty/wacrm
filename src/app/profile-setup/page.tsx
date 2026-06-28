@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { User, Mail, Loader2, ArrowRight, Sparkles } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
 import { AuthProvider, useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +13,6 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function ProfileSetupPageInner() {
   const { user, profile, loading: authLoading, profileLoading, refreshProfile } = useAuth();
-  const supabase = createClient();
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -61,52 +59,21 @@ function ProfileSetupPageInner() {
     try {
       setSaving(true);
 
-      // 1. Check if profile row exists in the database
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('id, account_id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      let resolvedAccountId = existingProfile?.account_id;
-
-      // Self-healing: if no account is linked, create one dynamically
-      if (!resolvedAccountId) {
-        console.log('[SETUP] No account linked. Creating new tenant account...');
-        const { data: newAccount, error: accError } = await supabase
-          .from('accounts')
-          .insert({
-            name: `${nameVal}'s Account`,
-          })
-          .select('id')
-          .maybeSingle();
-
-        if (accError || !newAccount) {
-          throw new Error(`Failed to bootstrap account: ${accError?.message || 'Unknown error'}`);
-        }
-        resolvedAccountId = newAccount.id;
-      }
-
-      // 2. Upsert the database profiles row directly to keep CRM synced immediately
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert({
-          user_id: user.id,
-          full_name: nameVal,
+      // Call the secure server-side setup API endpoint (bypasses client-side RLS constraints on accounts/profiles)
+      const response = await fetch('/api/auth/profile-setup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fullName: nameVal,
           email: emailVal,
-          account_id: resolvedAccountId,
-          account_role: existingProfile?.account_id ? undefined : 'owner',
-        }, {
-          onConflict: 'user_id',
-        });
+        }),
+      });
 
-      if (profileError) throw profileError;
-
-      // 3. Attempt to link/update the email address in Supabase Auth user metadata
-      try {
-        await supabase.auth.updateUser({ email: emailVal });
-      } catch (authErr) {
-        console.warn('Auth email update warning:', authErr);
+      if (!response.ok) {
+        const errJson = await response.json();
+        throw new Error(errJson.error || 'Failed to complete profile setup');
       }
 
       await refreshProfile();
