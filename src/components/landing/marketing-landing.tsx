@@ -765,6 +765,7 @@ Upgrade your timepiece with Italian craftsmanship. Made from genuine calfskin le
                         {isRealEstate ? (
                           <div className="bg-slate-950 border border-slate-900 rounded-xl overflow-hidden shadow-lg p-1.5 flex flex-col gap-1.5">
                             <div className="relative h-[95px] w-full rounded-lg overflow-hidden border border-slate-900">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img 
                                 src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=400&h=200&q=80" 
                                 alt="Stunning Modern Villa"
@@ -791,6 +792,7 @@ Upgrade your timepiece with Italian craftsmanship. Made from genuine calfskin le
                         ) : (
                           <div className="bg-slate-950 border border-slate-900 rounded-xl overflow-hidden shadow-lg p-1.5 flex flex-col gap-1.5">
                             <div className="relative h-[95px] w-full rounded-lg overflow-hidden border border-slate-900">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img 
                                 src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=400&h=200&q=80" 
                                 alt="Classic Brown Watch Strap"

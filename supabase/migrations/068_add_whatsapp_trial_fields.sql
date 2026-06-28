@@ -3,9 +3,13 @@
 -- and sets up a trigger to automatically calculate trial expiry based on type.
 
 ALTER TABLE public.whatsapp_config 
-ADD COLUMN IF NOT EXISTS integration_type TEXT NOT NULL DEFAULT 'sandbox'
+ADD COLUMN IF NOT EXISTS integration_type TEXT NOT NULL DEFAULT 'official_api'
 CHECK (integration_type IN ('sandbox', 'web_qr', 'official_api')),
 ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ;
+
+-- Adjust column default to official_api and update existing rows if they were set to sandbox
+ALTER TABLE public.whatsapp_config ALTER COLUMN integration_type SET DEFAULT 'official_api';
+UPDATE public.whatsapp_config SET integration_type = 'official_api' WHERE integration_type = 'sandbox';
 
 -- Helper to set trial_ends_at automatically upon onboarding type creation
 CREATE OR REPLACE FUNCTION set_whatsapp_trial_period()

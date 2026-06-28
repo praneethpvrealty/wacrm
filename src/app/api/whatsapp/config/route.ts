@@ -88,7 +88,7 @@ export async function GET() {
 
     const { data: config, error: configError } = await supabase
       .from('whatsapp_config')
-      .select('phone_number_id, access_token, status, catalog_id, auto_sync_catalog')
+      .select('phone_number_id, access_token, status, catalog_id, auto_sync_catalog, integration_type')
       .eq('account_id', accountId)
       .maybeSingle()
 
@@ -111,46 +111,35 @@ export async function GET() {
       )
     }
 
-    // Try to decrypt the stored token with the current ENCRYPTION_KEY.
-    // If this fails, the key changed (or was never consistent across envs).
-    try {
-      decrypt(config.access_token)
-    } catch (err) {
-      console.error('[whatsapp/config GET] Token decryption failed:', err)
-      return NextResponse.json(
-        {
-          connected: false,
-          reason: 'token_corrupted',
-          needs_reset: true,
-          message:
-            'The stored access token cannot be decrypted with the current ENCRYPTION_KEY. This usually means the key changed, or it differs between environments (local vs Hostinger vs Vercel). Click "Reset Configuration" below, then re-save.',
-        },
-        { status: 200 }
-      )
+    const intType = config.integration_type || 'official_api'
+
+    // Try to decrypt the stored token with the current ENCRYPTION_KEY if it's Official API.
+    if (intType === 'official_api' && config.access_token) {
+      try {
+        decrypt(config.access_token)
+      } catch (err) {
+        console.error('[whatsapp/config GET] Token decryption failed:', err)
+        return NextResponse.json(
+          {
+            connected: false,
+            reason: 'token_corrupted',
+            needs_reset: true,
+            message:
+              'The stored access token cannot be decrypted with the current ENCRYPTION_KEY. This usually means the key changed, or it differs between environments (local vs Hostinger vs Vercel). Click "Reset Configuration" below, then re-save.',
+          },
+          { status: 200 }
+        )
+      }
     }
 
     // Return stored configuration
-    try {
-      return NextResponse.json({
-        connected: true,
-        phone_number_id: config.phone_number_id,
-        catalog_id: config.catalog_id || null,
-        auto_sync_catalog: config.auto_sync_catalog || false,
-      })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown Meta API error'
-      console.error('[whatsapp/config GET] Meta API verification failed:', message)
-      return NextResponse.json(
-        {
-          connected: false,
-          reason: 'meta_api_error',
-          message: `Meta API rejected the credentials: ${message}`,
-          catalog_id: config.catalog_id || null,
-          auto_sync_catalog: config.auto_sync_catalog || false,
-        },
-        { status: 200 }
-      )
-    }
+    return NextResponse.json({
+      connected: config.status === 'connected',
+      phone_number_id: config.phone_number_id,
+      catalog_id: config.catalog_id || null,
+      auto_sync_catalog: config.auto_sync_catalog || false,
+      integration_type: intType,
+    })
   } catch (error) {
     console.error('Error in WhatsApp config GET:', error)
     return NextResponse.json(
@@ -188,11 +177,13 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { phone_number_id, waba_id, access_token, verify_token, pin, catalog_id, auto_sync_catalog } = body
+    const { phone_number_id, waba_id, access_token, verify_token, pin, catalog_id, auto_sync_catalog, integration_type } = body
 
-    if (!access_token || !phone_number_id) {
+    const intType = integration_type || 'official_api'
+
+    if (intType === 'official_api' && (!access_token || !phone_number_id)) {
       return NextResponse.json(
-        { error: 'access_token and phone_number_id are required' },
+        { error: 'access_token and phone_number_id are required for Official API' },
         { status: 400 }
       )
     }
@@ -206,80 +197,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // Reject if another account has already claimed this phone_number_id.
-    // ConvoReal is single-tenant-per-WhatsApp-number — letting two accounts
-    // bind the same number causes the webhook's `.single()` lookup to
-    // throw PGRST116 ("multiple rows"), silently dropping every
-    // inbound message. See issue #136. Post-multi-user we key on
-    // account_id (not user_id) since teammates inside the same account
-    // all share one config; the conflict is between accounts.
-    const { data: claimed, error: claimedError } = await supabaseAdmin()
-      .from('whatsapp_config')
-      .select('account_id')
-      .eq('phone_number_id', phone_number_id)
-      .neq('account_id', accountId)
-      .maybeSingle()
-
-    if (claimedError) {
-      console.error('Error checking phone_number_id ownership:', claimedError)
-      return NextResponse.json(
-        { error: 'Failed to validate configuration' },
-        { status: 500 }
-      )
-    }
-
-    if (claimed) {
-      return NextResponse.json(
-        {
-          error:
-            'This WhatsApp phone number is already linked to another account on this instance. Each phone number can only be connected to one ConvoReal user.',
-        },
-        { status: 409 }
-      )
-    }
-
-    // Verify credentials with Meta BEFORE saving
-    let phoneInfo
-    try {
-      phoneInfo = await verifyPhoneNumber({
-        phoneNumberId: phone_number_id,
-        accessToken: access_token,
-      })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown Meta API error'
-      console.error('Meta API verification failed during save:', message)
-      return NextResponse.json(
-        { error: `Meta API error: ${message}` },
-        { status: 400 }
-      )
-    }
-
-    // Check token permissions for media access
-    const permissionCheck = await checkWhatsAppPermissions(access_token, waba_id)
-    if (permissionCheck.hasIssues) {
-      console.warn('WhatsApp permission issues detected:', permissionCheck.issues)
-      // Return warning but don't block save - user might fix permissions later
-      // The issues will be logged for debugging
-    }
-
-    // Encrypt sensitive tokens before storing
-    let encryptedAccessToken: string
-    let encryptedVerifyToken: string | null
-    try {
-      encryptedAccessToken = encrypt(access_token)
-      encryptedVerifyToken = verify_token ? encrypt(verify_token) : null
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown encryption error'
-      console.error('Encryption failed:', message)
-      return NextResponse.json(
-        {
-          error:
-            'Failed to encrypt token. Check that ENCRYPTION_KEY is a valid 64-character hex string in your environment variables.',
-        },
-        { status: 500 }
-      )
-    }
-
     // Look up any pre-existing row for this account so we know whether
     // this number is already registered with Meta — if so we can skip
     // /register when the user didn't provide a PIN this time around.
@@ -289,93 +206,132 @@ export async function POST(request: Request) {
       .eq('account_id', accountId)
       .maybeSingle()
 
-    const sameNumber =
-      existing?.phone_number_id === phone_number_id &&
-      existing?.registered_at != null
+    let phoneInfo = null
+    let encryptedAccessToken = null
+    let encryptedVerifyToken = null
+    let registeredAt = existing?.registered_at ?? null
+    let registrationError = null
+    let subscribedAppsAt = null
 
-    // Step 1: register the phone number for inbound webhooks.
-    //
-    // PIN is OPTIONAL. Numbers set up via Meta's Embedded Signup or the
-    // Developer Console are already registered to this app — calling
-    // /register again is unnecessary and risks breaking the subscription.
-    // We only call /register when the user explicitly provides a PIN,
-    // which covers two cases:
-    //   a) First-time setup of a number NOT previously via Embedded Signup
-    //   b) User rotated their 2FA PIN and wants to re-register
-    // In all other cases (no PIN + new number) we skip /register and treat
-    // the number as already subscribed — messages will still flow.
-    let registeredAt: string | null = existing?.registered_at ?? null
-    let registrationError: string | null = null
+    if (intType === 'official_api') {
+      // Reject if another account has already claimed this phone_number_id.
+      const { data: claimed, error: claimedError } = await supabaseAdmin()
+        .from('whatsapp_config')
+        .select('account_id')
+        .eq('phone_number_id', phone_number_id)
+        .neq('account_id', accountId)
+        .maybeSingle()
 
-    const hasPin = typeof pin === 'string' && pin.length > 0
-    const needsRegistration = hasPin  // only register when PIN is explicitly provided
-    if (needsRegistration) {
+      if (claimedError) {
+        console.error('Error checking phone_number_id ownership:', claimedError)
+        return NextResponse.json(
+          { error: 'Failed to validate configuration' },
+          { status: 500 }
+        )
+      }
+
+      if (claimed) {
+        return NextResponse.json(
+          {
+            error:
+              'This WhatsApp phone number is already linked to another account on this instance. Each phone number can only be connected to one ConvoReal user.',
+          },
+          { status: 409 }
+        )
+      }
+
+      // Verify credentials with Meta BEFORE saving
       try {
-        const regResult = await registerPhoneNumber({
+        phoneInfo = await verifyPhoneNumber({
           phoneNumberId: phone_number_id,
           accessToken: access_token,
-          pin,
         })
-        if (regResult.testNumberSkipped) {
-          // Test/sandbox numbers don't support /register — Meta pre-registers
-          // them. Treat as success so the config saves without a PIN-retry error.
-          console.log('[whatsapp/config] Test number detected — skipping /register (not supported by Meta for sandbox numbers).')
-        }
-        registeredAt = new Date().toISOString()
       } catch (err) {
-        registrationError =
-          err instanceof Error ? err.message : 'Unknown Meta API error'
-        console.error('Phone number /register failed:', registrationError)
-        // We deliberately fall through and still save the row so the
-        // user can retry without re-entering everything. The UI
-        // surfaces `last_registration_error` so they see WHY it's
-        // not actually live yet.
+        const message = err instanceof Error ? err.message : 'Unknown Meta API error'
+        console.error('Meta API verification failed during save:', message)
+        return NextResponse.json(
+          { error: `Meta API error: ${message}` },
+          { status: 400 }
+        )
       }
-    } else if (!sameNumber) {
-      // New number, no PIN supplied — assume already subscribed via
-      // Embedded Signup / Developer Console. Mark registered so the UI
-      // doesn't show a "not registered" warning.
-      console.log('[whatsapp/config] No PIN provided — assuming number already registered via Embedded Signup.')
-      registeredAt = new Date().toISOString()
-    }
 
-    // Step 2: subscribe the WABA to this app. Idempotent on Meta's
-    // side, so we call on every save and persist the timestamp.
-    // Skipped only when there's no waba_id (legacy rows from before
-    // we required it).
-    let subscribedAppsAt: string | null = null
-    if (waba_id) {
+      // Check token permissions for media access
+      const permissionCheck = await checkWhatsAppPermissions(access_token, waba_id)
+      if (permissionCheck.hasIssues) {
+        console.warn('WhatsApp permission issues detected:', permissionCheck.issues)
+      }
+
+      // Encrypt sensitive tokens before storing
       try {
-        await subscribeWabaToApp({
-          wabaId: waba_id,
-          accessToken: access_token,
-        })
-        subscribedAppsAt = new Date().toISOString()
+        encryptedAccessToken = encrypt(access_token)
+        encryptedVerifyToken = verify_token ? encrypt(verify_token) : null
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        console.warn('WABA subscribed_apps failed (non-fatal):', message)
-        // Subscription failures are rare once the App has the right
-        // permissions; we don't block save on them — the diagnostic
-        // endpoint surfaces this state too.
+        const message = err instanceof Error ? err.message : 'Unknown encryption error'
+        console.error('Encryption failed:', message)
+        return NextResponse.json(
+          {
+            error:
+              'Failed to encrypt token. Check that ENCRYPTION_KEY is a valid 64-character hex string in your environment variables.',
+          },
+          { status: 500 }
+        )
+      }
+
+      const sameNumber =
+        existing?.phone_number_id === phone_number_id &&
+        existing?.registered_at != null
+
+      const hasPin = typeof pin === 'string' && pin.length > 0
+      const needsRegistration = hasPin  // only register when PIN is explicitly provided
+      if (needsRegistration) {
+        try {
+          const regResult = await registerPhoneNumber({
+            phoneNumberId: phone_number_id,
+            accessToken: access_token,
+            pin,
+          })
+          if (regResult.testNumberSkipped) {
+            console.log('[whatsapp/config] Test number detected — skipping /register')
+          }
+          registeredAt = new Date().toISOString()
+        } catch (err) {
+          registrationError =
+            err instanceof Error ? err.message : 'Unknown Meta API error'
+          console.error('Phone number /register failed:', registrationError)
+        }
+      } else if (!sameNumber) {
+        console.log('[whatsapp/config] No PIN provided — assuming number already registered.')
+        registeredAt = new Date().toISOString()
+      }
+
+      if (waba_id) {
+        try {
+          await subscribeWabaToApp({
+            wabaId: waba_id,
+            accessToken: access_token,
+          })
+          subscribedAppsAt = new Date().toISOString()
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          console.warn('WABA subscribed_apps failed (non-fatal):', message)
+        }
       }
     }
 
-    // Persist everything in one shot. If /register failed we still
-    // store the credentials and the error so the UI can guide the
-    // user through a retry.
     const baseRow = {
-      phone_number_id,
-      waba_id: waba_id || null,
-      access_token: encryptedAccessToken,
-      verify_token: encryptedVerifyToken,
+      phone_number_id: intType === 'official_api' ? phone_number_id : null,
+      waba_id: intType === 'official_api' ? (waba_id || null) : null,
+      access_token: intType === 'official_api' ? encryptedAccessToken : null,
+      verify_token: intType === 'official_api' ? encryptedVerifyToken : null,
       status: registrationError ? 'disconnected' : 'connected',
       connected_at: registrationError ? null : new Date().toISOString(),
       registered_at: registrationError ? null : registeredAt,
       subscribed_apps_at: subscribedAppsAt ?? null,
       last_registration_error: registrationError,
       updated_at: new Date().toISOString(),
-      catalog_id: catalog_id || null,
-      auto_sync_catalog: typeof auto_sync_catalog === 'boolean' ? auto_sync_catalog : false,
+      catalog_id: intType === 'official_api' ? (catalog_id || null) : null,
+      auto_sync_catalog: intType === 'official_api' ? (typeof auto_sync_catalog === 'boolean' ? auto_sync_catalog : false) : false,
+      integration_type: intType,
     }
 
     if (existing) {
