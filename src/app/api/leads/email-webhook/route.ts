@@ -571,16 +571,16 @@ export async function POST(request: Request) {
       
       // Add budget-based tags (ranges up to 150Cr+)
       if (maxBudget) {
-        if (maxBudget >= 15000000000) tagsToAssign.push('Budget 150Cr+');
-        else if (maxBudget >= 10000000000) tagsToAssign.push('Budget 100-150Cr');
-        else if (maxBudget >= 5000000000) tagsToAssign.push('Budget 50-100Cr');
-        else if (maxBudget >= 2500000000) tagsToAssign.push('Budget 25-50Cr');
-        else if (maxBudget >= 1000000000) tagsToAssign.push('Budget 10-25Cr');
-        else if (maxBudget >= 500000000) tagsToAssign.push('Budget 5-10Cr');
-        else if (maxBudget >= 200000000) tagsToAssign.push('Budget 2-5Cr');
-        else if (maxBudget >= 100000000) tagsToAssign.push('Budget 1-2Cr');
-        else if (maxBudget >= 50000000) tagsToAssign.push('Budget 50L-1Cr');
-        else if (maxBudget >= 20000000) tagsToAssign.push('Budget 20L-50L');
+        if (maxBudget >= 1500000000) tagsToAssign.push('Budget 150Cr+');
+        else if (maxBudget >= 1000000000) tagsToAssign.push('Budget 100-150Cr');
+        else if (maxBudget >= 500000000) tagsToAssign.push('Budget 50-100Cr');
+        else if (maxBudget >= 250000000) tagsToAssign.push('Budget 25-50Cr');
+        else if (maxBudget >= 100000000) tagsToAssign.push('Budget 10-25Cr');
+        else if (maxBudget >= 50000000) tagsToAssign.push('Budget 5-10Cr');
+        else if (maxBudget >= 20000000) tagsToAssign.push('Budget 2-5Cr');
+        else if (maxBudget >= 10000000) tagsToAssign.push('Budget 1-2Cr');
+        else if (maxBudget >= 5000000) tagsToAssign.push('Budget 50L-1Cr');
+        else if (maxBudget >= 2000000) tagsToAssign.push('Budget 20L-50L');
         else tagsToAssign.push('Budget <20L');
       }
 
@@ -727,16 +727,16 @@ export async function POST(request: Request) {
       
       // Add budget-based tags (ranges up to 150Cr+)
       if (maxBudget) {
-        if (maxBudget >= 15000000000) tagsToAssign.push('Budget 150Cr+');
-        else if (maxBudget >= 10000000000) tagsToAssign.push('Budget 100-150Cr');
-        else if (maxBudget >= 5000000000) tagsToAssign.push('Budget 50-100Cr');
-        else if (maxBudget >= 2500000000) tagsToAssign.push('Budget 25-50Cr');
-        else if (maxBudget >= 1000000000) tagsToAssign.push('Budget 10-25Cr');
-        else if (maxBudget >= 500000000) tagsToAssign.push('Budget 5-10Cr');
-        else if (maxBudget >= 200000000) tagsToAssign.push('Budget 2-5Cr');
-        else if (maxBudget >= 100000000) tagsToAssign.push('Budget 1-2Cr');
-        else if (maxBudget >= 50000000) tagsToAssign.push('Budget 50L-1Cr');
-        else if (maxBudget >= 20000000) tagsToAssign.push('Budget 20L-50L');
+        if (maxBudget >= 1500000000) tagsToAssign.push('Budget 150Cr+');
+        else if (maxBudget >= 1000000000) tagsToAssign.push('Budget 100-150Cr');
+        else if (maxBudget >= 500000000) tagsToAssign.push('Budget 50-100Cr');
+        else if (maxBudget >= 250000000) tagsToAssign.push('Budget 25-50Cr');
+        else if (maxBudget >= 100000000) tagsToAssign.push('Budget 10-25Cr');
+        else if (maxBudget >= 50000000) tagsToAssign.push('Budget 5-10Cr');
+        else if (maxBudget >= 20000000) tagsToAssign.push('Budget 2-5Cr');
+        else if (maxBudget >= 10000000) tagsToAssign.push('Budget 1-2Cr');
+        else if (maxBudget >= 5000000) tagsToAssign.push('Budget 50L-1Cr');
+        else if (maxBudget >= 2000000) tagsToAssign.push('Budget 20L-50L');
         else tagsToAssign.push('Budget <20L');
       }
 
