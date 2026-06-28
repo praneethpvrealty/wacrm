@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { supabaseAdmin } from '@/lib/automations/admin-client';
 import { ShowcaseView } from '@/components/showcase/showcase-view';
 import { MarketingLanding } from '@/components/landing/marketing-landing';
@@ -17,12 +18,26 @@ export const metadata: Metadata = {
 };
 
 interface PageProps {
-  searchParams: Promise<{ account_id?: string; ref?: string; agent_id?: string; property_id?: string; category?: string }>;
+  searchParams: Promise<{ 
+    account_id?: string; 
+    ref?: string; 
+    agent_id?: string; 
+    property_id?: string; 
+    category?: string;
+    code?: string;
+    invite?: string;
+  }>;
 }
 
 // Server Component: fetches public listings & configuration details
 export default async function RootPage({ searchParams }: PageProps) {
   const resolvedParams = await searchParams;
+  
+  if (resolvedParams.code) {
+    const inviteParam = resolvedParams.invite ? `&invite=${encodeURIComponent(resolvedParams.invite)}` : '';
+    redirect(`/auth/callback?code=${encodeURIComponent(resolvedParams.code)}${inviteParam}`);
+  }
+
   const admin = supabaseAdmin();
   const reqHeaders = await headers();
   const host = reqHeaders.get('host') || '';
