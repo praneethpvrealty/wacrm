@@ -14,7 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { MessageSquare, UsersRound, Phone, Key, ArrowLeft } from "lucide-react";
+import { MessageSquare, UsersRound, Phone, ArrowLeft } from "lucide-react";
 
 export default function LoginPage() {
   return (
@@ -35,8 +35,60 @@ function LoginPageInner() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
-  const [otp, setOtp] = useState("");
+  const [otpValues, setOtpValues] = useState<string[]>(Array(6).fill(""));
+  const otp = otpValues.join("");
   const [otpSent, setOtpSent] = useState(false);
+
+  const handleOtpChange = (index: number, val: string) => {
+    const digit = val.replace(/\D/g, "");
+    const nextOtp = [...otpValues];
+    nextOtp[index] = digit.slice(-1);
+    setOtpValues(nextOtp);
+
+    // Auto-focus next box if a digit was typed
+    if (digit && index < 5) {
+      const nextInput = document.getElementById(`otp-${index + 1}`);
+      nextInput?.focus();
+    }
+
+    // Auto-submit if all 6 digits are entered
+    const finalOtp = nextOtp.join("");
+    if (finalOtp.length === 6) {
+      setTimeout(() => {
+        const form = document.getElementById("otp-form") as HTMLFormElement;
+        form?.requestSubmit();
+      }, 50);
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace") {
+      if (!otpValues[index] && index > 0) {
+        // Clear previous box and focus it
+        const nextOtp = [...otpValues];
+        nextOtp[index - 1] = "";
+        setOtpValues(nextOtp);
+        const prevInput = document.getElementById(`otp-${index - 1}`);
+        prevInput?.focus();
+      }
+    }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasteData = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (pasteData.length > 0) {
+      const newOtp = [...otpValues];
+      pasteData.split("").forEach((digit, idx) => {
+        if (idx < 6) newOtp[idx] = digit;
+      });
+      setOtpValues(newOtp);
+      // Focus the last filled box or the next empty box
+      const targetIndex = Math.min(pasteData.length, 5);
+      const nextInput = document.getElementById(`otp-${targetIndex}`);
+      nextInput?.focus();
+    }
+  };
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -334,32 +386,36 @@ function LoginPageInner() {
                   </Button>
                 </form>
               ) : (
-                <form onSubmit={handleVerifyOtp} className="flex flex-col gap-4">
+                <form id="otp-form" onSubmit={handleVerifyOtp} className="flex flex-col gap-4">
                   <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="otp" className="text-slate-300 font-bold text-xs">
+                    <div className="flex items-center justify-between mb-1">
+                      <Label className="text-slate-300 font-bold text-xs">
                         Verification Code
                       </Label>
                       <button
                         type="button"
-                        onClick={() => { setOtpSent(false); setSuccessMessage(null); setError(null); }}
+                        onClick={() => { setOtpSent(false); setSuccessMessage(null); setError(null); setOtpValues(Array(6).fill("")); }}
                         className="flex items-center gap-1 text-[11px] text-primary hover:underline font-bold cursor-pointer"
                       >
                         <ArrowLeft className="size-3" /> Change Number
                       </button>
                     </div>
-                    <div className="relative">
-                      <Key className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" />
-                      <Input
-                        id="otp"
-                        type="text"
-                        placeholder="Enter 6-digit code"
-                        value={otp}
-                        onChange={(e) => setOtp(e.target.value)}
-                        required
-                        maxLength={6}
-                        className="pl-10 border-slate-800 bg-slate-950 text-white placeholder:text-slate-600 focus-visible:border-primary focus-visible:ring-primary/20 h-10 rounded-xl tracking-widest font-black text-center"
-                      />
+                    <div className="flex justify-between gap-2">
+                      {Array.from({ length: 6 }).map((_, idx) => (
+                        <input
+                          key={idx}
+                          id={`otp-${idx}`}
+                          type="text"
+                          pattern="\d*"
+                          inputMode="numeric"
+                          maxLength={1}
+                          value={otpValues[idx]}
+                          onChange={(e) => handleOtpChange(idx, e.target.value)}
+                          onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                          onPaste={idx === 0 ? handleOtpPaste : undefined}
+                          className="w-12 h-12 text-center text-xl font-bold bg-slate-950 border border-slate-850 focus:border-primary focus:ring-1 focus:ring-primary/30 rounded-xl text-white outline-none transition-all animate-fade-in"
+                        />
+                      ))}
                     </div>
                   </div>
 

@@ -11,7 +11,7 @@ import { Header } from "@/components/layout/header";
 // client components can't export Next's metadata object.
 
 function DashboardShellInner({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading, profile, profileLoading } = useAuth();
   const router = useRouter();
 
   // Sidebar drawer state — only used on mobile. On lg+ the sidebar is
@@ -22,8 +22,14 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!loading && !user) {
       router.push("/login");
+    } else if (!loading && !profileLoading && user && profile) {
+      const hasMissingName = !profile.full_name || profile.full_name.trim() === "";
+      const hasMissingEmail = !profile.email || profile.email.trim() === "";
+      if (hasMissingName || hasMissingEmail) {
+        router.push("/profile-setup");
+      }
     }
-  }, [user, loading, router]);
+  }, [user, loading, profile, profileLoading, router]);
 
   if (loading) {
     return (
