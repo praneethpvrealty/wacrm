@@ -62,6 +62,9 @@ export default function AdminDashboardPage() {
   const [sandboxEnabled, setSandboxEnabled] = useState(false);
   const [testingSandbox, setTestingSandbox] = useState(false);
   const [sandboxIsEditing, setSandboxIsEditing] = useState(false);
+  const [sandboxConnectionStatus, setSandboxConnectionStatus] = useState<
+    'connected' | 'disconnected' | 'not_configured' | 'loading'
+  >('loading');
 
   // Sandbox Analytics State
   const [sandboxTenants, setSandboxTenants] = useState<Array<Record<string, unknown>>>([]);
@@ -119,11 +122,30 @@ export default function AdminDashboardPage() {
             setSandboxPhoneNumberId(cfg.phone_number_id || '');
             setSandboxEnabled(true);
             setSandboxIsEditing(true);
-            toast.info('Sandbox credentials auto-filled from your Official API config. Review and save.');
+            const seenKey = 'sandbox_autofill_seen';
+            if (typeof window !== 'undefined' && !localStorage.getItem(seenKey)) {
+              toast.info('Sandbox credentials auto-filled from your Official API config. Review and save.');
+              localStorage.setItem(seenKey, '1');
+            }
           } else {
             setSandboxIsEditing(true);
           }
         }
+        // Check sandbox connection status
+        try {
+          const sbRes = await fetch('/api/admin/sandbox-config', { method: 'GET' });
+          const sbData = await sbRes.json();
+          if (sbData.connected) {
+            setSandboxConnectionStatus('connected');
+          } else if (sbData.message?.includes('not configured')) {
+            setSandboxConnectionStatus('not_configured');
+          } else {
+            setSandboxConnectionStatus('disconnected');
+          }
+        } catch {
+          setSandboxConnectionStatus('disconnected');
+        }
+
         setLoading(false);
       } catch (err) {
         console.error('Error fetching admin settings:', err);
@@ -189,6 +211,9 @@ export default function AdminDashboardPage() {
       }
 
       toast.success('Sandbox configuration saved successfully');
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('sandbox_autofill_seen');
+      }
     } catch (err) {
       console.error('Error saving sandbox config:', err);
       toast.error(err instanceof Error ? err.message : 'Failed to save sandbox config');
@@ -340,7 +365,7 @@ export default function AdminDashboardPage() {
       {activeTab === 'overview' && (
         <div className="space-y-6">
           {/* Metrics Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card className="bg-slate-900 border-slate-700 ring-0 ring-transparent">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-semibold text-slate-400">Total Users</CardTitle>
@@ -371,6 +396,44 @@ export default function AdminDashboardPage() {
               <CardContent>
                 <div className="text-2xl font-black text-white">{whatsappConfigs.length}</div>
                 <p className="text-xs text-slate-500 mt-1">Configured account credentials</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-slate-900 border-slate-700 ring-0 ring-transparent">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-semibold text-slate-400">Sandbox Status</CardTitle>
+                {sandboxConnectionStatus === 'connected' ? (
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                ) : sandboxConnectionStatus === 'loading' ? (
+                  <Loader2 className="h-4 w-4 text-slate-400 animate-spin" />
+                ) : (
+                  <AlertTriangle className="h-4 w-4 text-amber-400" />
+                )}
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-black text-white">
+                  {sandboxConnectionStatus === 'connected' && (
+                    <span className="text-emerald-400">Active</span>
+                  )}
+                  {sandboxConnectionStatus === 'disconnected' && (
+                    <span className="text-amber-400">Disconnected</span>
+                  )}
+                  {sandboxConnectionStatus === 'not_configured' && (
+                    <span className="text-slate-400">Not Configured</span>
+                  )}
+                  {sandboxConnectionStatus === 'loading' && (
+                    <span className="text-slate-400">Checking...</span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  {sandboxConnectionStatus === 'connected'
+                    ? 'Shared sandbox number is ready for trial users'
+                    : sandboxConnectionStatus === 'disconnected'
+                      ? 'Sandbox config exists but Meta connection failed'
+                      : sandboxConnectionStatus === 'not_configured'
+                        ? 'Go to Sandbox Config tab to set up'
+                        : 'Checking sandbox configuration...'}
+                </p>
               </CardContent>
             </Card>
           </div>
