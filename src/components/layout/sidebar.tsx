@@ -21,7 +21,6 @@ import {
   UsersRound,
   Workflow,
   X,
-  Zap,
   Home,
   Calendar,
   ClipboardList,

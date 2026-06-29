@@ -51,14 +51,15 @@ export async function POST(request: NextRequest) {
   const admin = billingAdmin();
   const eventType: string = event.event;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sub: any = (event.payload as any)?.subscription?.entity;
+  const payload = event.payload as Record<string, Record<string, unknown>>;
+  const sub = payload?.subscription?.entity as Record<string, unknown> | undefined;
 
   if (!sub) {
     // Not a subscription event — acknowledge and ignore
     return NextResponse.json({ received: true });
   }
 
-  const rzSubId: string = sub.id;
+  const rzSubId: string = String(sub.id);
 
   // Look up our account by the Razorpay subscription ID
   const { data: ourSub } = await admin
@@ -76,13 +77,14 @@ export async function POST(request: NextRequest) {
 
   switch (eventType) {
     case 'subscription.activated': {
-      const newPlan = planFromRazorpayPlanId(sub.plan_id) ?? currentPlan;
+      const rzPlanId = String(sub.plan_id ?? '');
+      const newPlan = planFromRazorpayPlanId(rzPlanId) ?? currentPlan;
       await admin.from('subscriptions').update({
         status: 'active',
         plan: newPlan,
-        current_period_start: new Date(sub.current_start * 1000).toISOString(),
-        current_period_end: new Date(sub.current_end * 1000).toISOString(),
-        razorpay_plan_id: sub.plan_id,
+        current_period_start: new Date(Number(sub.current_start) * 1000).toISOString(),
+        current_period_end: new Date(Number(sub.current_end) * 1000).toISOString(),
+        razorpay_plan_id: rzPlanId,
       }).eq('account_id', account_id);
 
       await admin.from('subscription_events').insert({
@@ -97,11 +99,11 @@ export async function POST(request: NextRequest) {
     }
 
     case 'subscription.charged': {
-      const chargeEntity = (event.payload as any)?.payment?.entity;
+      const chargeEntity = (payload?.payment?.entity ?? {}) as Record<string, unknown>;
       await admin.from('subscriptions').update({
         status: 'active',
-        current_period_start: new Date(sub.current_start * 1000).toISOString(),
-        current_period_end: new Date(sub.current_end * 1000).toISOString(),
+        current_period_start: new Date(Number(sub.current_start) * 1000).toISOString(),
+        current_period_end: new Date(Number(sub.current_end) * 1000).toISOString(),
       }).eq('account_id', account_id);
 
       await admin.from('subscription_events').insert({
@@ -109,8 +111,8 @@ export async function POST(request: NextRequest) {
         event_type: 'payment_succeeded',
         from_plan: currentPlan,
         to_plan: currentPlan,
-        razorpay_event_id: chargeEntity?.id ?? rzSubId,
-        metadata: { amount: chargeEntity?.amount, razorpay_event: eventType },
+        razorpay_event_id: String(chargeEntity.id ?? rzSubId),
+        metadata: { amount: chargeEntity.amount, razorpay_event: eventType },
       });
       break;
     }

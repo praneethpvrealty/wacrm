@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, X, Zap, Users, Building2, Crown, AlertTriangle, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
+import { Check, X, Zap, Users, Building2, Crown, AlertTriangle, ExternalLink, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -75,7 +75,6 @@ function PlanCard({
   const config = PLAN_CONFIG[plan];
   const isCurrent = plan === currentPlan;
   const upgrading = isUpgrade(currentPlan, plan);
-  const downgrading = isDowngrade(currentPlan, plan);
   const price = cycle === 'annual' ? config.annualMonthlyEquiv : config.monthlyPrice;
 
   return (
