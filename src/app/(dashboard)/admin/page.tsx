@@ -93,15 +93,29 @@ export default function AdminDashboardPage() {
         if (data.settings?.feature_toggles) {
           setFeatureToggles(data.settings.feature_toggles);
         }
-        // Load sandbox config if present
-        if (data.settings?.sandbox_config) {
-          const sc = data.settings.sandbox_config;
+        // Load sandbox config if present (and has at least a phone_number_id)
+        const sc = data.settings?.sandbox_config;
+        const hasSandboxConfig = sc && (sc.phone_number_id || sc.access_token);
+        if (hasSandboxConfig) {
           setSandboxPhoneNumberId(sc.phone_number_id || '');
           setSandboxWabaId(sc.waba_id || '');
           setSandboxAccessToken(sc.access_token ? '••••••••••••••••' : '');
           setSandboxVerifyToken(sc.verify_token || '');
           setSandboxDisplayName(sc.display_name || 'ConvoReal Sandbox');
           setSandboxEnabled(sc.enabled || false);
+        } else {
+          // Auto-fill from the admin's own Official API config so they don't
+          // have to duplicate credentials. Use the first official_api config
+          // that has a phone_number_id as the default sandbox number.
+          const officialConfigs = (data.whatsappConfigs || []).filter(
+            (c: WhatsappConfig) => c.integration_type === 'official_api' && c.phone_number_id
+          );
+          if (officialConfigs.length > 0) {
+            const cfg = officialConfigs[0];
+            setSandboxPhoneNumberId(cfg.phone_number_id || '');
+            setSandboxEnabled(true);
+            toast.info('Sandbox credentials auto-filled from your Official API config. Review and save.');
+          }
         }
         setLoading(false);
       } catch (err) {

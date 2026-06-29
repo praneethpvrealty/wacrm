@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Settings,
@@ -77,14 +76,7 @@ export default function SettingsPage() {
       ? 'profile'
       : requestedTab;
 
-  const [activeTab, setActiveTab] = useState<TabValue>(tab);
-
-  useEffect(() => {
-    setActiveTab(tab);
-  }, [tab]);
-
   const onChange = (next: TabValue) => {
-    setActiveTab(next);
     const params = new URLSearchParams(searchParams.toString());
     params.set('tab', next);
     router.replace(`/settings?${params.toString()}`, { scroll: false });
@@ -100,7 +92,7 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(v) => onChange(v as TabValue)}>
+      <Tabs value={tab} onValueChange={(v) => onChange(v as TabValue)}>
         <TabsList className="bg-slate-900 border border-slate-700">
           <TabsTrigger
             value="profile"

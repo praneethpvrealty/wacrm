@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import {
   Eye,
@@ -179,6 +179,8 @@ export function WhatsAppConfig() {
     }
   }, [supabase]);
 
+  const fetchedAccountId = useRef<string | null>(null);
+
   useEffect(() => {
     // Need both the auth session (`!authLoading`) AND the profile
     // (`!profileLoading`, which carries `accountId`). Without the
@@ -190,6 +192,10 @@ export function WhatsAppConfig() {
       setLoading(false);
       return;
     }
+    // Prevent re-fetching when profileLoading toggles due to background
+    // auth token refreshes (Supabase onAuthStateChange fires periodically).
+    if (fetchedAccountId.current === accountId) return;
+    fetchedAccountId.current = accountId;
     fetchConfig(accountId);
   }, [authLoading, profileLoading, user, accountId, fetchConfig]);
 

@@ -194,7 +194,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         {/* Logo row. On mobile we put a close button here; on desktop the
             close button is hidden since the sidebar is always-visible. */}
         <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-slate-900/60 px-4 bg-slate-950/20 backdrop-blur-sm relative z-10">
-          <Link href="/dashboard" className="flex items-center gap-2">
+          <Link href="/dashboard" prefetch={false} className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-indigo-650 text-white shadow-md shadow-primary/20">
               <MessageSquare className="h-4 w-4" />
             </div>
@@ -227,6 +227,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 <li key={item.href}>
                   <Link
                     href={item.href}
+                    prefetch={false}
                     className={cn(
                       // Taller on mobile so fingers can hit the row reliably (≥44px).
                       "flex items-center gap-3 px-3 py-2.5 text-sm font-semibold transition-all duration-300 lg:py-2",
@@ -269,6 +270,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 <li key={item.href}>
                   <Link
                     href={item.href}
+                    prefetch={false}
                     className={cn(
                       "flex items-center gap-3 px-3 py-2.5 text-sm font-semibold transition-all duration-300 lg:py-2",
                       isActive
@@ -299,6 +301,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 <Link
                   key={qa.label}
                   href={qa.href}
+                  prefetch={false}
                   className="w-full text-left text-xs font-bold text-slate-450 hover:text-white bg-slate-900/15 hover:bg-slate-900/45 border border-slate-900/60 hover:border-slate-800 px-4 py-2 rounded-xl transition-all duration-200 cursor-pointer"
                 >
                   {qa.label}
@@ -379,6 +382,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 render={
                   <Link
                     href="/settings?tab=profile"
+                    prefetch={false}
                     onClick={onClose}
                     className="text-slate-200 focus:bg-slate-800 focus:text-white"
                   />
@@ -391,6 +395,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 render={
                   <Link
                     href="/settings?tab=whatsapp"
+                    prefetch={false}
                     onClick={onClose}
                     className="text-slate-200 focus:bg-slate-800 focus:text-white"
                   />

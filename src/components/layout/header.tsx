@@ -119,6 +119,7 @@ export function Header({ onOpenSidebar }: HeaderProps) {
             render={
               <Link
                 href="/settings?tab=profile"
+                prefetch={false}
                 className="text-slate-200 focus:bg-slate-800 focus:text-white"
               />
             }
@@ -130,6 +131,7 @@ export function Header({ onOpenSidebar }: HeaderProps) {
             render={
               <Link
                 href="/settings?tab=whatsapp"
+                prefetch={false}
                 className="text-slate-200 focus:bg-slate-800 focus:text-white"
               />
             }
