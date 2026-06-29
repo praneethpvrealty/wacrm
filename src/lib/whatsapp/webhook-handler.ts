@@ -202,125 +202,132 @@ export async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
       if (!value.messages || !value.contacts) continue
 
       const phoneNumberId = value.metadata.phone_number_id
+      console.log(`[webhook] Incoming messages for phone_number_id: ${phoneNumberId}, messages: ${value.messages.length}`)
 
-      // ── Check for system sandbox number first ──────────────────
-      const sandboxConfig = await getSandboxSystemConfig()
-      const isSystemSandboxNumber = sandboxConfig.enabled && sandboxConfig.phone_number_id === phoneNumberId
+      // ── 1. Try Official API first ─────────────────────────────
+      const { data: officialConfigs, error: officialError } = await supabaseAdmin()
+        .from('whatsapp_config')
+        .select('*')
+        .eq('phone_number_id', phoneNumberId)
 
-      if (isSystemSandboxNumber) {
-        // Sandbox routing: each message may belong to a different tenant
+      if (officialError) {
+        console.error('[webhook] Error fetching Official API configs:', officialError)
+      }
+
+      if (officialConfigs && officialConfigs.length > 0) {
+        if (officialConfigs.length > 1) {
+          console.error(
+            `[webhook] Multiple configs (${officialConfigs.length}) for phone_number_id ${phoneNumberId}. Dropping.`
+          )
+          continue
+        }
+
+        const config = officialConfigs[0]
+        console.log(`[webhook] Matched Official API account: ${config.account_id}`)
+
+        // Trial expiration check (for official_api, trial_ends_at is usually null)
+        if (config.integration_type !== 'official_api' && config.trial_ends_at) {
+          if (new Date() > new Date(config.trial_ends_at)) {
+            console.warn(`[webhook] Trial expired for account ${config.account_id}. Dropping message.`)
+            continue
+          }
+        }
+
+        let decryptedAccessToken: string
+        try {
+          decryptedAccessToken = decrypt(config.access_token)
+        } catch (err) {
+          console.error('[webhook] Failed to decrypt access_token:', err)
+          continue
+        }
+
         for (let i = 0; i < value.messages.length; i++) {
           const message = value.messages[i]
           const contact = value.contacts[i] || value.contacts[0]
-          const senderPhone = normalizePhone(message.from)
-
-          const route = await resolveSandboxAccount(message, senderPhone)
-          if (!route) {
-            console.warn(`[webhook] Sandbox message from ${senderPhone} has no hashtag and no prior mapping. Dropping.`)
-            continue
-          }
-
-          // Resolve owner user_id if not cached in mapping
-          const ownerUserId = route.userId || await resolveSandboxOwnerUserId(route.accountId)
-
-          // Check trial expiration
-          const { data: tenantConfig } = await supabaseAdmin()
-            .from('whatsapp_config')
-            .select('trial_ends_at, sandbox_message_count, sandbox_message_limit')
-            .eq('account_id', route.accountId)
-            .maybeSingle()
-
-          if (tenantConfig?.trial_ends_at && new Date() > new Date(tenantConfig.trial_ends_at)) {
-            console.warn(`[webhook] Sandbox trial expired for account ${route.accountId}. Dropping message.`)
-            continue
-          }
-
-          // Rate limit check
-          const msgCount = tenantConfig?.sandbox_message_count ?? 0
-          const msgLimit = tenantConfig?.sandbox_message_limit ?? 50
-          if (msgCount >= msgLimit) {
-            console.warn(`[webhook] Sandbox message limit reached for account ${route.accountId} (${msgCount}/${msgLimit}). Dropping.`)
-            continue
-          }
-
-          // Increment message count
-          await supabaseAdmin()
-            .from('whatsapp_config')
-            .update({ sandbox_message_count: msgCount + 1 })
-            .eq('account_id', route.accountId)
-
-          // Process with system sandbox credentials
-          const decryptedSystemToken = sandboxConfig.access_token ? decrypt(sandboxConfig.access_token) : ''
           await processMessage(
             message,
             contact,
-            route.accountId,
-            ownerUserId,
-            decryptedSystemToken,
-            sandboxConfig.phone_number_id!
+            config.account_id,
+            config.user_id,
+            decryptedAccessToken,
+            config.phone_number_id
           )
         }
         continue
       }
 
-      // ── Normal Official API flow ────────────────────────────────
-      const { data: configRows, error: configError } = await supabaseAdmin()
-        .from('whatsapp_config')
-        .select('*')
-        .eq('phone_number_id', phoneNumberId)
+      // ── 2. No Official API match — try Sandbox routing ─────────
+      console.log(`[webhook] No Official API config for ${phoneNumberId}. Trying sandbox hashtag/sender routing...`)
 
-      if (configError) {
-        console.error(
-          'Error fetching whatsapp_config for phone_number_id:',
-          phoneNumberId,
-          configError
-        )
-        continue
-      }
-
-      if (!configRows || configRows.length === 0) {
-        console.error('No config found for phone_number_id:', phoneNumberId)
-        continue
-      }
-
-      if (configRows.length > 1) {
-        console.error(
-          `Multiple configs (${configRows.length}) found for phone_number_id:`,
-          phoneNumberId,
-          '— inbound message dropped. Resolve duplicates so each number maps to a single account.',
-          'Account owners:',
-          configRows.map((r: { account_id: string; user_id: string }) => `${r.account_id} (admin ${r.user_id})`)
-        )
-        continue
-      }
-
-      const config = configRows[0]
-      
-      // Trial Expiration Check
-      if (config.integration_type !== 'official_api' && config.trial_ends_at) {
-        if (new Date() > new Date(config.trial_ends_at)) {
-          console.warn(`[webhook] Trial expired for account ${config.account_id} (${config.integration_type}). Dropping message.`);
-          // Optional: Send auto-response to user about trial expiration
-          // await sendTextMessage(..., "Your trial has expired...");
-          continue;
-        }
-      }
-
-      const decryptedAccessToken = decrypt(config.access_token)
+      const sandboxSystem = await getSandboxSystemConfig()
 
       for (let i = 0; i < value.messages.length; i++) {
         const message = value.messages[i]
         const contact = value.contacts[i] || value.contacts[0]
+        const senderPhone = normalizePhone(message.from)
+
+        console.log(`[webhook] Attempting sandbox routing for sender: ${senderPhone}, body: "${message.text?.body?.substring(0, 50) || '[non-text]'}"`)
+
+        const route = await resolveSandboxAccount(message, senderPhone)
+        if (!route) {
+          console.warn(`[webhook] No hashtag or prior mapping for sender ${senderPhone}. Dropping. Body: "${message.text?.body || ''}"`)
+          continue
+        }
+
+        console.log(`[webhook] Resolved sandbox route: account=${route.accountId}, code=${route.sandboxCode}, newMapping=${route.isNewMapping}`)
+
+        // Resolve owner user_id if not cached in mapping
+        const ownerUserId = route.userId || await resolveSandboxOwnerUserId(route.accountId)
+
+        // Check trial expiration
+        const { data: tenantConfig } = await supabaseAdmin()
+          .from('whatsapp_config')
+          .select('trial_ends_at, sandbox_message_count, sandbox_message_limit')
+          .eq('account_id', route.accountId)
+          .maybeSingle()
+
+        if (tenantConfig?.trial_ends_at && new Date() > new Date(tenantConfig.trial_ends_at)) {
+          console.warn(`[webhook] Sandbox trial expired for account ${route.accountId}. Dropping message.`)
+          continue
+        }
+
+        // Rate limit check
+        const msgCount = tenantConfig?.sandbox_message_count ?? 0
+        const msgLimit = tenantConfig?.sandbox_message_limit ?? 50
+        if (msgCount >= msgLimit) {
+          console.warn(`[webhook] Sandbox message limit reached for account ${route.accountId} (${msgCount}/${msgLimit}). Dropping.`)
+          continue
+        }
+
+        // Increment message count
+        await supabaseAdmin()
+          .from('whatsapp_config')
+          .update({ sandbox_message_count: msgCount + 1 })
+          .eq('account_id', route.accountId)
+
+        // Use system sandbox credentials if available; otherwise empty (text-only processing)
+        let decryptedSystemToken = ''
+        if (sandboxSystem.enabled && sandboxSystem.access_token) {
+          try {
+            decryptedSystemToken = decrypt(sandboxSystem.access_token)
+          } catch (err) {
+            console.warn('[webhook] Failed to decrypt sandbox system token:', err)
+          }
+        } else {
+          console.warn('[webhook] Sandbox system credentials not configured. Media downloads may fail, but text processing will continue.')
+        }
 
         await processMessage(
           message,
           contact,
-          config.account_id,
-          config.user_id,
-          decryptedAccessToken,
-          config.phone_number_id
+          route.accountId,
+          ownerUserId,
+          decryptedSystemToken,
+          phoneNumberId
         )
       }
+      continue
+
     }
   }
 }
