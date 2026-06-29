@@ -204,7 +204,102 @@ export async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
       const phoneNumberId = value.metadata.phone_number_id
       console.log(`[webhook] Incoming messages for phone_number_id: ${phoneNumberId}, messages: ${value.messages.length}`)
 
-      // ── 1. Try Official API first ─────────────────────────────
+      const sandboxSystem = await getSandboxSystemConfig()
+      const isSystemSandboxNumber = sandboxSystem.enabled && sandboxSystem.phone_number_id === phoneNumberId
+
+      // ── 1. If this is the shared sandbox number, try tenant routing per-message ──
+      if (isSystemSandboxNumber) {
+        console.log(`[webhook] phone_number_id ${phoneNumberId} matches system sandbox config. Trying hashtag/sender routing per message...`)
+
+        for (let i = 0; i < value.messages.length; i++) {
+          const message = value.messages[i]
+          const contact = value.contacts[i] || value.contacts[0]
+          const senderPhone = normalizePhone(message.from)
+
+          console.log(`[webhook] Attempting sandbox routing for sender: ${senderPhone}, body: "${message.text?.body?.substring(0, 50) || '[non-text]'}"`)
+
+          const route = await resolveSandboxAccount(message, senderPhone)
+          if (route) {
+            console.log(`[webhook] Resolved sandbox route: account=${route.accountId}, code=${route.sandboxCode}, newMapping=${route.isNewMapping}`)
+
+            // Resolve owner user_id if not cached in mapping
+            const ownerUserId = route.userId || await resolveSandboxOwnerUserId(route.accountId)
+
+            // Check trial expiration
+            const { data: tenantConfig } = await supabaseAdmin()
+              .from('whatsapp_config')
+              .select('trial_ends_at, sandbox_message_count, sandbox_message_limit')
+              .eq('account_id', route.accountId)
+              .maybeSingle()
+
+            if (tenantConfig?.trial_ends_at && new Date() > new Date(tenantConfig.trial_ends_at)) {
+              console.warn(`[webhook] Sandbox trial expired for account ${route.accountId}. Dropping message.`)
+              continue
+            }
+
+            // Rate limit check
+            const msgCount = tenantConfig?.sandbox_message_count ?? 0
+            const msgLimit = tenantConfig?.sandbox_message_limit ?? 50
+            if (msgCount >= msgLimit) {
+              console.warn(`[webhook] Sandbox message limit reached for account ${route.accountId} (${msgCount}/${msgLimit}). Dropping.`)
+              continue
+            }
+
+            // Increment message count
+            await supabaseAdmin()
+              .from('whatsapp_config')
+              .update({ sandbox_message_count: msgCount + 1 })
+              .eq('account_id', route.accountId)
+
+            // Use system sandbox credentials if available
+            let decryptedSystemToken = ''
+            if (sandboxSystem.access_token) {
+              try {
+                decryptedSystemToken = decrypt(sandboxSystem.access_token)
+              } catch (err) {
+                console.warn('[webhook] Failed to decrypt sandbox system token:', err)
+              }
+            }
+
+            await processMessage(
+              message,
+              contact,
+              route.accountId,
+              ownerUserId,
+              decryptedSystemToken,
+              phoneNumberId
+            )
+            continue
+          }
+
+          // No sandbox route found for this message — fall back to Official API config (if same number is also an official number)
+          console.warn(`[webhook] No sandbox route for sender ${senderPhone}. Checking Official API fallback...`)
+
+          const { data: fallbackConfigs } = await supabaseAdmin()
+            .from('whatsapp_config')
+            .select('*')
+            .eq('phone_number_id', phoneNumberId)
+
+          if (fallbackConfigs && fallbackConfigs.length === 1) {
+            const fb = fallbackConfigs[0]
+            console.log(`[webhook] Falling back to Official API account: ${fb.account_id}`)
+            let fbToken: string
+            try {
+              fbToken = decrypt(fb.access_token)
+            } catch (err) {
+              console.error('[webhook] Failed to decrypt fallback access_token:', err)
+              continue
+            }
+            await processMessage(message, contact, fb.account_id, fb.user_id, fbToken, fb.phone_number_id)
+            continue
+          }
+
+          console.warn(`[webhook] No sandbox route and no Official API fallback for sender ${senderPhone}. Dropping. Body: "${message.text?.body || ''}"`)
+        }
+        continue
+      }
+
+      // ── 2. Normal Official API flow (phone_number_id is NOT the sandbox number) ──
       const { data: officialConfigs, error: officialError } = await supabaseAdmin()
         .from('whatsapp_config')
         .select('*')
@@ -259,7 +354,7 @@ export async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
       // ── 2. No Official API match — try Sandbox routing ─────────
       console.log(`[webhook] No Official API config for ${phoneNumberId}. Trying sandbox hashtag/sender routing...`)
 
-      const sandboxSystem = await getSandboxSystemConfig()
+      const fallbackSandboxSystem = await getSandboxSystemConfig()
 
       for (let i = 0; i < value.messages.length; i++) {
         const message = value.messages[i]
@@ -307,9 +402,9 @@ export async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
 
         // Use system sandbox credentials if available; otherwise empty (text-only processing)
         let decryptedSystemToken = ''
-        if (sandboxSystem.enabled && sandboxSystem.access_token) {
+        if (fallbackSandboxSystem.enabled && fallbackSandboxSystem.access_token) {
           try {
-            decryptedSystemToken = decrypt(sandboxSystem.access_token)
+            decryptedSystemToken = decrypt(fallbackSandboxSystem.access_token)
           } catch (err) {
             console.warn('[webhook] Failed to decrypt sandbox system token:', err)
           }
