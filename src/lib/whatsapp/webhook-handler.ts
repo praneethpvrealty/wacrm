@@ -251,6 +251,16 @@ export async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
               .update({ sandbox_message_count: msgCount + 1 })
               .eq('account_id', route.accountId)
 
+            // Strip the sandbox hashtag from the message text before storing
+            // so the UI shows "hi" instead of "#convo870 hi"
+            const cleanedMessage = { ...message }
+            if (cleanedMessage.text?.body) {
+              cleanedMessage.text = {
+                ...cleanedMessage.text,
+                body: cleanedMessage.text.body.replace(HASHTAG_REGEX, '').trim(),
+              }
+            }
+
             // Use system sandbox credentials if available
             let decryptedSystemToken = ''
             if (sandboxSystem.access_token) {
@@ -262,7 +272,7 @@ export async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
             }
 
             await processMessage(
-              message,
+              cleanedMessage,
               contact,
               route.accountId,
               ownerUserId,
