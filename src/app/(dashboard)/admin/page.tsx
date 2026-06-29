@@ -21,6 +21,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 interface WhatsappConfig {
   account_id: string;
   phone_number_id: string | null;
+  waba_id?: string | null;
+  verify_token?: string | null;
   status: string;
   integration_type: string;
   owner_name: string;
@@ -59,6 +61,7 @@ export default function AdminDashboardPage() {
   const [sandboxDisplayName, setSandboxDisplayName] = useState('ConvoReal Sandbox');
   const [sandboxEnabled, setSandboxEnabled] = useState(false);
   const [testingSandbox, setTestingSandbox] = useState(false);
+  const [sandboxIsEditing, setSandboxIsEditing] = useState(false);
 
   // Sandbox Analytics State
   const [sandboxTenants, setSandboxTenants] = useState<Array<Record<string, unknown>>>([]);
@@ -103,6 +106,7 @@ export default function AdminDashboardPage() {
           setSandboxVerifyToken(sc.verify_token || '');
           setSandboxDisplayName(sc.display_name || 'ConvoReal Sandbox');
           setSandboxEnabled(sc.enabled || false);
+          setSandboxIsEditing(false);
         } else {
           // Auto-fill from the admin's own Official API config so they don't
           // have to duplicate credentials. Use the first official_api config
@@ -114,7 +118,10 @@ export default function AdminDashboardPage() {
             const cfg = officialConfigs[0];
             setSandboxPhoneNumberId(cfg.phone_number_id || '');
             setSandboxEnabled(true);
+            setSandboxIsEditing(true);
             toast.info('Sandbox credentials auto-filled from your Official API config. Review and save.');
+          } else {
+            setSandboxIsEditing(true);
           }
         }
         setLoading(false);
@@ -506,6 +513,26 @@ export default function AdminDashboardPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Edit mode banner */}
+              {!sandboxIsEditing && sandboxPhoneNumberId && (
+                <div className="flex items-center justify-between p-3 rounded-xl border border-amber-800/40 bg-amber-950/20">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-amber-400" />
+                    <span className="text-xs text-amber-300">
+                      Sandbox config is saved and active. Click Edit to modify.
+                    </span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSandboxIsEditing(true)}
+                    className="rounded-lg border-amber-700/50 text-amber-300 hover:text-white hover:bg-amber-900/30 text-xs"
+                  >
+                    Edit
+                  </Button>
+                </div>
+              )}
+
               {/* Enable Toggle */}
               <div className="flex items-center justify-between p-3 rounded-xl border border-slate-800 bg-slate-950/40">
                 <div className="space-y-0.5">
@@ -515,19 +542,47 @@ export default function AdminDashboardPage() {
                 <input
                   type="checkbox"
                   checked={sandboxEnabled}
+                  disabled={!sandboxIsEditing}
                   onChange={(e) => setSandboxEnabled(e.target.checked)}
-                  className="rounded border-slate-700 bg-slate-800 text-primary focus:ring-0 focus:ring-offset-0 h-4 w-4 cursor-pointer"
+                  className="rounded border-slate-700 bg-slate-800 text-primary focus:ring-0 focus:ring-offset-0 h-4 w-4 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
+
+              {/* Auto-fill from Official API */}
+              {sandboxIsEditing && whatsappConfigs.filter((c) => c.integration_type === 'official_api' && c.phone_number_id).length > 0 && (
+                <div className="p-3 rounded-xl border border-blue-800/40 bg-blue-950/20">
+                  <p className="text-xs text-blue-300 mb-2">
+                    We detected your Official API credentials. You can auto-fill the sandbox config with the same number.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const cfg = whatsappConfigs.find((c) => c.integration_type === 'official_api' && c.phone_number_id);
+                      if (cfg) {
+                        setSandboxPhoneNumberId(cfg.phone_number_id || '');
+                        setSandboxWabaId(cfg.waba_id || '');
+                        setSandboxVerifyToken(cfg.verify_token || '');
+                        setSandboxEnabled(true);
+                        toast.success('Auto-filled from your Official API config. Add token and save.');
+                      }
+                    }}
+                    className="rounded-lg border-blue-700/50 text-blue-300 hover:text-white hover:bg-blue-900/30 text-xs"
+                  >
+                    Use My Official API Credentials
+                  </Button>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-300">Display Name</label>
                 <input
                   type="text"
                   value={sandboxDisplayName}
+                  disabled={!sandboxIsEditing}
                   onChange={(e) => setSandboxDisplayName(e.target.value)}
                   placeholder="ConvoReal Sandbox"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 disabled:bg-slate-900 disabled:cursor-not-allowed"
                 />
                 <p className="text-xs text-slate-500">
                   This name appears to leads when they receive messages from the shared number.
@@ -539,9 +594,10 @@ export default function AdminDashboardPage() {
                 <input
                   type="text"
                   value={sandboxPhoneNumberId}
+                  disabled={!sandboxIsEditing}
                   onChange={(e) => setSandboxPhoneNumberId(e.target.value)}
                   placeholder="e.g. 100234567890123"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 disabled:bg-slate-900 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -550,9 +606,10 @@ export default function AdminDashboardPage() {
                 <input
                   type="text"
                   value={sandboxWabaId}
+                  disabled={!sandboxIsEditing}
                   onChange={(e) => setSandboxWabaId(e.target.value)}
                   placeholder="e.g. 100234567890456"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 disabled:bg-slate-900 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -561,14 +618,15 @@ export default function AdminDashboardPage() {
                 <input
                   type="password"
                   value={sandboxAccessToken}
+                  disabled={!sandboxIsEditing}
                   onChange={(e) => setSandboxAccessToken(e.target.value)}
-                  placeholder="Enter Meta access token"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-primary"
+                  placeholder={sandboxIsEditing ? 'Enter Meta access token' : '••••••••••••••••'}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 disabled:bg-slate-900 disabled:cursor-not-allowed"
                 />
                 <p className="text-xs text-slate-500">
-                  {sandboxAccessToken === '••••••••••••••••' 
-                    ? 'Token is hidden. Re-enter to update.' 
-                    : 'This token will be encrypted before storage.'}
+                  {sandboxIsEditing
+                    ? 'This token will be encrypted before storage.'
+                    : 'Token is hidden. Click Edit to update.'}
                 </p>
               </div>
 
@@ -577,9 +635,10 @@ export default function AdminDashboardPage() {
                 <input
                   type="text"
                   value={sandboxVerifyToken}
+                  disabled={!sandboxIsEditing}
                   onChange={(e) => setSandboxVerifyToken(e.target.value)}
                   placeholder="Create a custom verify token"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 disabled:bg-slate-900 disabled:cursor-not-allowed"
                 />
                 <p className="text-xs text-slate-500">
                   Must match the verify token configured in Meta webhook settings for this number.
