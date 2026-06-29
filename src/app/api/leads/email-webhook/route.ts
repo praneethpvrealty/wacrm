@@ -13,6 +13,7 @@ import {
 import { resolveHousingPhone } from './phone-resolver';
 import { writeSyncLog, assignTagsToContact } from './db-utils';
 import { sendAutoReply } from './auto-reply';
+import { runAutomationsForTrigger } from '@/lib/automations/engine';
 
 // Re-export for route.test.ts and backward compatibility
 export {
@@ -390,10 +391,10 @@ export async function POST(request: Request) {
           .eq('is_published', true);
 
         if (properties && properties.length > 0) {
-          // Find all matching properties
-          const matchedProperties = properties.filter((p) => {
+          // Score and rank every property so the strongest location match is first.
+          const scoredProperties = properties.map((p) => {
             let matchScore = 0;
-            
+
             // Match by property type (Apartment, Flat, etc.)
             if (parsed.propertyType && p.type) {
               const typeLower = parsed.propertyType.toLowerCase();
@@ -410,7 +411,7 @@ export async function POST(request: Request) {
               }
             }
 
-            // Match by location (fuzzy match)
+            // Match by location (fuzzy match) — highest weight
             if (parsed.propertyLocation && p.location) {
               const locLower = parsed.propertyLocation.toLowerCase();
               const pLocLower = p.location.toLowerCase();
@@ -435,9 +436,14 @@ export async function POST(request: Request) {
               }
             }
 
-            // Require at least 3 points to consider it a match
-            return matchScore >= 3;
+            return { property: p, score: matchScore };
           });
+
+          // Require at least 3 points to consider it a match
+          const matchedProperties = scoredProperties
+            .filter((sp) => sp.score >= 3)
+            .sort((a, b) => b.score - a.score)
+            .map((sp) => sp.property);
 
           if (matchedProperties.length > 0) {
             matchedPropertyIds = matchedProperties.map(p => p.id);
@@ -656,6 +662,13 @@ export async function POST(request: Request) {
         leadSource: parsed.source || '',
       });
 
+      // Fire automations for existing contact getting a new lead
+      void runAutomationsForTrigger({
+        accountId,
+        triggerType: 'new_message_received',
+        contactId: existingContact.id,
+      })
+
       return NextResponse.json({
         status: 'updated',
         contactId: existingContact.id,
@@ -784,6 +797,13 @@ export async function POST(request: Request) {
       leadName: parsed.name || '',
       leadSource: parsed.source || '',
     });
+
+    // Fire automations for the new contact (e.g. welcome message, property info)
+    void runAutomationsForTrigger({
+      accountId,
+      triggerType: 'new_contact_created',
+      contactId: newContact.id,
+    })
 
     return NextResponse.json({
       status: 'created',
