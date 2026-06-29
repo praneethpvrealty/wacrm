@@ -57,7 +57,7 @@ export async function GET(request: Request) {
 
     let query = supabaseAdmin()
       .from('whatsapp_config')
-      .select('*, owner:profiles(full_name, email, user_id)')
+      .select('*')
       .eq('integration_type', 'sandbox')
 
     if (!includeExpired) {
@@ -71,10 +71,19 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Failed to fetch tenants' }, { status: 500 })
     }
 
+    // Fetch owner profiles separately — no FK between whatsapp_config and profiles,
+    // so we match on user_id (whatsapp_config.user_id → profiles.user_id).
+    const userIds = (configs || []).map((cfg: Record<string, unknown>) => cfg.user_id as string).filter(Boolean)
+    const { data: profiles } = userIds.length > 0
+      ? await supabaseAdmin().from('profiles').select('user_id, full_name, email').in('user_id', userIds)
+      : { data: [] }
+
     // Enrich with conversation counts
     const enriched = await Promise.all(
       (configs || []).map(async (cfg: Record<string, unknown>) => {
         const accountId = cfg.account_id as string
+        const userId = cfg.user_id as string
+        const owner = profiles?.find((p: Record<string, unknown>) => p.user_id === userId)
 
         const { count: convCount } = await supabaseAdmin()
           .from('conversations')
@@ -93,6 +102,7 @@ export async function GET(request: Request) {
 
         return {
           ...cfg,
+          owner: owner || null,
           stats: {
             conversations: convCount || 0,
             messages: msgCount || 0,
