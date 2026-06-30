@@ -18,11 +18,13 @@ export const metadata: Metadata = {
 };
 
 /**
- * ISR: Regenerate showcase pages every 60 seconds in the background.
- * The edge cache (s-maxage=300 from next.config.ts) serves stale content
- * instantly while fresh data is fetched asynchronously.
+ * ISR: Regenerate showcase pages every 1 hour (3600s) in the background.
+ * Property listings change infrequently (price edits, new listings), so
+ * 1 hour is a safe balance between freshness and performance.
+ * The edge cache (s-maxage=3600) serves stale content instantly
+ * while fresh data is fetched asynchronously.
  */
-export const revalidate = 60;
+export const revalidate = 3600;
 
 interface PageProps {
   searchParams: Promise<{
