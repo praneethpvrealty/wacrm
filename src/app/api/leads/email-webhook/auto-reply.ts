@@ -3,6 +3,14 @@ import { sendTextMessage, sendTemplateMessage } from '@/lib/whatsapp/meta-api';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import { EmailSyncConfig, MessageTemplate } from '@/types';
 
+export interface SendAutoReplyResult {
+  success: boolean;
+  messageId?: string;
+  error?: string;
+  usedTemplateName?: string | null;
+  replyText?: string;
+}
+
 // Helper to trigger automatic WhatsApp auto-reply (either approved template or custom text)
 export async function sendAutoReply({
   supabase,
@@ -22,10 +30,15 @@ export async function sendAutoReply({
   leadName: string;
   leadSource: string;
   forceSend?: boolean;
-}) {
+}): Promise<SendAutoReplyResult> {
+  const logPrefix = `[lead-webhook][sendAutoReply][${cleanPhone}]`;
+
   // When forceSend is true (email-webhook lead collection), we always attempt
   // to deliver a message regardless of the auto_reply_enabled setting.
-  if (!forceSend && !syncConfig?.auto_reply_enabled) return;
+  if (!forceSend && !syncConfig?.auto_reply_enabled) {
+    console.log(`${logPrefix} Skipped: auto_reply not enabled and forceSend=false`);
+    return { success: false, error: 'auto_reply not enabled' };
+  }
 
   const { data: waConfig } = await supabase
     .from('whatsapp_config')
@@ -35,15 +48,18 @@ export async function sendAutoReply({
     .maybeSingle();
 
   if (!waConfig) {
-    console.warn(`[lead-webhook] Cannot send auto-reply: no connected WhatsApp config for account ${accountId}`);
-    return;
+    console.warn(`${logPrefix} FAILED: no connected WhatsApp config for account ${accountId}`);
+    return { success: false, error: 'No connected WhatsApp config for this account' };
   }
+
+  console.log(`${logPrefix} WhatsApp config loaded. phone_number_id=${waConfig.phone_number_id}`);
 
   try {
     let replyText = '';
     let messageId = '';
     let usedTemplateName: string | null = null;
 
+    // ── Primary template (from syncConfig) ──
     let template: MessageTemplate | null = null;
     if (syncConfig?.auto_reply_template_name) {
       const { data: foundTemplate } = await supabase
@@ -54,16 +70,21 @@ export async function sendAutoReply({
         .eq('status', 'APPROVED')
         .maybeSingle();
       template = foundTemplate as unknown as MessageTemplate;
+      if (template) {
+        console.log(`${logPrefix} Primary template resolved: ${template.name} (lang: ${template.language || 'en_US'})`);
+      } else {
+        console.log(`${logPrefix} Primary template "${syncConfig.auto_reply_template_name}" not found or not APPROVED`);
+      }
+    } else {
+      console.log(`${logPrefix} No primary template configured in syncConfig`);
     }
 
-    let primaryTemplateFailed = false;
     if (template) {
       const bodyParams = [
         leadName || 'there',
         leadSource || 'portal'
       ];
-      
-      // Auto-resolve dynamic URL buttons if the template has them
+
       const buttonParams: Record<number, string> = {};
       if (template.buttons && Array.isArray(template.buttons)) {
         template.buttons.forEach((btn, idx: number) => {
@@ -72,7 +93,7 @@ export async function sendAutoReply({
           }
         });
       }
-      
+
       try {
         const sendRes = await sendTemplateMessage({
           phoneNumberId: waConfig.phone_number_id,
@@ -86,34 +107,32 @@ export async function sendAutoReply({
             ...(Object.keys(buttonParams).length > 0 ? { buttonParams } : {})
           }
         });
-        
+
         messageId = sendRes.messageId;
         usedTemplateName = template.name;
-        
-        // Format text for storing in messages log
         replyText = template.body_text
           .replace(/{{1}}/g, leadName || 'there')
           .replace(/{{2}}/g, leadSource || 'portal');
+
+        console.log(`${logPrefix} Primary template SENT: ${template.name}, Meta messageId=${messageId}`);
       } catch (tplErr) {
         const errMsg = (tplErr as Error).message || '';
-        // If template not found on Meta (132001), mark inactive and fall through
+        console.error(`${logPrefix} Primary template ${template.name} FAILED: ${errMsg}`);
         if (errMsg.includes('132001') || errMsg.toLowerCase().includes('does not exist')) {
-          console.warn(`[lead-webhook] Configured template ${template.name} does not exist on Meta. Marking inactive and trying fallbacks.`);
+          console.warn(`${logPrefix} Marking template ${template.name} as INACTIVE in DB`);
           await supabase
             .from('message_templates')
             .update({ status: 'INACTIVE' })
             .eq('id', template.id);
-          primaryTemplateFailed = true;
         } else {
-          throw tplErr; // Re-throw other errors
+          return { success: false, error: `Primary template failed: ${errMsg}` };
         }
       }
     }
 
-    // If primary template wasn't configured or failed, try fallback templates
-    if (!messageId && (primaryTemplateFailed || !template)) {
+    // ── Fallback path ──
+    if (!messageId) {
       // Check 24-hour customer service window before sending free-form text.
-      // Meta rejects free-form messages outside the window (Error 131047).
       let isWithin24Hours = false;
       if (conversationId) {
         const { data: lastCustomerMsg } = await supabase
@@ -128,15 +147,21 @@ export async function sendAutoReply({
         if (lastCustomerMsg) {
           const lastMsgTime = new Date(lastCustomerMsg.created_at).getTime();
           isWithin24Hours = (Date.now() - lastMsgTime) < 24 * 60 * 60 * 1000;
+          console.log(`${logPrefix} Last customer msg: ${lastCustomerMsg.created_at}, within24h=${isWithin24Hours}`);
+        } else {
+          console.log(`${logPrefix} No prior customer messages in conversation`);
         }
+      } else {
+        console.log(`${logPrefix} No conversationId provided — cannot check 24h window`);
       }
 
+      // Within 24h window: send free-form text if available
       if (isWithin24Hours && syncConfig?.auto_reply_text) {
-        // Within 24h window — send free-form text
         replyText = syncConfig.auto_reply_text
           .replace(/{name}/g, leadName || 'there')
           .replace(/{source}/g, leadSource || 'portal');
 
+        console.log(`${logPrefix} Sending free-form text (within 24h window): "${replyText.slice(0, 60)}..."`);
         const sendRes = await sendTextMessage({
           phoneNumberId: waConfig.phone_number_id,
           accessToken: decrypt(waConfig.access_token),
@@ -144,22 +169,25 @@ export async function sendAutoReply({
           text: replyText,
         });
         messageId = sendRes.messageId;
+        console.log(`${logPrefix} Free-form text SENT, Meta messageId=${messageId}`);
       } else {
-        // 24h window expired — fall back to an approved Utility template.
-        // Templates work outside the 24h window; free-form text does not.
-        const { data: fallbackTemplates } = await supabase
+        // Outside 24h window (or no free-form text configured) — MUST use a template.
+        // Try ALL approved templates (no category restriction) so we maximise chances.
+        console.log(`${logPrefix} Outside 24h window. Querying ALL approved templates for account ${accountId}...`);
+        const { data: fallbackTemplates, error: tplErr } = await supabase
           .from('message_templates')
           .select('*')
           .eq('account_id', accountId)
           .eq('status', 'APPROVED')
-          .in('category', ['UTILITY', 'UTILITY_MARKETING', 'MARKETING'])
           .order('created_at', { ascending: true });
 
-        // Try templates in order, attempting the DB language first then
-        // common English fallbacks. This handles cases where the DB
-        // language code doesn't match Meta's registered locale.
-        // If a template fails with 132001 (not found), mark it inactive
-        // in the DB so future requests skip it.
+        if (tplErr) {
+          console.error(`${logPrefix} DB error querying templates:`, tplErr);
+          return { success: false, error: `Template DB query failed: ${tplErr.message}` };
+        }
+
+        console.log(`${logPrefix} Found ${fallbackTemplates?.length || 0} approved template(s)`);
+
         let sent = false;
         for (const fallbackTemplate of fallbackTemplates || []) {
           if (sent) break;
@@ -169,7 +197,7 @@ export async function sendAutoReply({
 
           for (const lang of tryLanguages) {
             try {
-              console.log(`[lead-webhook] 24h session expired for ${cleanPhone}. Trying template: ${fallbackTemplate.name} (lang: ${lang})`);
+              console.log(`${logPrefix} Trying fallback template: ${fallbackTemplate.name} (lang: ${lang})`);
 
               const bodyParams = [leadName || 'there', leadSource || 'portal'];
               const tpl = fallbackTemplate as MessageTemplate;
@@ -201,19 +229,19 @@ export async function sendAutoReply({
                 .replace(/{{1}}/g, leadName || 'there')
                 .replace(/{{2}}/g, leadSource || 'portal');
               sent = true;
+              console.log(`${logPrefix} Fallback template SENT: ${tpl.name} (lang: ${lang}), Meta messageId=${messageId}`);
               break;
             } catch (langErr) {
               const errMsg = (langErr as Error).message || '';
-              console.warn(`[lead-webhook] Template ${fallbackTemplate.name} failed with lang ${lang}:`, errMsg);
+              console.warn(`${logPrefix} Template ${fallbackTemplate.name} failed with lang ${lang}: ${errMsg}`);
 
-              // If 132001 (template not found on Meta), mark inactive in DB
               if (errMsg.includes('132001') || errMsg.toLowerCase().includes('does not exist')) {
-                console.warn(`[lead-webhook] Template ${fallbackTemplate.name} does not exist on Meta. Marking as inactive.`);
+                console.warn(`${logPrefix} Marking template ${fallbackTemplate.name} as INACTIVE`);
                 await supabase
                   .from('message_templates')
                   .update({ status: 'INACTIVE' })
                   .eq('id', fallbackTemplate.id);
-                break; // Skip to next template, don't try other languages
+                break;
               }
               // Continue to next language for other errors
             }
@@ -221,14 +249,16 @@ export async function sendAutoReply({
         }
 
         if (!sent) {
-          console.warn(`[lead-webhook] 24h session expired for ${cleanPhone} and no fallback template worked. Create a Utility template on Meta Business Manager and sync from Settings > WhatsApp > Templates.`);
+          const err = `No approved template could be sent to ${cleanPhone}. Account has ${fallbackTemplates?.length || 0} approved template(s). Create a template in Meta Business Manager and sync.`;
+          console.error(`${logPrefix} ${err}`);
+          return { success: false, error: err };
         }
       }
-    } else {
-      return; // No reply configured
     }
 
+    // ── Persist sent message to DB ──
     if (conversationId && replyText && messageId) {
+      console.log(`${logPrefix} Persisting message to DB. conversationId=${conversationId}, type=${usedTemplateName ? 'template' : 'text'}`);
       await supabase.from('messages').insert({
         conversation_id: conversationId,
         sender_type: 'bot',
@@ -239,8 +269,15 @@ export async function sendAutoReply({
         status: 'sent',
         created_at: new Date().toISOString(),
       });
+      console.log(`${logPrefix} Message persisted successfully`);
+    } else {
+      console.warn(`${logPrefix} Cannot persist: missing conversationId=${conversationId}, replyText=${!!replyText}, messageId=${!!messageId}`);
     }
+
+    return { success: true, messageId, usedTemplateName, replyText };
   } catch (sendErr) {
-    console.error('[lead-webhook] Failed to send auto-reply:', sendErr);
+    const errMsg = (sendErr as Error).message || 'Unknown error';
+    console.error(`${logPrefix} Unhandled exception:`, sendErr);
+    return { success: false, error: errMsg };
   }
 }

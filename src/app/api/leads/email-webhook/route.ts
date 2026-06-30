@@ -652,7 +652,7 @@ export async function POST(request: Request) {
       });
 
       // Trigger automatic WhatsApp reply — always send for email leads
-      await sendAutoReply({
+      const replyResult = await sendAutoReply({
         supabase,
         accountId,
         syncConfig,
@@ -662,6 +662,11 @@ export async function POST(request: Request) {
         leadSource: parsed.source || '',
         forceSend: true,
       });
+      if (!replyResult.success) {
+        console.error(`[lead-webhook] Auto-reply FAILED for existing contact ${existingContact.id}: ${replyResult.error}`);
+      } else {
+        console.log(`[lead-webhook] Auto-reply SENT for existing contact ${existingContact.id}: messageId=${replyResult.messageId}`);
+      }
 
       // Fire automations for existing contact getting a new lead
       void runAutomationsForTrigger({
@@ -789,7 +794,7 @@ export async function POST(request: Request) {
     });
 
     // Trigger automatic WhatsApp reply — always send for email leads
-    await sendAutoReply({
+    const replyResult = await sendAutoReply({
       supabase,
       accountId,
       syncConfig,
@@ -799,6 +804,11 @@ export async function POST(request: Request) {
       leadSource: parsed.source || '',
       forceSend: true,
     });
+    if (!replyResult.success) {
+      console.error(`[lead-webhook] Auto-reply FAILED for new contact ${newContact.id}: ${replyResult.error}`);
+    } else {
+      console.log(`[lead-webhook] Auto-reply SENT for new contact ${newContact.id}: messageId=${replyResult.messageId}`);
+    }
 
     // Fire automations for the new contact (e.g. welcome message, property info)
     void runAutomationsForTrigger({
