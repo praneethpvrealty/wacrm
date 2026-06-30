@@ -410,8 +410,8 @@ export function ContactForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-slate-900 border-slate-700 text-slate-200 sm:max-w-lg max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="bg-slate-900 border-slate-700 text-slate-200 sm:max-w-lg max-h-[85vh] p-0 gap-0 flex flex-col overflow-hidden">
+        <DialogHeader className="p-6 pb-4 border-b border-slate-800">
           <DialogTitle className="text-white">
             {isEdit ? 'Edit Contact' : 'Add Contact'}
           </DialogTitle>
@@ -422,7 +422,8 @@ export function ContactForm({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-6 pt-4 space-y-4">
           <div className="space-y-2">
             <Label htmlFor="cf-name" className="text-slate-300">
               Name
@@ -899,7 +900,9 @@ export function ContactForm({
             </div>
           )}
  
-          <DialogFooter className="bg-slate-900 border-slate-700">
+          </div>
+
+          <DialogFooter className="bg-slate-950/40 border-t border-slate-800 p-4 mx-0 mb-0 rounded-none rounded-b-xl">
             <Button
               type="button"
               variant="outline"
