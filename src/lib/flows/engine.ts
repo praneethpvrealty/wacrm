@@ -266,7 +266,9 @@ async function fetchAndFormatPropertyListings(
     .order("created_at", { ascending: false })
     .limit(limit);
 
-  if (cfg.filter_type) {
+  if (cfg.filter_types && cfg.filter_types.length > 0) {
+    query = query.in("type", cfg.filter_types);
+  } else if (cfg.filter_type) {
     query = query.eq("type", cfg.filter_type);
   }
   if (cfg.filter_listing_type) {

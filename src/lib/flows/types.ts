@@ -184,8 +184,10 @@ export interface SendPropertyListingsNodeConfig {
   empty_text?: string;
   /** Max listings to include (WhatsApp text cap ~4096 chars). */
   limit?: number;
-  /** Optional property type filter, e.g. "Villa" or "Apartment". */
+  /** Single property type filter (legacy). Use filter_types for multi-type. */
   filter_type?: string;
+  /** Match any of these property types (OR logic). Supersedes filter_type when set. */
+  filter_types?: string[];
   /** Optional listing type filter: "Sale" or "Rent". */
   filter_listing_type?: "Sale" | "Rent";
   /** Auto-advance target after the message lands at Meta. */
