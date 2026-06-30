@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
+import { useOnboarding } from "@/hooks/useOnboarding";
+import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard";
 
 // Auth-gated dashboard shell. Extracted from the layout so the layout
 // itself can stay a server component and export metadata (noindex) —
@@ -16,6 +18,8 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   // always visible and this stays at `false` (ignored by the component).
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
+
+  const { shouldShow, status, dismiss, refresh } = useOnboarding();
 
   useEffect(() => {
     console.log('[SHELL GATE] evaluating profile:', {
@@ -71,6 +75,14 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
         {/* Thinner horizontal padding on mobile so cards have room to breathe. */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">{children}</main>
       </div>
+
+      {shouldShow && status && (
+        <OnboardingWizard
+          status={status}
+          onDismiss={dismiss}
+          onRefresh={refresh}
+        />
+      )}
     </div>
   );
 }
