@@ -280,7 +280,7 @@ describe('Email Webhook Lead Parsing', () => {
       expect(res.name).toBe('M Naveen');
       expect(res.phone).toBe('+91-9811122232');
       expect(res.phone.replace(/\D/g, '')).toBe('919811122232');
-      expect(res.email).toBe('');
+      expect(res.email).toBeNull();
     });
   });
 
