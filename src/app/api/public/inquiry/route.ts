@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/automations/admin-client";
 import { normalizePhoneWithCountryCode } from "@/lib/whatsapp/phone-utils";
+import { findOrCreateContact } from "@/lib/contacts/find-or-create";
 
 export async function POST(request: Request) {
   try {
@@ -84,71 +85,24 @@ export async function POST(request: Request) {
       }
     }
 
-    // 2. Check if contact exists under this account
-    const { data: existingContacts, error: findError } = await admin
-      .from("contacts")
-      .select("id, name, email")
-      .eq("account_id", accountId)
-      .eq("phone", normalizedPhone);
-
-    if (findError) {
-      console.error("[POST /api/public/inquiry] Contact lookup failed:", findError);
-      return NextResponse.json(
-        { error: "Failed to process inquiry" },
-        { status: 500 }
-      );
-    }
-
-    const existingContact = existingContacts && existingContacts.length > 0 ? existingContacts[0] : null;
+    // 2. Find or create contact with phone + email deduplication
     let contactId: string;
-
-    if (existingContact) {
-      contactId = existingContact.id;
-      
-      // Update contact if name or email was empty
-      const updates: Record<string, unknown> = {
-        status: "pending_review",
-        last_inquired_property_id: propertyId || null,
-        updated_at: new Date().toISOString(),
-      };
-      if (!existingContact.name && name) updates.name = name.trim();
-      if (!existingContact.email && email) updates.email = email.trim().toLowerCase();
-      if (resolvedReferrerContactId) updates.referrer_contact_id = resolvedReferrerContactId;
-
-      await admin
-        .from("contacts")
-        .update(updates)
-        .eq("id", contactId);
-    } else {
-      // Create new contact
-      const { data: newContact, error: createError } = await admin
-        .from("contacts")
-        .insert([
-          {
-            account_id: accountId,
-            user_id: targetAgentUserId,
-            phone: normalizedPhone,
-            name: (name || "Website Lead").trim(),
-            email: email ? email.trim().toLowerCase() : null,
-            classification: "Buyer",
-            status: "pending_review",
-            referrer: "Website Showcase",
-            referrer_contact_id: resolvedReferrerContactId,
-            last_inquired_property_id: propertyId || null,
-          },
-        ])
-        .select("id")
-        .single();
-
-      if (createError) {
-        console.error("[POST /api/public/inquiry] Contact creation failed:", createError);
-        return NextResponse.json(
-          { error: "Failed to create contact" },
-          { status: 500 }
-        );
-      }
-
-      contactId = newContact.id;
+    try {
+      const result = await findOrCreateContact(admin, {
+        accountId,
+        userId: targetAgentUserId,
+        phone: normalizedPhone,
+        name: name || "Website Lead",
+        email: email || null,
+        classification: "Buyer",
+        referrer: "Website Showcase",
+        referrerContactId: resolvedReferrerContactId,
+        lastInquiredPropertyId: propertyId || null,
+      });
+      contactId = result.contactId;
+    } catch (err) {
+      console.error("[POST /api/public/inquiry] Contact find-or-create failed:", err);
+      return NextResponse.json({ error: "Failed to process inquiry" }, { status: 500 });
     }
 
     // 3. Add inquiry details as a contact note

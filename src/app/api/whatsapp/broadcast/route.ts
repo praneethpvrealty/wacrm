@@ -14,11 +14,23 @@ import {
 import { sendWhatsAppMessageAndPersist } from '@/lib/whatsapp/meta-api-dispatcher'
 import type { MessageTemplate } from '@/types'
 
+// Meta Cloud API rate-limit detection.
+// 130429 = messaging rate limit; 131056 = pair-rate-limit. Both are retryable.
+function isRateLimitError(errorMsg: string): boolean {
+  return (
+    errorMsg.includes('130429') ||
+    errorMsg.includes('131056') ||
+    errorMsg.toLowerCase().includes('rate limit') ||
+    errorMsg.toLowerCase().includes('too many requests')
+  )
+}
+
 interface BroadcastResult {
   phone: string
-  status: 'sent' | 'failed'
+  status: 'sent' | 'failed' | 'rate_limited'
   whatsapp_message_id?: string
   error?: string
+  isRateLimited?: boolean
 }
 
 /**
@@ -377,11 +389,14 @@ export async function POST(request: Request) {
         })
         sentCount++
       } else {
-        console.error(`Failed to send broadcast to ${recipient.phone}:`, result.error)
+        const errMsg = result.error || 'Unknown error'
+        const rateLimited = isRateLimitError(errMsg)
+        console.error(`Failed to send broadcast to ${recipient.phone}:`, errMsg)
         results.push({
           phone: recipient.phone,
-          status: 'failed',
-          error: result.error || 'Unknown error',
+          status: rateLimited ? 'rate_limited' : 'failed',
+          error: errMsg,
+          isRateLimited: rateLimited,
         })
         failedCount++
       }

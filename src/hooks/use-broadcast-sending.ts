@@ -62,11 +62,16 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Max retries during the initial send loop for rate-limited recipients.
+// Each retry doubles the delay: 1s → 2s → 4s → 8s …
+const MAX_INLINE_RETRIES = 3;
+
 interface BroadcastApiResult {
   phone: string;
-  status: 'sent' | 'failed';
+  status: 'sent' | 'failed' | 'rate_limited';
   whatsapp_message_id?: string;
   error?: string;
+  isRateLimited?: boolean;
 }
 
 /** contactId → (customFieldId → value). */
@@ -482,6 +487,27 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
                   error_message: null,
                 })
                 .eq('id', recipient.id);
+            } else if (result.isRateLimited) {
+              // Rate-limited → mark for deferred retry. The retry endpoint
+              // will re-send after retry_after has elapsed.
+              const currentRetry = (recipient.retry_count ?? 0);
+              const backoffMs = Math.min(60_000, 1000 * Math.pow(2, currentRetry)); // cap at 60s
+              const retryAfter = new Date(Date.now() + backoffMs).toISOString();
+              const nextRetry = currentRetry + 1;
+              await supabase
+                .from('broadcast_recipients')
+                .update({
+                  status: nextRetry >= MAX_INLINE_RETRIES ? 'failed' : 'rate_limited',
+                  error_message: result.error ?? 'Rate limit exceeded',
+                  retry_count: nextRetry,
+                  retry_after: nextRetry >= MAX_INLINE_RETRIES ? null : retryAfter,
+                })
+                .eq('id', recipient.id);
+              if (nextRetry < MAX_INLINE_RETRIES) {
+                // Don't count as a hard failure — it may succeed on retry
+              } else {
+                failedCount++;
+              }
             } else {
               failedCount++;
               await supabase

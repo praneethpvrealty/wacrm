@@ -32,6 +32,7 @@ import {
   Download,
   ChevronDown,
   Trash2,
+  RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -118,6 +119,7 @@ const RECIPIENT_STATUSES: readonly RecipientStatus[] = [
   'read',
   'replied',
   'failed',
+  'rate_limited',
 ];
 
 /**
@@ -155,6 +157,7 @@ export default function BroadcastDetailPage() {
   );
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [retrying, setRetrying] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -243,6 +246,36 @@ export default function BroadcastDetailPage() {
     router.push('/broadcasts');
   }
 
+  async function handleRetryFailed() {
+    setRetrying(true);
+    try {
+      const res = await fetch(`/api/broadcasts/${broadcastId}/retry-failed`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Retry failed');
+
+      toast.success(
+        `Retried ${data.retried} recipient${data.retried !== 1 ? 's' : ''}: ` +
+        `${data.succeeded} sent, ${data.failed} failed` +
+        (data.rateLimited > 0 ? `, ${data.rateLimited} rate-limited (will retry again)` : ''),
+      );
+
+      // Reload page data
+      const supabase = createClient();
+      const [{ data: bc }, { data: recs }] = await Promise.all([
+        supabase.from('broadcasts').select('*').eq('id', broadcastId).single(),
+        supabase.from('broadcast_recipients').select('*, contact:contacts(*)').eq('broadcast_id', broadcastId).order('created_at', { ascending: false }),
+      ]);
+      if (bc) setBroadcast(bc);
+      if (recs) setRecipients(recs);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Retry failed');
+    } finally {
+      setRetrying(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -303,6 +336,25 @@ export default function BroadcastDetailPage() {
           </div>
         </div>
 
+        <div className="flex items-center gap-2">
+        {/* Retry failed — shown when there are failed or rate-limited recipients */}
+        {recipients.some((r) => r.status === 'failed' || r.status === 'rate_limited') && (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={retrying || broadcast.status === 'sending'}
+            onClick={handleRetryFailed}
+            className="border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
+          >
+            {retrying ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RotateCcw className="h-3.5 w-3.5" />
+            )}
+            {retrying ? 'Retrying…' : 'Retry failed'}
+          </Button>
+        )}
+
         {/* Delete — inline-confirm pattern matches the pipeline-settings
             "Delete Pipeline" flow. Mid-send broadcasts can't be deleted
             because orphaning in-flight Meta messages would leave the
@@ -345,6 +397,7 @@ export default function BroadcastDetailPage() {
             Delete
           </Button>
         )}
+        </div>
       </div>
 
       {/* Stats — 6 cards: Total / Sent / Delivered / Read / Replied / Failed */}

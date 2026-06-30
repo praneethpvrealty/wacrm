@@ -1,10 +1,11 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { unstable_cache } from 'next/cache';
 import { supabaseAdmin } from '@/lib/automations/admin-client';
 import { ShowcaseView } from '@/components/showcase/showcase-view';
 import { MarketingLanding } from '@/components/landing/marketing-landing';
-import type { Property } from '@/types';
+import type { Property, ShowcaseSettings } from '@/types';
 import { BRANDING } from '@/config/branding';
 
 export const metadata: Metadata = {
@@ -17,15 +18,6 @@ export const metadata: Metadata = {
   },
 };
 
-/**
- * ISR: Regenerate showcase pages every 1 hour (3600s) in the background.
- * Property listings change infrequently (price edits, new listings), so
- * 1 hour is a safe balance between freshness and performance.
- * The edge cache (s-maxage=3600) serves stale content instantly
- * while fresh data is fetched asynchronously.
- */
-export const revalidate = 3600;
-
 interface PageProps {
   searchParams: Promise<{
     account_id?: string;
@@ -35,68 +27,210 @@ interface PageProps {
     category?: string;
     code?: string;
     invite?: string;
+    mode?: string;
   }>;
 }
 
-// ── Parallel data fetchers ───────────────────────────────────────
+// ── Cached data fetchers ─────────────────────────────────────────
+// The page uses runtime APIs (headers, searchParams) so it renders
+// dynamically.  ISR `revalidate` has no effect on dynamic pages.
+// Instead we cache the expensive Supabase queries with unstable_cache
+// so repeat visits with the same parameters are instant.
 
-async function resolveAccountFromSubdomain(admin: ReturnType<typeof supabaseAdmin>, subdomain: string | null) {
-  if (!subdomain) return null;
-  const { data } = await admin
-    .from('showcase_settings')
-    .select('account_id')
-    .eq('subdomain', subdomain)
-    .maybeSingle();
-  return data?.account_id || null;
+const cachedResolveAccountFromSubdomain = unstable_cache(
+  async (subdomain: string) => {
+    const admin = supabaseAdmin();
+    const { data } = await admin
+      .from('showcase_settings')
+      .select('account_id')
+      .eq('subdomain', subdomain)
+      .maybeSingle();
+    return data?.account_id || null;
+  },
+  ['showcase-subdomain'],
+  { revalidate: 3600 },
+);
+
+const cachedResolvePropertyById = unstable_cache(
+  async (propertyId: string, scopedAccountId: string | null) => {
+    const admin = supabaseAdmin();
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(propertyId);
+    let query = admin.from('properties').select('*');
+    if (isUuid) query = query.eq('id', propertyId);
+    else query = query.eq('property_code', propertyId.toUpperCase());
+    if (scopedAccountId) query = query.eq('account_id', scopedAccountId);
+    const { data } = await query.maybeSingle();
+    return data as Property | null;
+  },
+  ['showcase-property'],
+  { revalidate: 3600 },
+);
+
+const cachedResolveRef = unstable_cache(
+  async (ref: string) => {
+    const admin = supabaseAdmin();
+    const [accountResult, contactResult, profileResult] = await Promise.all([
+      admin.from('accounts').select('id').eq('id', ref).maybeSingle(),
+      admin.from('contacts').select('account_id, id').eq('id', ref).maybeSingle(),
+      admin.from('profiles').select('account_id, user_id').eq('user_id', ref).maybeSingle(),
+    ]);
+
+    if (accountResult.data) {
+      return { type: 'account' as const, accountId: accountResult.data.id, filterContactId: null, filterUserId: null };
+    }
+    if (contactResult.data) {
+      return {
+        type: 'contact' as const,
+        accountId: contactResult.data.account_id,
+        filterContactId: contactResult.data.id,
+        filterUserId: null,
+      };
+    }
+    if (profileResult.data) {
+      return {
+        type: 'profile' as const,
+        accountId: profileResult.data.account_id,
+        filterContactId: null,
+        filterUserId: profileResult.data.user_id,
+      };
+    }
+    return null;
+  },
+  ['showcase-ref'],
+  { revalidate: 3600 },
+);
+
+const cachedFetchFallbackAccount = unstable_cache(
+  async () => {
+    const admin = supabaseAdmin();
+    const { data } = await admin.from('accounts').select('id').limit(1).maybeSingle();
+    return data?.id || null;
+  },
+  ['showcase-fallback-account'],
+  { revalidate: 3600 },
+);
+
+interface ShowcaseData {
+  settings: ShowcaseSettings | null;
+  properties: Property[];
+  agents: Array<{ id: string; name: string; phone: string; email: string | null }>;
+  profiles: Array<{ user_id: string; full_name: string | null; email: string | null; avatar_url: string | null }>;
 }
 
-async function resolvePropertyById(
-  admin: ReturnType<typeof supabaseAdmin>,
-  propertyId: string,
-  scopedAccountId: string | null,
-) {
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(propertyId);
-  let query = admin.from('properties').select('*');
-  if (isUuid) query = query.eq('id', propertyId);
-  else query = query.eq('property_code', propertyId.toUpperCase());
-  if (scopedAccountId) query = query.eq('account_id', scopedAccountId);
-  const { data } = await query.maybeSingle();
-  return data as Property | null;
-}
+const cachedFetchShowcaseData = unstable_cache(
+  async (accountId: string, isAgentMode: boolean): Promise<ShowcaseData> => {
+    const admin = supabaseAdmin();
 
-async function resolveRefInParallel(admin: ReturnType<typeof supabaseAdmin>, ref: string) {
-  const [accountResult, contactResult, profileResult] = await Promise.all([
-    admin.from('accounts').select('id').eq('id', ref).maybeSingle(),
-    admin.from('contacts').select('account_id, id').eq('id', ref).maybeSingle(),
-    admin.from('profiles').select('account_id, user_id').eq('user_id', ref).maybeSingle(),
-  ]);
+    if (isAgentMode) {
+      const [settingsResult, propertiesResult] = await Promise.all([
+        admin.from('showcase_settings').select('*').eq('account_id', accountId).maybeSingle(),
+        admin
+          .from('properties')
+          .select('*')
+          .eq('account_id', accountId)
+          .eq('is_published', true)
+          .eq('status', 'Available')
+          .order('created_at', { ascending: false }),
+      ]);
+      return {
+        settings: settingsResult.data || null,
+        properties: propertiesResult.data || [],
+        agents: [],
+        profiles: [],
+      };
+    }
 
-  if (accountResult.data) {
-    return { type: 'account' as const, accountId: accountResult.data.id, filterContactId: null, filterUserId: null };
-  }
-  if (contactResult.data) {
+    const [settingsResult, propertiesResult, agentsResult, profilesResult] = await Promise.all([
+      admin.from('showcase_settings').select('*').eq('account_id', accountId).maybeSingle(),
+      admin
+        .from('properties')
+        .select('*')
+        .eq('account_id', accountId)
+        .eq('is_published', true)
+        .eq('status', 'Available')
+        .order('created_at', { ascending: false }),
+      admin
+        .from('contacts')
+        .select('id, name, phone, email')
+        .eq('account_id', accountId)
+        .eq('classification', 'Agent'),
+      admin.from('profiles').select('user_id, full_name, email, avatar_url').eq('account_id', accountId),
+    ]);
+
     return {
-      type: 'contact' as const,
-      accountId: contactResult.data.account_id,
-      filterContactId: contactResult.data.id,
-      filterUserId: null,
+      settings: settingsResult.data || null,
+      properties: propertiesResult.data || [],
+      agents: agentsResult.data || [],
+      profiles: profilesResult.data || [],
     };
-  }
-  if (profileResult.data) {
-    return {
-      type: 'profile' as const,
-      accountId: profileResult.data.account_id,
-      filterContactId: null,
-      filterUserId: profileResult.data.user_id,
-    };
-  }
-  return null;
-}
+  },
+  ['showcase-data'],
+  { revalidate: 3600 },
+);
 
-async function fetchFallbackAccount(admin: ReturnType<typeof supabaseAdmin>) {
-  const { data } = await admin.from('accounts').select('id').limit(1).maybeSingle();
-  return data?.id || null;
-}
+const cachedResolveReferrerPhone = unstable_cache(
+  async (
+    accountId: string,
+    filterContactId: string | null,
+    filterUserId: string | null,
+    targetPropertyUserId: string | null,
+  ): Promise<{ referrerPhone: string | null; resolvedContactId: string | null }> => {
+    const admin = supabaseAdmin();
+
+    if (filterContactId) {
+      const { data: contact } = await admin
+        .from('contacts')
+        .select('phone')
+        .eq('id', filterContactId)
+        .maybeSingle();
+      return { referrerPhone: contact?.phone || null, resolvedContactId: filterContactId };
+    }
+
+    if (filterUserId) {
+      const { data: profile } = await admin
+        .from('profiles')
+        .select('email')
+        .eq('user_id', filterUserId)
+        .maybeSingle();
+      if (profile?.email) {
+        const { data: contact } = await admin
+          .from('contacts')
+          .select('phone, id')
+          .eq('account_id', accountId)
+          .eq('email', profile.email)
+          .maybeSingle();
+        return {
+          referrerPhone: contact?.phone || null,
+          resolvedContactId: contact?.id || null,
+        };
+      }
+    }
+
+    if (targetPropertyUserId) {
+      const { data: profile } = await admin
+        .from('profiles')
+        .select('email')
+        .eq('user_id', targetPropertyUserId)
+        .maybeSingle();
+      if (profile?.email) {
+        const { data: contact } = await admin
+          .from('contacts')
+          .select('phone, id')
+          .eq('account_id', accountId)
+          .eq('email', profile.email)
+          .maybeSingle();
+        return {
+          referrerPhone: contact?.phone || null,
+          resolvedContactId: contact?.id || null,
+        };
+      }
+    }
+
+    return { referrerPhone: null, resolvedContactId: null };
+  },
+  ['showcase-referrer'],
+  { revalidate: 3600 },
+);
 
 // Server Component: fetches public listings & configuration details
 export default async function RootPage({ searchParams }: PageProps) {
@@ -109,7 +243,6 @@ export default async function RootPage({ searchParams }: PageProps) {
     redirect(`/auth/callback?code=${encodeURIComponent(resolvedParams.code)}${inviteParam}`);
   }
 
-  const admin = supabaseAdmin();
   const reqHeaders = await headers();
   const host = reqHeaders.get('host') || '';
 
@@ -139,18 +272,21 @@ export default async function RootPage({ searchParams }: PageProps) {
   // ── Phase 1: Resolve accountId in parallel ─────────────────────
   // Property lookup + subdomain lookup + ref resolution all fire at once.
   const [subdomainAccount, targetProperty] = await Promise.all([
-    resolveAccountFromSubdomain(admin, subdomain),
-    initialPropertyId ? resolvePropertyById(admin, initialPropertyId, accountId) : Promise.resolve(null),
+    subdomain ? cachedResolveAccountFromSubdomain(subdomain) : Promise.resolve(null),
+    initialPropertyId ? cachedResolvePropertyById(initialPropertyId, accountId) : Promise.resolve(null),
   ]);
 
   if (subdomainAccount) accountId = subdomainAccount;
   if (targetProperty) accountId = targetProperty.account_id;
 
+  // ── Fast path: Agent mode shares don't need referrer/contacts/profiles ─
+  const isAgentMode = resolvedParams.mode === 'agent';
+
   let filterContactId: string | null = null;
   let filterUserId: string | null = null;
 
-  if (ref) {
-    const resolved = await resolveRefInParallel(admin, ref);
+  if (!isAgentMode && ref) {
+    const resolved = await cachedResolveRef(ref);
     if (resolved) {
       if (!accountId) accountId = resolved.accountId;
       if (accountId === resolved.accountId) {
@@ -162,7 +298,7 @@ export default async function RootPage({ searchParams }: PageProps) {
 
   // Fallback to default account
   if (!accountId) {
-    accountId = await fetchFallbackAccount(admin);
+    accountId = await cachedFetchFallbackAccount();
   }
 
   if (!accountId) {
@@ -184,44 +320,21 @@ export default async function RootPage({ searchParams }: PageProps) {
     );
   }
 
-  // ── Phase 2: Fetch all showcase data in parallel ───────────────
-  const [
-    settingsResult,
-    propertiesResult,
-    agentsResult,
-    profilesResult,
-  ] = await Promise.all([
-    admin.from('showcase_settings').select('*').eq('account_id', accountId).maybeSingle(),
-    admin
-      .from('properties')
-      .select('*')
-      .eq('account_id', accountId)
-      .eq('is_published', true)
-      .eq('status', 'Available')
-      .order('created_at', { ascending: false }),
-    admin
-      .from('contacts')
-      .select('id, name, phone, email')
-      .eq('account_id', accountId)
-      .eq('classification', 'Agent'),
-    admin.from('profiles').select('user_id, full_name, email, avatar_url').eq('account_id', accountId),
-  ]);
+  // ── Phase 2: Fetch showcase data (cached) ────────────────────
+  const { settings, properties: publishedProperties, agents: agentContacts, profiles } =
+    await cachedFetchShowcaseData(accountId, isAgentMode);
 
-  const settings = settingsResult.data;
-  let publishedProperties = propertiesResult.data || [];
-  const agentContacts = agentsResult.data || [];
-  const profiles = profilesResult.data || [];
+  let filteredProperties = [...publishedProperties];
 
-  // Apply referrer filter client-side instead of in the query
-  // (already fetched all properties, just filter the array)
+  // Apply referrer filter client-side
   if (filterContactId) {
-    publishedProperties = publishedProperties.filter((p) => p.owner_contact_id === filterContactId);
+    filteredProperties = filteredProperties.filter((p) => p.owner_contact_id === filterContactId);
   } else if (filterUserId) {
-    publishedProperties = publishedProperties.filter((p) => p.user_id === filterUserId);
+    filteredProperties = filteredProperties.filter((p) => p.user_id === filterUserId);
   }
 
   // Merge targeted property if not in list
-  const propertiesList = [...publishedProperties];
+  const propertiesList = [...filteredProperties];
   if (targetProperty) {
     const exists = propertiesList.some((p) => p.id === targetProperty.id);
     if (!exists) {
@@ -229,51 +342,19 @@ export default async function RootPage({ searchParams }: PageProps) {
     }
   }
 
-  // ── Phase 3: Resolve referrer phone ──
+  // ── Phase 3: Resolve referrer phone (cached, skip in agent mode) ──
   let referrerPhone: string | null = null;
 
-  if (filterContactId) {
-    const { data: contact } = await admin
-      .from('contacts')
-      .select('phone')
-      .eq('id', filterContactId)
-      .maybeSingle();
-    if (contact) referrerPhone = contact.phone;
-  } else if (filterUserId) {
-    const { data: profile } = await admin
-      .from('profiles')
-      .select('email')
-      .eq('user_id', filterUserId)
-      .maybeSingle();
-    if (profile?.email) {
-      const { data: contact } = await admin
-        .from('contacts')
-        .select('phone, id')
-        .eq('account_id', accountId)
-        .eq('email', profile.email)
-        .maybeSingle();
-      if (contact) {
-        referrerPhone = contact.phone;
-        filterContactId = contact.id;
-      }
-    }
-  } else if (targetProperty?.user_id) {
-    const { data: profile } = await admin
-      .from('profiles')
-      .select('email')
-      .eq('user_id', targetProperty.user_id)
-      .maybeSingle();
-    if (profile?.email) {
-      const { data: contact } = await admin
-        .from('contacts')
-        .select('phone, id')
-        .eq('account_id', accountId)
-        .eq('email', profile.email)
-        .maybeSingle();
-      if (contact) {
-        referrerPhone = contact.phone;
-        filterContactId = contact.id;
-      }
+  if (!isAgentMode) {
+    const referrerResult = await cachedResolveReferrerPhone(
+      accountId,
+      filterContactId,
+      filterUserId,
+      targetProperty?.user_id || null,
+    );
+    referrerPhone = referrerResult.referrerPhone;
+    if (referrerResult.resolvedContactId) {
+      filterContactId = referrerResult.resolvedContactId;
     }
   }
 
@@ -285,7 +366,7 @@ export default async function RootPage({ searchParams }: PageProps) {
 
   profiles.forEach((p) => {
     const matchingContact = agentContacts.find(
-      (c) => c.email && c.email.toLowerCase() === p.email.toLowerCase(),
+      (c) => c.email && c.email.toLowerCase() === p.email?.toLowerCase(),
     );
     if (matchingContact) {
       userIdToAgentMap[p.user_id] = {

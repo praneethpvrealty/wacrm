@@ -115,8 +115,13 @@ const nextConfig: NextConfig = {
         headers: [{ key: "Cache-Control", value: "no-store" }],
       },
       {
-        // Showcase root path (property listings) — cache aggressively at edge
-        // since property data changes infrequently. ISR revalidates hourly.
+        // Showcase root path (property listings).
+        // The page is dynamic (reads headers + searchParams) so Next.js App
+        // Router marks it private by default.  Edge CDN caching of HTML is
+        // therefore unreliable for this route.  Data-layer caching is handled
+        // in the page itself via unstable_cache (1 h TTL).  We keep the header
+        // as a best-effort fallback for any static assets or edge middleware
+        // that might still benefit.
         source: "/",
         headers: [
           {

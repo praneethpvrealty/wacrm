@@ -45,6 +45,10 @@ export const broadcastStatusConfig: Record<BroadcastStatus, StatusDisplay> = {
 };
 
 export const recipientStatusConfig: Record<RecipientStatus, StatusDisplay> = {
+  rate_limited: {
+    label: "Rate Limited",
+    classes: "bg-orange-500/10 text-orange-400 border-orange-500/20",
+  },
   pending: {
     label: "Pending",
     classes: "bg-slate-500/10 text-slate-400 border-slate-500/20",

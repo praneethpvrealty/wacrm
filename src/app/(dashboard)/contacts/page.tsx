@@ -58,6 +58,7 @@ import { normalizePhoneWithCountryCode } from '@/lib/whatsapp/phone-utils';
 import { BulkImportModal, type BulkImportContact } from '@/components/contacts/bulk-import-modal';
 import { ScheduleDialog } from '@/components/calendar/schedule-dialog';
 import { CalendarDays } from 'lucide-react';
+import { DuplicatesPanel } from '@/components/contacts/duplicates-panel';
 import {
   Select,
   SelectContent,
@@ -877,6 +878,9 @@ export default function ContactsPage() {
           </GatedButton>
         </div>
       </div>
+
+      {/* Duplicate detection panel — only visible to agents+ when dupes exist */}
+      <DuplicatesPanel onMergeComplete={fetchContactsWithInvalidate} />
 
       {/* Search and Filters */}
       <div className="flex flex-col gap-4">
