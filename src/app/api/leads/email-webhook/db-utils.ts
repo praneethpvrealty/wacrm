@@ -87,9 +87,9 @@ export async function writeSyncLog(args: {
   accountId: string;
   sender: string;
   subject: string;
-  extractedName?: string;
-  extractedPhone?: string;
-  extractedEmail?: string;
+  extractedName?: string | null;
+  extractedPhone?: string | null;
+  extractedEmail?: string | null;
   status: 'success' | 'failed' | 'ignored';
   errorMessage?: string;
   bodyPreview?: string;

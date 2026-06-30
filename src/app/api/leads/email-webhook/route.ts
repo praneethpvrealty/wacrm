@@ -255,6 +255,12 @@ export async function POST(request: Request) {
 
     const parsed = parsePortalLead(subject, bodyText, htmlContent);
 
+    // Ignore portal source emails (e.g. support@housing.com) — they are the
+    // sender address, not the lead's actual email.
+    if (parsed.email && parsed.email.toLowerCase() === 'support@housing.com') {
+      parsed.email = null;
+    }
+
     // Dynamic resolution for Housing.com lead phone number
     // Also try HTML URL resolution if phone looks suspicious (e.g., Property ID or URL)
     const isSuspiciousPhone = parsed.phone && (

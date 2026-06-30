@@ -259,7 +259,7 @@ async function fetchAndFormatPropertyListings(
   const limit = Math.max(1, Math.min(cfg.limit ?? 5, 10));
   let query = db
     .from("properties")
-    .select("id, title, location, type, bedrooms, area_sqft, price, property_code, listing_type")
+    .select("id, title, location, type, bedrooms, area_sqft, price, property_code, listing_type, slug")
     .eq("account_id", run.account_id)
     .eq("is_published", true)
     .eq("status", "Available")
@@ -299,9 +299,11 @@ async function fetchAndFormatPropertyListings(
     const priceLabel =
       p.listing_type === "Rent" && p.price
         ? `${currency}${(p.price / 1000).toFixed(0)}K/month`
-        : p.price
-          ? `${currency}${(p.price / 100000).toFixed(1)}L`
-          : "Price on request";
+        : p.price && p.price >= 10000000
+          ? `${currency}${(p.price / 10000000).toFixed(2).replace(/\.?0+$/, "")} Cr`
+          : p.price
+            ? `${currency}${(p.price / 100000).toFixed(2).replace(/\.?0+$/, "")}L`
+            : "Price on request";
 
     const specs = [
       p.type,
@@ -311,10 +313,14 @@ async function fetchAndFormatPropertyListings(
       .filter(Boolean)
       .join(" | ");
 
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "";
+    const showcaseLink = `${siteUrl}/?property_id=${p.id}`;
+
     lines.push(`${idx}. *${p.title}* — ${p.location}`);
     if (specs) lines.push(`   ${specs}`);
     lines.push(`   Price: ${priceLabel}`);
     if (p.property_code) lines.push(`   Code: ${p.property_code}`);
+    lines.push(`   🔗 ${showcaseLink}`);
     lines.push("");
   }
 

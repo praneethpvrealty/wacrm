@@ -517,7 +517,7 @@ export function parsePortalLead(subject: string, bodyText: string, html: string)
   return {
     name: name ? cleanLine(name) : 'Portal Lead',
     phone: phone ? cleanLine(phone) : '',
-    email: email ? cleanLine(email) : '',
+    email: email ? cleanLine(email) : null,
     requirementText: requirementText ? cleanLine(requirementText) : '',
     source,
     // Property details for matching against listings
