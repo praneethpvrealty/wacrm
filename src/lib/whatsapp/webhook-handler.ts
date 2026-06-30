@@ -1069,6 +1069,7 @@ async function processMessage(
     }
   }
 
+  console.log(`[webhook] Dispatching to flows. accountId=${accountId}, contact=${contactRecord.id}, text="${contentText ?? message.text?.body ?? ''}"`);
   const flowResult = await dispatchInboundToFlows({
     accountId,
     userId: configOwnerUserId,
@@ -1089,6 +1090,7 @@ async function processMessage(
           },
     isFirstInboundMessage,
   })
+  console.log(`[webhook] Flow result: consumed=${flowResult.consumed}, outcome=${flowResult.outcome || 'n/a'}, flow_run_id=${flowResult.flow_run_id || 'n/a'}`);
   const flowConsumed = flowResult.consumed
 
   const inboundText = contentText ?? message.text?.body ?? ''

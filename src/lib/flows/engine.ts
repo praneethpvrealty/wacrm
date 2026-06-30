@@ -395,7 +395,11 @@ async function findEntryFlow(
   // Interactive list replies are excluded — they advance existing flows.
   // Template QUICK_REPLY buttons send `interactive_reply` with the button
   // title as text; this lets a button press start a new flow.
-  if (message.kind !== "text" && message.kind !== "interactive_reply") return null;
+  const msgKind = message.kind;
+  if (msgKind !== "text" && msgKind !== "interactive_reply") {
+    console.log(`[flows][findEntryFlow] Skipped: message kind=${msgKind} is not text or interactive_reply`);
+    return null;
+  }
 
   // Pull all active flows for this account. Active set is bounded
   // (the builder discourages double-trigger overlap; partial index
@@ -406,9 +410,14 @@ async function findEntryFlow(
     .eq("account_id", accountId)
     .eq("status", "active")
     .order("created_at", { ascending: true });
-  if (error || !flows) return null;
+  if (error || !flows) {
+    console.log(`[flows][findEntryFlow] DB error or no flows: ${error?.message || 'empty result'}`);
+    return null;
+  }
 
   const typed = flows as FlowRow[];
+  console.log(`[flows][findEntryFlow] Found ${typed.length} active flow(s) for account ${accountId}`);
+
   // Extract the text to match against keywords:
   // - text messages: use the message body
   // - interactive replies (button presses): use the button title
@@ -418,19 +427,25 @@ async function findEntryFlow(
       : message.kind === "interactive_reply"
         ? message.reply_title
         : "";
+  console.log(`[flows][findEntryFlow] Matching text: "${matchText}"`);
+
   for (const flow of typed) {
+    console.log(`[flows][findEntryFlow] Checking flow: id=${flow.id}, name=${flow.name}, trigger_type=${flow.trigger_type}`);
     if (flow.trigger_type === "keyword") {
-      if (matchesKeywordTrigger(
-        matchText,
-        flow.trigger_config as KeywordTriggerConfig,
-      )) {
+      const cfg = flow.trigger_config as KeywordTriggerConfig;
+      console.log(`[flows][findEntryFlow]   Keywords: [${cfg.keywords?.join(", ") || "none"}], match_type=${cfg.match_type || "contains"}`);
+      const matched = matchesKeywordTrigger(matchText, cfg);
+      console.log(`[flows][findEntryFlow]   Match result: ${matched}`);
+      if (matched) {
         return flow;
       }
     } else if (flow.trigger_type === "first_inbound_message" && isFirstInbound) {
+      console.log(`[flows][findEntryFlow]   Matched first_inbound_message trigger`);
       return flow;
     }
     // 'manual' triggers do not auto-start from inbound messages.
   }
+  console.log(`[flows][findEntryFlow] No flow matched for text: "${matchText}"`);
   return null;
 }
 
@@ -944,6 +959,7 @@ export async function dispatchInboundToFlows(
   input: DispatchInboundInput & { isFirstInboundMessage: boolean },
 ): Promise<DispatchInboundResult> {
   const db = supabaseAdmin();
+  const logPrefix = `[flows][dispatch][account=${input.accountId}][contact=${input.contactId}]`;
   try {
     const activeRun = await loadActiveRunForContact(
       db,
@@ -955,6 +971,7 @@ export async function dispatchInboundToFlows(
     // contact. For new runs, the partial unique index catches duplicate
     // starts at INSERT time.
     if (activeRun) {
+      console.log(`${logPrefix} Active run found: flow_id=${activeRun.flow_id}, current_node=${activeRun.current_node_key}`);
       const dupe = await isDuplicateInbound(
         db,
         input.accountId,
@@ -962,6 +979,7 @@ export async function dispatchInboundToFlows(
         input.message.meta_message_id,
       );
       if (dupe) {
+        console.log(`${logPrefix} Duplicate inbound ignored (meta_message_id=${input.message.meta_message_id})`);
         return {
           consumed: true,
           flow_run_id: activeRun.id,
@@ -975,6 +993,7 @@ export async function dispatchInboundToFlows(
     }
 
     // No active run → look for a flow whose entry trigger matches.
+    console.log(`${logPrefix} No active run. Searching for matching flow... message_kind=${input.message.kind}`);
     const flow = await findEntryFlow(
       db,
       input.accountId,
@@ -982,13 +1001,15 @@ export async function dispatchInboundToFlows(
       input.isFirstInboundMessage,
     );
     if (!flow || !flow.entry_node_id) {
+      console.log(`${logPrefix} No matching flow found.`);
       return { consumed: false, outcome: "no_match" };
     }
+    console.log(`${logPrefix} Flow matched: id=${flow.id}, name=${flow.name}, trigger_type=${flow.trigger_type}`);
     const nodes = await loadAllNodes(db, flow.id);
     return startNewRun(db, flow, input, nodes);
   } catch (err) {
     console.error(
-      "[flows] dispatchInboundToFlows threw:",
+      `${logPrefix} threw:`,
       err instanceof Error ? err.message : err,
     );
     return { consumed: false, outcome: "no_match" };
