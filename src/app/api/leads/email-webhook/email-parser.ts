@@ -533,7 +533,7 @@ export function parsePortalLead(subject: string, bodyText: string, html: string)
 export function extractPropertyType(text: string): string | null {
   const lower = text.toLowerCase();
   if (lower.includes('industrial land') || lower.includes('industrial plot')) return 'Industrial Land';
-  if (lower.includes('industrial building')) return 'Industrial Building';
+  if (lower.includes('industrial building') || lower.includes('industry building')) return 'Industrial Building';
   if (lower.includes('industrial shed') || lower.includes('industrial factory')) return 'Industrial Shed';
   if (lower.includes('warehouse') || lower.includes('godown')) return 'Warehouse/ Godown';
   if (lower.includes('commercial land')) return 'Commercial Land';

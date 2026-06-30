@@ -390,6 +390,12 @@ export async function POST(request: Request) {
       if (reqLower.includes('building') || reqLower.includes('house') || reqLower.includes('villa')) {
         propertyInterests.push('Vacant building');
       }
+      if (reqLower.includes('commercial') || reqLower.includes('office') || reqLower.includes('shop')) {
+        propertyInterests.push('Commercial');
+      }
+      if (reqLower.includes('industrial') || reqLower.includes('industry') || reqLower.includes('warehouse') || reqLower.includes('factory')) {
+        propertyInterests.push('Industrial');
+      }
 
       // Check for popular locations mentioned
       const popularLocalities = ['hsr', 'whitefield', 'koramangala', 'indiranagar', 'jayanagar', 'jp nagar'];
@@ -426,6 +432,14 @@ export async function POST(request: Request) {
               const pTypeLower = p.type.toLowerCase();
               if (typeLower.includes(pTypeLower) || pTypeLower.includes(typeLower)) {
                 matchScore += 2;
+              } else {
+                // Fuzzy word overlap for near-misses (e.g. "Industrial Building" vs "Industry Building")
+                const wordsA = typeLower.split(/[^a-z0-9]+/).filter((w: string) => w.length > 2);
+                const wordsB = pTypeLower.split(/[^a-z0-9]+/).filter((w: string) => w.length > 2);
+                const overlap = wordsA.filter((w: string) => wordsB.includes(w)).length;
+                if (overlap > 0) {
+                  matchScore += overlap;
+                }
               }
             }
 
@@ -464,9 +478,9 @@ export async function POST(request: Request) {
             return { property: p, score: matchScore };
           });
 
-          // Require at least 3 points to consider it a match
+          // Require at least 2 points so type-only near-matches still qualify
           const matchedProperties = scoredProperties
-            .filter((sp) => sp.score >= 3)
+            .filter((sp) => sp.score >= 2)
             .sort((a, b) => b.score - a.score)
             .map((sp) => sp.property);
 
@@ -507,6 +521,8 @@ export async function POST(request: Request) {
                   interest = 'Vacant building';
                 } else if (typeLower.includes('commercial') || typeLower.includes('office')) {
                   interest = 'Commercial';
+                } else if (typeLower.includes('industrial') || typeLower.includes('industry')) {
+                  interest = 'Industrial';
                 }
                 if (interest && !propertyInterests.includes(interest)) {
                   propertyInterests.push(interest);
