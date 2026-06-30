@@ -434,7 +434,7 @@ const REAL_ESTATE_ONBOARDING: FlowTemplate = {
         limit: 5,
         filter_types: ["Villa", "Residential House"],
         filter_listing_type: "Sale",
-        next_node_key: "collect_email",
+        next_node_key: "post_listings",
       } as SendPropertyListingsNodeConfig,
     },
     {
@@ -446,7 +446,7 @@ const REAL_ESTATE_ONBOARDING: FlowTemplate = {
         limit: 5,
         filter_types: ["Flat/ Apartment", "Builder Floor Apartment", "Penthouse", "Studio Apartment"],
         filter_listing_type: "Sale",
-        next_node_key: "collect_email",
+        next_node_key: "post_listings",
       } as SendPropertyListingsNodeConfig,
     },
     {
@@ -458,7 +458,7 @@ const REAL_ESTATE_ONBOARDING: FlowTemplate = {
         limit: 5,
         filter_types: ["Residential Land/ Plot"],
         filter_listing_type: "Sale",
-        next_node_key: "collect_email",
+        next_node_key: "post_listings",
       } as SendPropertyListingsNodeConfig,
     },
     {
@@ -469,7 +469,7 @@ const REAL_ESTATE_ONBOARDING: FlowTemplate = {
         empty_text: "🏠 *PGs & Hostels*\n\nSorry, no PG/hostel listings are currently available. Our team will reach out when something suitable is listed.",
         limit: 5,
         filter_types: ["Residential PG building", "PG/ Hostel"],
-        next_node_key: "collect_email",
+        next_node_key: "post_listings",
       } as SendPropertyListingsNodeConfig,
     },
     {
@@ -481,7 +481,7 @@ const REAL_ESTATE_ONBOARDING: FlowTemplate = {
         limit: 5,
         filter_types: ["Residential Land/ Plot"],
         filter_listing_type: "Sale",
-        next_node_key: "collect_email",
+        next_node_key: "post_listings",
       } as SendPropertyListingsNodeConfig,
     },
     {
@@ -493,7 +493,7 @@ const REAL_ESTATE_ONBOARDING: FlowTemplate = {
         limit: 5,
         filter_types: ["Commercial Land"],
         filter_listing_type: "Sale",
-        next_node_key: "collect_email",
+        next_node_key: "post_listings",
       } as SendPropertyListingsNodeConfig,
     },
     {
@@ -505,7 +505,7 @@ const REAL_ESTATE_ONBOARDING: FlowTemplate = {
         limit: 5,
         filter_types: ["Agricultural Land", "Farm House"],
         filter_listing_type: "Sale",
-        next_node_key: "collect_email",
+        next_node_key: "post_listings",
       } as SendPropertyListingsNodeConfig,
     },
     {
@@ -517,7 +517,7 @@ const REAL_ESTATE_ONBOARDING: FlowTemplate = {
         limit: 5,
         filter_types: ["Commercial Office Space", "Office in IT Park/ SEZ", "Commercial Shop", "Commercial Showroom", "Warehouse/ Godown"],
         filter_listing_type: "Sale",
-        next_node_key: "collect_email",
+        next_node_key: "post_listings",
       } as SendPropertyListingsNodeConfig,
     },
     {
@@ -529,7 +529,7 @@ const REAL_ESTATE_ONBOARDING: FlowTemplate = {
         limit: 5,
         filter_types: ["Industrial Land", "Industrial Building", "Industrial Shed"],
         filter_listing_type: "Sale",
-        next_node_key: "collect_email",
+        next_node_key: "post_listings",
       } as SendPropertyListingsNodeConfig,
     },
     {
@@ -540,7 +540,7 @@ const REAL_ESTATE_ONBOARDING: FlowTemplate = {
         empty_text: "🔑 *Properties for Rent*\n\nSorry, no rental properties are currently available. Our team will reach out when something suitable is listed.",
         limit: 5,
         filter_listing_type: "Rent",
-        next_node_key: "collect_email",
+        next_node_key: "post_listings",
       } as SendPropertyListingsNodeConfig,
     },
     {
@@ -551,7 +551,7 @@ const REAL_ESTATE_ONBOARDING: FlowTemplate = {
         empty_text: "🔑 *Properties for Rent*\n\nSorry, no rental properties are currently available. Our team will reach out when something suitable is listed.",
         limit: 5,
         filter_listing_type: "Rent",
-        next_node_key: "collect_email",
+        next_node_key: "post_listings",
       } as SendPropertyListingsNodeConfig,
     },
     {
@@ -562,8 +562,27 @@ const REAL_ESTATE_ONBOARDING: FlowTemplate = {
         empty_text: "🏢 *Properties for Rent*\n\nSorry, no rental properties are currently available. Our team will reach out when something suitable is listed.",
         limit: 5,
         filter_listing_type: "Rent",
-        next_node_key: "collect_email",
+        next_node_key: "post_listings",
       } as SendPropertyListingsNodeConfig,
+    },
+    {
+      node_key: "post_listings",
+      node_type: "send_buttons",
+      config: {
+        text: "Interested in any of these? Our specialist can share more details, photos, and arrange a site visit. 👇",
+        buttons: [
+          {
+            reply_id: "explore_more",
+            title: "View More Categories",
+            next_node_key: "buy_menu",
+          },
+          {
+            reply_id: "talk_to_agent",
+            title: "Talk to an Agent",
+            next_node_key: "collect_email",
+          },
+        ],
+      } as SendButtonsNodeConfig,
     },
     {
       node_key: "collect_email",
