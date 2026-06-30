@@ -736,15 +736,41 @@ export async function processOwnerChatbotMessage(
           google_map_link: draft.google_map_link,
           land_area: draft.land_area,
           land_area_unit: draft.land_area_unit || 'Sq.Ft.',
-          land_zone: draft.type && (
-            draft.type.toLowerCase().includes('commercial') ||
-            draft.type.toLowerCase().includes('office') ||
-            draft.type.toLowerCase().includes('warehouse') ||
-            draft.type.toLowerCase().includes('godown') ||
-            draft.type.toLowerCase().includes('industrial') ||
-            draft.type.toLowerCase().includes('it park') ||
-            draft.type.toLowerCase().includes('sez')
-          ) ? 'Commercial' : null,
+          land_zone: (() => {
+            if (!draft.type) return null;
+            const typeLower = draft.type.toLowerCase();
+            if (typeLower.includes('industrial') || typeLower.includes('shed')) {
+              return 'Industrial';
+            }
+            if (typeLower.includes('sez')) {
+              return 'SEZ';
+            }
+            if (typeLower.includes('agricultural') || typeLower.includes('farm')) {
+              return 'Agricultural';
+            }
+            if (
+              typeLower.includes('commercial') ||
+              typeLower.includes('office') ||
+              typeLower.includes('warehouse') ||
+              typeLower.includes('godown') ||
+              typeLower.includes('shop') ||
+              typeLower.includes('showroom') ||
+              typeLower.includes('it park')
+            ) {
+              return 'Commercial';
+            }
+            if (
+              typeLower.includes('residential') ||
+              typeLower.includes('flat') ||
+              typeLower.includes('apartment') ||
+              typeLower.includes('house') ||
+              typeLower.includes('villa') ||
+              typeLower.includes('floor')
+            ) {
+              return 'Residential';
+            }
+            return null;
+          })(),
           owner_contact_id: ownerContactId,
           listing_source: listingSource,
           listing_type: draft.listing_type || 'Sale',

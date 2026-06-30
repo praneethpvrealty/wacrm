@@ -195,11 +195,11 @@ export function isValidContactName(name: string): boolean {
   return true;
 }
 
-// Helper to strip owner/developer/builder suffixes from contact names
-// e.g. "Kg Subramanian (Owner)" -> "Kg Subramanian"
+// Helper to strip owner/developer/builder/individual/agent/buyer suffixes from contact names
+// e.g. "Kg Subramanian (Owner)" -> "Kg Subramanian", "Pushpa (Individual)" -> "Pushpa"
 export function stripOwnerSuffix(name: string): string {
   if (!name) return name;
-  return name.replace(/\s*\((?:Owner|Developer|Builder|Broker|Landlord|Seller)\)\s*$/i, '').trim();
+  return name.replace(/\s*\((?:Owner|Developer|Builder|Broker|Landlord|Seller|Individual|Agent|Buyer|Tenant|Customer)\)\s*$/i, '').trim();
 }
 
 // Extractor rules for different portals
@@ -299,47 +299,7 @@ export function parsePortalLead(subject: string, bodyText: string, html: string)
       }
     }
 
-    // Extract property details for matching against listings
-    // Property type: "3 BHK Apartment", "2 BHK Flat", "Villa", etc.
-    const propertyTypeMatch = bodyText.match(/(\d+)\s*(?:BHK|BHK)\s*(Apartment|Flat|House|Villa|Plot|Land|Commercial)/i);
-    if (propertyTypeMatch) {
-      bedrooms = parseInt(propertyTypeMatch[1]);
-      propertyType = propertyTypeMatch[2];
-    } else {
-      // Try just property type without bedrooms
-      const typeOnlyMatch = bodyText.match(/(Apartment|Flat|House|Villa|Plot|Land|Commercial)/i);
-      if (typeOnlyMatch) propertyType = typeOnlyMatch[1];
-    }
 
-    // Location extraction: "Kattigenahalli" or "in Kattigenahalli"
-    const locationMatch = bodyText.match(/(?:in|at|near|located)\s+([A-Za-z\s,]+?)(?:\s*,|\s*\n|\s*\d|\s*₹|\s*\.)/i);
-    if (locationMatch) {
-      propertyLocation = locationMatch[1].trim();
-    } else {
-      // Try location after property type
-      const locationAfterType = bodyText.match(/(?:Apartment|Flat|House|Villa|Plot|Land)\s+in\s+([A-Za-z\s,]+)/i);
-      if (locationAfterType) {
-        propertyLocation = locationAfterType[1].trim();
-      }
-    }
-
-    // Area extraction: "1779 sq. ft." or "1,779 Sq.Ft."
-    const areaMatch = bodyText.match(/([\d,]+)\s*(?:sq\.?\s*ft\.?|sqft|sq\.?\s*feet)/i);
-    if (areaMatch) {
-      areaSqft = parseInt(areaMatch[1].replace(/,/g, ''));
-    }
-
-    // Price extraction: "₹2.67 Cr" or "2.67 Cr" or "₹ 2.67 Cr"
-    const priceMatch = bodyText.match(/₹?\s*([\d.]+)\s*(Cr|Crore|Lakh|L)\b/i);
-    if (priceMatch) {
-      const priceValue = parseFloat(priceMatch[1]);
-      const unit = priceMatch[2].toLowerCase();
-      if (unit === 'cr' || unit === 'crore') {
-        propertyPrice = Math.round(priceValue * 10000000);
-      } else if (unit === 'lakh' || unit === 'l') {
-        propertyPrice = Math.round(priceValue * 100000);
-      }
-    }
 
     // Housing Property ID extraction: "Property ID: 20327451"
     const propIdMatch = bodyText.match(/Property\s*ID\s*[:|-]\s*(\d+)/i);
@@ -496,6 +456,61 @@ export function parsePortalLead(subject: string, bodyText: string, html: string)
     }
   }
 
+  // Generic Property Details Parser
+  const combinedText = `${subject}\n${bodyText}`;
+
+  // 1. Property Type & Bedrooms
+  const propertyTypeMatch = combinedText.match(/(\d+)\s*(?:BHK|BHK)\s*(Apartment|Flat|House|Villa|Plot|Land|Commercial|Industrial)/i);
+  if (propertyTypeMatch) {
+    bedrooms = parseInt(propertyTypeMatch[1]);
+    propertyType = propertyTypeMatch[2];
+  }
+  
+  // Try intelligent type mapping first
+  const mappedType = extractPropertyType(combinedText);
+  if (mappedType) {
+    propertyType = mappedType;
+  } else if (!propertyType) {
+    // Fallback to simple keyword match
+    const typeOnlyMatch = combinedText.match(/(Apartment|Flat|House|Villa|Plot|Land|Commercial|Industrial)/i);
+    if (typeOnlyMatch) propertyType = typeOnlyMatch[1];
+  }
+
+  // 2. Location
+  if (!propertyLocation) {
+    const locationMatch = combinedText.match(/(?:in|at|near|located)\s+([A-Za-z\s,]+?)(?:\s*,|\s*\n|\s*\d|\s*₹|\s*\.)/i);
+    if (locationMatch) {
+      propertyLocation = locationMatch[1].trim();
+    } else {
+      const locationAfterType = combinedText.match(/(?:Apartment|Flat|House|Villa|Plot|Land|Industrial)\s+in\s+([A-Za-z\s,]+)/i);
+      if (locationAfterType) {
+        propertyLocation = locationAfterType[1].trim();
+      }
+    }
+  }
+
+  // 3. Area
+  if (!areaSqft) {
+    const areaMatch = combinedText.match(/([\d,]+)\s*(?:sq\.?\s*ft\.?|sqft|sq\.?\s*feet)/i);
+    if (areaMatch) {
+      areaSqft = parseInt(areaMatch[1].replace(/,/g, ''));
+    }
+  }
+
+  // 4. Price
+  if (!propertyPrice) {
+    const priceMatch = combinedText.match(/₹?\s*([\d.]+)\s*(Cr|Crore|Lakh|L)\b/i);
+    if (priceMatch) {
+      const priceValue = parseFloat(priceMatch[1]);
+      const unit = priceMatch[2].toLowerCase();
+      if (unit === 'cr' || unit === 'crore') {
+        propertyPrice = Math.round(priceValue * 10000000);
+      } else if (unit === 'lakh' || unit === 'l') {
+        propertyPrice = Math.round(priceValue * 100000);
+      }
+    }
+  }
+
   // Clean values from HTML wrappers or carriage returns
   const cleanLine = (str: string) => str.replace(/<[^>]*>/g, '').split(/[\r\n]/)[0].trim();
 
@@ -513,4 +528,26 @@ export function parsePortalLead(subject: string, bodyText: string, html: string)
     propertyPrice,
     housingPropertyId: housingPropertyId || null,
   };
+}
+
+export function extractPropertyType(text: string): string | null {
+  const lower = text.toLowerCase();
+  if (lower.includes('industrial land') || lower.includes('industrial plot')) return 'Industrial Land';
+  if (lower.includes('industrial building')) return 'Industrial Building';
+  if (lower.includes('industrial shed') || lower.includes('industrial factory')) return 'Industrial Shed';
+  if (lower.includes('warehouse') || lower.includes('godown')) return 'Warehouse/ Godown';
+  if (lower.includes('commercial land')) return 'Commercial Land';
+  if (lower.includes('commercial office') || lower.includes('office space') || lower.includes('office in it park')) return 'Commercial Office Space';
+  if (lower.includes('commercial showroom') || lower.includes('showroom')) return 'Commercial Showroom';
+  if (lower.includes('commercial shop') || lower.includes('retail shop') || lower.includes(' shop')) return 'Commercial Shop';
+  if (lower.includes('penthouse')) return 'Penthouse';
+  if (lower.includes('studio apartment')) return 'Studio Apartment';
+  if (lower.includes('flat') || lower.includes('apartment') || lower.includes('bhk')) return 'Flat/ Apartment';
+  if (lower.includes('villa')) return 'Villa';
+  if (lower.includes('farm house') || lower.includes('farmland') || lower.includes('farm land')) return 'Farm House';
+  if (lower.includes('agricultural land')) return 'Agricultural Land';
+  if (lower.includes('builder floor')) return 'Builder Floor Apartment';
+  if (lower.includes('house')) return 'Residential House';
+  if (lower.includes('residential land') || lower.includes('residential plot') || lower.includes(' plot') || lower.includes(' land')) return 'Residential Land/ Plot';
+  return null;
 }

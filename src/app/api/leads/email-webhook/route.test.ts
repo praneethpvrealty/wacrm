@@ -7,7 +7,8 @@ import {
   decodeQuotedPrintable,
   decodeMimeSubject,
   parseMimeEmail,
-  checkIsNonLeadEmail
+  checkIsNonLeadEmail,
+  stripOwnerSuffix
 } from './route';
 
 describe('Email Webhook Lead Parsing', () => {
@@ -29,6 +30,27 @@ describe('Email Webhook Lead Parsing', () => {
       expect(res.phone).toBe('9738622542');
       expect(res.email).toBe('shreyasrvce@gmail.com');
       expect(res.requirementText).toBe('Commercial Showroom in Indiranagar');
+    });
+
+    it('should parse Magicbricks Industrial Land emails correctly', () => {
+      const subject = 'Hot Lead - Buyer has contacted you on Magicbricks for - Industrial Land for sale in Bommasandra';
+      const body = `
+        Dear Praneeth,
+        A user is interested in your Property, ID 79221031: Industrial Land in Bommasandra, Bangalore.
+        Details of Contact Made:
+        Sender's Name: Pushpa (Individual)
+        Mobile: 9740750397
+        Email: pushpa9876@gmail.com
+        Message: I am interested in your property.
+        Please get in touch with me
+      `;
+      const res = parsePortalLead(subject, body, '');
+      expect(res.source).toBe('Magic Bricks');
+      expect(res.name).toBe('Pushpa (Individual)');
+      expect(res.phone).toBe('9740750397');
+      expect(res.email).toBe('pushpa9876@gmail.com');
+      expect(res.propertyType).toBe('Industrial Land');
+      expect(res.propertyLocation).toBe('Bommasandra');
     });
 
     it('should parse 99acres emails correctly', () => {
@@ -321,6 +343,16 @@ Content-Transfer-Encoding: quoted-printable
       expect(checkIsNonLeadEmail('Magicbricks Weekly Digest', 'info@magicbricks.com')).toBe(true);
       expect(checkIsNonLeadEmail('Flash Sale! Save 50% now', 'marketing@deals.com')).toBe(true);
       expect(checkIsNonLeadEmail('Exclusive Offer for subscribers', 'promo@service.com')).toBe(true);
+    });
+  });
+
+  describe('stripOwnerSuffix', () => {
+    it('should strip owner and individual role suffixes from contact names', () => {
+      expect(stripOwnerSuffix('Kg Subramanian (Owner)')).toBe('Kg Subramanian');
+      expect(stripOwnerSuffix('Pushpa (Individual)')).toBe('Pushpa');
+      expect(stripOwnerSuffix('Robert Smith (Agent)')).toBe('Robert Smith');
+      expect(stripOwnerSuffix('John Doe (Buyer)')).toBe('John Doe');
+      expect(stripOwnerSuffix('No Suffix')).toBe('No Suffix');
     });
   });
 });
