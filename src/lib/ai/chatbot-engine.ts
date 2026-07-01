@@ -932,24 +932,72 @@ export async function processOwnerChatbotMessage(
       }
     }
 
-    // Handle conversational update/correction text
+    // Handle conversational update/correction text.
+    //
+    // Re-fetches + retries with an optimistic-lock precondition (same
+    // pattern as the image-upload branch above) instead of blindly
+    // overwriting `draft_data` from the snapshot read at the top of
+    // this call. Without it, two corrections landing close together
+    // (e.g. "Location - X" then "Type - Y") each build on the SAME
+    // stale base and the second write silently clobbers the first —
+    // a field the user just provided reverts to "Missing".
     if (cleanedText) {
-      const updatedDraft = await updateListingDraft(draft, cleanedText);
-      const { isValid } = validateDraft(updatedDraft);
-      const nextStatus = isValid ? 'awaiting_confirmation' : 'collecting';
+      let updatedDraft = draft;
+      let nextStatus: string = propSession.status;
+      let success = false;
+      let retryCount = 0;
+      const maxRetries = 5;
+      let finalUpdateData: { updated_at: string }[] | null = null;
 
-      const savedTime = new Date().toISOString();
-      const { data: updateData } = await supabaseAdmin()
-        .from('property_draft_sessions')
-        .update({
-          draft_data: updatedDraft,
-          status: nextStatus,
-          updated_at: savedTime
-        })
-        .eq('id', propSession.id)
-        .select();
+      while (retryCount < maxRetries && !success) {
+        const { data: latestSession, error: fetchErr } = await supabaseAdmin()
+          .from('property_draft_sessions')
+          .select('*')
+          .eq('id', propSession.id)
+          .single();
 
-      const actualSavedTime = updateData?.[0]?.updated_at || savedTime;
+        if (fetchErr || !latestSession) {
+          if (fetchErr?.code === 'PGRST116') {
+            console.log('[chatbot-engine] Active session was deleted concurrently. Exiting text update flow.');
+            return true;
+          }
+          throw fetchErr || new Error('Session not found during text update retry');
+        }
+
+        const currentDraft = latestSession.draft_data as ParsedPropertyDraft;
+        updatedDraft = await updateListingDraft(currentDraft, cleanedText);
+
+        const validation = validateDraft(updatedDraft);
+        nextStatus = validation.isValid ? 'awaiting_confirmation' : 'collecting';
+
+        const { data: updateData, error: updateErr } = await supabaseAdmin()
+          .from('property_draft_sessions')
+          .update({
+            draft_data: updatedDraft,
+            status: nextStatus,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', propSession.id)
+          .eq('updated_at', latestSession.updated_at)
+          .select();
+
+        if (!updateErr && updateData && updateData.length > 0) {
+          success = true;
+          finalUpdateData = updateData;
+        } else {
+          retryCount++;
+          await new Promise((resolve) => setTimeout(resolve, Math.random() * 200 + 50));
+        }
+      }
+
+      if (!success || !finalUpdateData || finalUpdateData.length === 0) {
+        const reply = "⚠️ *Couldn't save your update due to a conflicting change.* Please resend it.";
+        const sendRes = await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
+        await saveBotMessage(conversation.id, reply, sendRes.messageId);
+        return true;
+      }
+
+      const actualSavedTime = finalUpdateData[0].updated_at;
 
       await sendPropertyDraftPreviewDebounced(
         propSession.id,
@@ -1969,24 +2017,71 @@ export async function processExternalListingMessage(
     }
   }
 
-  // Handle conversational update/correction text
+  // Handle conversational update/correction text.
+  //
+  // Re-fetches + retries with an optimistic-lock precondition (same
+  // pattern as the image-upload branch above), instead of blindly
+  // overwriting `draft_data` from the snapshot read at the top of this
+  // call — otherwise two corrections landing close together each
+  // build on the same stale base and the second write silently
+  // clobbers the first.
   if (cleanedText) {
-    const updatedDraft = await updateListingDraft(draft, cleanedText);
-    const { isValid } = validateDraft(updatedDraft);
-    const nextStatus = isValid ? 'awaiting_confirmation' : 'collecting';
+    let updatedDraft = draft;
+    let nextStatus: string = propSession.status;
+    let success = false;
+    let retryCount = 0;
+    const maxRetries = 5;
+    let finalUpdateData: { updated_at: string }[] | null = null;
 
-    const savedTime = new Date().toISOString();
-    const { data: updateData } = await supabaseAdmin()
-      .from('property_draft_sessions')
-      .update({
-        draft_data: updatedDraft,
-        status: nextStatus,
-        updated_at: savedTime
-      })
-      .eq('id', propSession.id)
-      .select();
+    while (retryCount < maxRetries && !success) {
+      const { data: latestSession, error: fetchErr } = await supabaseAdmin()
+        .from('property_draft_sessions')
+        .select('*')
+        .eq('id', propSession.id)
+        .single();
 
-    const actualSavedTime = updateData?.[0]?.updated_at || savedTime;
+      if (fetchErr || !latestSession) {
+        if (fetchErr?.code === 'PGRST116') {
+          console.log('[chatbot-engine] Active external session was deleted concurrently. Exiting text update flow.');
+          return true;
+        }
+        throw fetchErr || new Error('Session not found during text update retry');
+      }
+
+      const currentDraft = latestSession.draft_data as ParsedPropertyDraft;
+      updatedDraft = await updateListingDraft(currentDraft, cleanedText);
+
+      const validation = validateDraft(updatedDraft);
+      nextStatus = validation.isValid ? 'awaiting_confirmation' : 'collecting';
+
+      const { data: updateData, error: updateErr } = await supabaseAdmin()
+        .from('property_draft_sessions')
+        .update({
+          draft_data: updatedDraft,
+          status: nextStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', propSession.id)
+        .eq('updated_at', latestSession.updated_at)
+        .select();
+
+      if (!updateErr && updateData && updateData.length > 0) {
+        success = true;
+        finalUpdateData = updateData;
+      } else {
+        retryCount++;
+        await new Promise((resolve) => setTimeout(resolve, Math.random() * 200 + 50));
+      }
+    }
+
+    if (!success || !finalUpdateData || finalUpdateData.length === 0) {
+      const reply = "⚠️ *Couldn't save your update due to a conflicting change.* Please resend it.";
+      const sendRes = await sendTextMessage({ phoneNumberId, accessToken, to: contactRecord.phone, text: reply });
+      await saveBotMessage(conversation.id, reply, sendRes.messageId);
+      return true;
+    }
+
+    const actualSavedTime = finalUpdateData[0].updated_at;
 
     await sendPropertyDraftPreviewDebounced(
       propSession.id,
