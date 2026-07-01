@@ -572,9 +572,13 @@ async function executeHandoff(
 }
 
 const DEFAULT_LISTING_INTAKE_PROMPT =
-  "📋 *List Your Property*\n\nSend photos and/or details of your property " +
-  "(location, price, BHK, etc.) as text or images, and we'll put together " +
-  "the listing for you.\n\nType *cancel* anytime to stop.";
+  "📋 *List Your Property*\n\n" +
+  "Ready to get your property in front of serious buyers? Just share a few details and photos, " +
+  "and we'll put together a polished listing for you.\n\n" +
+  "• 📸 *Photos* — any angle, as many as you have\n" +
+  "• 📝 *Details* — location, price, type, BHK, area, amenities, anything else worth mentioning\n\n" +
+  "Send it all at once or a bit at a time — we'll piece it together and show you a preview before it goes live.\n\n" +
+  "_Type *cancel* anytime to stop._";
 
 /** Reply id for the "Talk to an Agent" button shown when an account's
  *  property limit blocks a new WhatsApp submission. Handled explicitly
