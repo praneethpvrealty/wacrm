@@ -198,6 +198,52 @@ export async function classifyImageOrText(
 }
 
 
+const PROPERTY_TYPE_VALUES = [
+  "Flat/ Apartment", "Residential House", "Villa", "Builder Floor Apartment",
+  "Residential Land/ Plot", "Penthouse", "Studio Apartment", "Commercial Office Space",
+  "Office in IT Park/ SEZ", "Commercial Shop", "Commercial Showroom", "Commercial Land",
+  "Warehouse/ Godown", "Industrial Land", "Industrial Building", "Industrial Shed",
+  "Agricultural Land", "Farm House", "Others",
+] as const;
+
+/**
+ * Deterministic backstop for the 'type' field, same idea as the location
+ * fallback below: the model is instructed to map free text onto the
+ * canonical enum, but isn't always reliable about it (e.g. "Residential
+ * old house" was seen coming back null instead of "Residential House").
+ * Keyword-matches common phrasing so a real answer survives even when
+ * the model's own mapping doesn't land exactly.
+ */
+function normalizePropertyType(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  const exact = PROPERTY_TYPE_VALUES.find((v) => v.toLowerCase() === trimmed.toLowerCase());
+  if (exact) return exact;
+
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("penthouse")) return "Penthouse";
+  if (lower.includes("studio")) return "Studio Apartment";
+  if (lower.includes("villa")) return "Villa";
+  if (lower.includes("builder floor")) return "Builder Floor Apartment";
+  if (lower.includes("farm house") || lower.includes("farmhouse")) return "Farm House";
+  if (lower.includes("agricultural") || lower.includes("farmland") || lower.includes("farm land")) return "Agricultural Land";
+  if (lower.includes("warehouse") || lower.includes("godown")) return "Warehouse/ Godown";
+  if (lower.includes("industrial") && lower.includes("shed")) return "Industrial Shed";
+  if (lower.includes("industrial") && lower.includes("building")) return "Industrial Building";
+  if (lower.includes("industrial") && lower.includes("land")) return "Industrial Land";
+  if (lower.includes("sez") || lower.includes("it park")) return "Office in IT Park/ SEZ";
+  if (lower.includes("office")) return "Commercial Office Space";
+  if (lower.includes("showroom")) return "Commercial Showroom";
+  if (lower.includes("shop")) return "Commercial Shop";
+  if (lower.includes("commercial") && lower.includes("land")) return "Commercial Land";
+  if (lower.includes("plot") || (lower.includes("land") && !/industrial|commercial|agricultural/.test(lower))) return "Residential Land/ Plot";
+  if (lower.includes("flat") || lower.includes("apartment")) return "Flat/ Apartment";
+  if (lower.includes("house") || lower.includes("bungalow") || lower.includes("independent")) return "Residential House";
+  // Preserve whatever was said rather than silently discarding it — an
+  // account owner can still correct it later in the manual edit form.
+  return trimmed;
+}
+
 export interface ParsedPropertyDraft {
   title: string | null;
   price: number | null;
@@ -415,7 +461,7 @@ export async function parseListingFromImageOrText(
     "}\n\n" +
     "Important parsing rules:\n" +
     "1. For Price, Rent, Advance/Deposit: Convert terms like 'Crore', 'Cr', 'Lakhs', 'L', 'k' to standard numeric integer values (e.g., '80 Lakhs' -> 8000000, '1.5 Cr' -> 15000000, '2.5 L' -> 250000, '25k' -> 25000).\n" +
-    "2. For Location/Sublocality: Infer the sublocality / layout name (e.g. HSR Layout, Koramangala) if mentioned.\n" +
+    "2. For Location: ALWAYS populate the top-level 'location' field with the primary area/neighborhood/address text mentioned anywhere in the input (e.g. if the text says '...for sale in Jayanagar 17th Main' or 'Location - Jayanagar 17th Main', set location to 'Jayanagar 17th Main'). Never leave 'location' null just because the same text is already part of the 'title' — 'location' is a separate required field. Additionally, if a distinct sublocality/layout name (e.g. HSR Layout, Koramangala) is identifiable, also set 'sublocality' — but 'location' must be filled whenever ANY area/address is mentioned, even if it's identical to 'sublocality'.\n" +
     "3. For vacant land/plot without building details (e.g., no bedrooms/bathrooms/apartment mention), map 'type' intelligently based on keywords to 'Residential Land/ Plot', 'Commercial Land', 'Industrial Land', or 'Agricultural Land'. For example, commercial plots go to 'Commercial Land'.\n" +
     "4. Set any fields that cannot be found or reasonably inferred to null.\n" +
     "5. For Amenities/Features: Extract any amenities, specifications, or internal/external building features of the property (such as wood flooring, modular kitchen, power backup, gym, pool, gated community, library, basement, water supply, fenced boundary, security, etc.) into the `features` array.\n" +
@@ -455,8 +501,12 @@ export async function parseListingFromImageOrText(
     return {
       title: parsed.title || null,
       price: parsed.price || null,
-      location: parsed.location || null,
-      type: parsed.type || null,
+      // Deterministic safety net: if the model filled sublocality but left
+      // the primary location empty (the model's most common failure mode
+      // here), fall back to sublocality rather than showing "Missing" when
+      // the user clearly gave *some* area/address text.
+      location: parsed.location || parsed.sublocality || null,
+      type: normalizePropertyType(parsed.type) as ParsedPropertyDraft["type"],
       sublocality: parsed.sublocality || null,
       city: parsed.city || "Bangalore",
       state: parsed.state || "Karnataka",
@@ -503,6 +553,8 @@ export async function updateListingDraft(
     "Convert terms like 'Crore', 'Cr', 'Lakhs', 'L', 'k' to standard numeric integer values for the price, rent_per_month, advance, and rental_income fields. Extracted Google Map links should be placed in 'google_map_link' field.\n" +
     "Handle updates to amenities (features) and nearby highlights (nearby_highlights) intelligently (e.g. if the user says 'add Gym to amenities', add 'Gym' to the features array; if they say 'add HSR Metro to landmarks', add 'HSR Metro' to the nearby_highlights array).\n" +
     "Handle updates to listing/owner contact details intelligently (e.g. if the user says 'contact name is Ramesh' or 'owner phone is 9876543210', update owner_contact_name or owner_contact_phone respectively).\n" +
+    "Handle updates to location intelligently: if the user says 'location is X', 'Location - X', 'located in X', or similar, set the top-level 'location' field to X. 'location' is a required primary address field, separate from 'sublocality' — never leave it unset when the user has given any area/address text, even if you also record a more specific 'sublocality'.\n" +
+    "Handle updates to property type intelligently: if the user says 'type is X', 'Type - X', or describes the property category in any way, map it to the closest matching value from this exact list: 'Flat/ Apartment', 'Residential House', 'Villa', 'Builder Floor Apartment', 'Residential Land/ Plot', 'Penthouse', 'Studio Apartment', 'Commercial Office Space', 'Office in IT Park/ SEZ', 'Commercial Shop', 'Commercial Showroom', 'Commercial Land', 'Warehouse/ Godown', 'Industrial Land', 'Industrial Building', 'Industrial Shed', 'Agricultural Land', 'Farm House', 'Others'. For example, 'Type - Residential old house' or 'its an old independent house' both map to 'Residential House'. Never leave 'type' null when the user has specified any property category — always pick the closest match from the list above rather than leaving it unset.\n" +
     "Include fields for rental vertical updates: listing_type ('Sale' or 'Rent'), rent_per_month, maintenance, advance, and gst.\n" +
     "Output MUST be valid JSON.";
 
@@ -516,6 +568,14 @@ export async function updateListingDraft(
     const updatedDraft = {
       ...currentDraft,
       ...parsed,
+      // Deterministic safety net (see parseListingFromImageOrText): if this
+      // update newly set sublocality but the model still left the primary
+      // location empty, fall back rather than showing "Missing".
+      location: parsed.location || currentDraft.location || parsed.sublocality || currentDraft.sublocality || null,
+      // Same idea for 'type' — normalize whatever the model returned (or
+      // fall back to the prior value) rather than letting it revert to
+      // null when the user clearly specified a category.
+      type: normalizePropertyType(parsed.type ?? currentDraft.type) as ParsedPropertyDraft["type"],
       // Retain images and other fields if they were omitted in the response
       images: currentDraft.images || []
     };

@@ -21,6 +21,7 @@ import {
 import { autoSyncPropertyCatalogIfNeeded } from '@/lib/whatsapp/catalog-sync-helper';
 import { extractImagesFromPdf } from '@/lib/pdf/image-extractor';
 import { checkAccountPropertyLimit } from '@/lib/billing/gates';
+import { resolveLocationFromGoogleMapLink } from '@/lib/maps/resolve-location';
 
 // Lazy initialize supabase admin client
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -115,9 +116,22 @@ async function saveBotMessage(
 }
 
 /**
+ * If the draft is still missing a location but has a Google Maps link
+ * (common when a lister shares a pin instead of typing an address),
+ * best-effort resolve the link into a usable location string. Never
+ * throws — a failed/timed-out resolution just leaves the draft as-is so
+ * it doesn't block the WhatsApp reply.
+ */
+async function backfillLocationFromMapLink(draft: ParsedPropertyDraft): Promise<ParsedPropertyDraft> {
+  if (draft.location || !draft.google_map_link) return draft;
+  const derived = await resolveLocationFromGoogleMapLink(draft.google_map_link);
+  return derived ? { ...draft, location: derived } : draft;
+}
+
+/**
  * Validates the parsed draft to check for missing mandatory details.
  */
-function validateDraft(draft: ParsedPropertyDraft): { 
+function validateDraft(draft: ParsedPropertyDraft): {
   isValid: boolean; 
   missingFields: string[] 
 } {
@@ -966,6 +980,7 @@ export async function processOwnerChatbotMessage(
 
         const currentDraft = latestSession.draft_data as ParsedPropertyDraft;
         updatedDraft = await updateListingDraft(currentDraft, cleanedText);
+        updatedDraft = await backfillLocationFromMapLink(updatedDraft);
 
         const validation = validateDraft(updatedDraft);
         nextStatus = validation.isValid ? 'awaiting_confirmation' : 'collecting';
@@ -1455,6 +1470,8 @@ export async function processOwnerChatbotMessage(
           parsedDraft = await parseListingFromImageOrText(cleanedText);
           parsedDraft.images = [];
         }
+
+        parsedDraft = await backfillLocationFromMapLink(parsedDraft);
 
         const { isValid } = validateDraft(parsedDraft);
         const initialStatus = isValid ? 'awaiting_confirmation' : 'collecting';
@@ -2050,6 +2067,7 @@ export async function processExternalListingMessage(
 
       const currentDraft = latestSession.draft_data as ParsedPropertyDraft;
       updatedDraft = await updateListingDraft(currentDraft, cleanedText);
+      updatedDraft = await backfillLocationFromMapLink(updatedDraft);
 
       const validation = validateDraft(updatedDraft);
       nextStatus = validation.isValid ? 'awaiting_confirmation' : 'collecting';
