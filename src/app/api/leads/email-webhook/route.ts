@@ -460,12 +460,18 @@ export async function POST(request: Request) {
     let matchedPropertyIds: string[] = [];
     if (parsed.propertyType || parsed.propertyLocation || parsed.housingPropertyId) {
       try {
-        // Fetch user's published properties
+        // Fetch user's published properties.
         const { data: properties } = await supabase
           .from('properties')
-          .select('id, title, type, location, bedrooms, area_sqft, price, property_code')
+          .select('id, title, type, location, bedrooms, area_sqft, price, property_code, created_at')
           .eq('account_id', accountId)
           .eq('is_published', true);
+
+        // Sort by newest first before scoring so ties (possible when two
+        // listings share type/bedrooms/price bracket) resolve
+        // deterministically to the newer listing, rather than whatever
+        // order Postgres/the client happens to return rows in.
+        properties?.sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''));
 
         if (properties && properties.length > 0) {
           // Score and rank every property so the strongest location match is first.

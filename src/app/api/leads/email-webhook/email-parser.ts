@@ -485,6 +485,15 @@ export function parsePortalLead(subject: string, bodyText: string, html: string)
       const locationAfterType = combinedText.match(/(?:Apartment|Flat|House|Villa|Plot|Land|Industrial)\s+in\s+([A-Za-z\s,]+)/i);
       if (locationAfterType) {
         propertyLocation = locationAfterType[1].trim();
+      } else {
+        // Comma-separated listing-card format some portal emails use,
+        // e.g. "5 BHK Villa, Devanahalli, 8400 sq. ft., ₹16.0 Cr" — the
+        // location directly follows the property type, before the next
+        // comma, with no "in/at/near" connector at all.
+        const locationAfterTypeComma = combinedText.match(/(?:Apartment|Flat|House|Villa|Plot|Land|Industrial|Commercial|Studio|Penthouse)s?\s*,\s*([A-Za-z][A-Za-z\s]*?)\s*,/i);
+        if (locationAfterTypeComma) {
+          propertyLocation = locationAfterTypeComma[1].trim();
+        }
       }
     }
   }
@@ -542,12 +551,17 @@ export function extractPropertyType(text: string): string | null {
   if (lower.includes('commercial shop') || lower.includes('retail shop') || lower.includes(' shop')) return 'Commercial Shop';
   if (lower.includes('penthouse')) return 'Penthouse';
   if (lower.includes('studio apartment')) return 'Studio Apartment';
-  if (lower.includes('flat') || lower.includes('apartment') || lower.includes('bhk')) return 'Flat/ Apartment';
+  // Specific residential structure types must be checked BEFORE the
+  // generic 'bhk'/'flat'/'apartment' catch-all below. "5 BHK Villa"
+  // contains "bhk" too, and with the catch-all first, it used to win —
+  // silently reclassifying villas/houses as apartments whenever a BHK
+  // count was mentioned alongside them.
   if (lower.includes('villa')) return 'Villa';
   if (lower.includes('farm house') || lower.includes('farmland') || lower.includes('farm land')) return 'Farm House';
   if (lower.includes('agricultural land')) return 'Agricultural Land';
   if (lower.includes('builder floor')) return 'Builder Floor Apartment';
   if (lower.includes('house')) return 'Residential House';
+  if (lower.includes('flat') || lower.includes('apartment') || lower.includes('bhk')) return 'Flat/ Apartment';
   if (lower.includes('residential land') || lower.includes('residential plot') || lower.includes(' plot') || lower.includes(' land')) return 'Residential Land/ Plot';
   return null;
 }
