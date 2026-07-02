@@ -200,10 +200,10 @@ export async function classifyImageOrText(
 
 const PROPERTY_TYPE_VALUES = [
   "Flat/ Apartment", "Residential House", "Villa", "Builder Floor Apartment",
-  "Residential Land/ Plot", "Penthouse", "Studio Apartment", "Commercial Office Space",
-  "Office in IT Park/ SEZ", "Commercial Shop", "Commercial Showroom", "Commercial Land",
-  "Warehouse/ Godown", "Industrial Land", "Industrial Building", "Industrial Shed",
-  "Agricultural Land", "Farm House", "Others",
+  "Residential Land/ Plot", "Penthouse", "Studio Apartment", "Residential PG building",
+  "PG/ Hostel", "Commercial Office Space", "Office in IT Park/ SEZ", "Commercial Shop",
+  "Commercial Showroom", "Commercial Land", "Warehouse/ Godown", "Industrial Land",
+  "Industrial Building", "Industrial Shed", "Agricultural Land", "Farm House", "Others",
 ] as const;
 
 /**
@@ -221,6 +221,10 @@ function normalizePropertyType(raw: string | null | undefined): string | null {
   if (exact) return exact;
 
   const lower = trimmed.toLowerCase();
+  if (lower.includes("hostel")) return "PG/ Hostel";
+  if (/\bpg\b/i.test(trimmed) || lower.includes("paying guest")) {
+    return lower.includes("building") ? "Residential PG building" : "PG/ Hostel";
+  }
   if (lower.includes("penthouse")) return "Penthouse";
   if (lower.includes("studio")) return "Studio Apartment";
   if (lower.includes("villa")) return "Villa";
@@ -244,6 +248,20 @@ function normalizePropertyType(raw: string | null | undefined): string | null {
   return trimmed;
 }
 
+/**
+ * Deterministic backstop for 'bedrooms': extracts an "X BHK" / "X bhk"
+ * count directly from raw text. Same defensive pattern as location/type
+ * above — the model is instructed to always set bedrooms from a BHK
+ * mention (rule 3), but this catches it even if that instruction doesn't
+ * land (e.g. a title like "5 bhk old house..." was seen leaving the
+ * structured 'bedrooms' field null).
+ */
+function extractBedroomsFromText(text: string | null | undefined): number | null {
+  if (!text) return null;
+  const match = text.match(/(\d+)\s*-?\s*bhk/i);
+  return match ? parseInt(match[1], 10) : null;
+}
+
 export interface ParsedPropertyDraft {
   title: string | null;
   price: number | null;
@@ -256,6 +274,8 @@ export interface ParsedPropertyDraft {
     | "Residential Land/ Plot"
     | "Penthouse"
     | "Studio Apartment"
+    | "Residential PG building"
+    | "PG/ Hostel"
     | "Commercial Office Space"
     | "Office in IT Park/ SEZ"
     | "Commercial Shop"
@@ -434,7 +454,7 @@ export async function parseListingFromImageOrText(
     "  \"title\": \"A descriptive title (e.g. '3 BHK Apartment in HSR Layout' or '30x40 Residential Plot in Devanahalli') or null\",\n" +
     "  \"price\": Numeric price in INR (e.g. if text says '1.2 Cr' or '120 Lakhs', price is 12000000) or null,\n" +
     "  \"location\": \"Exact location or address or null\",\n" +
-    "  \"type\": \"Must be exactly one of: 'Flat/ Apartment', 'Residential House', 'Villa', 'Builder Floor Apartment', 'Residential Land/ Plot', 'Penthouse', 'Studio Apartment', 'Commercial Office Space', 'Office in IT Park/ SEZ', 'Commercial Shop', 'Commercial Showroom', 'Commercial Land', 'Warehouse/ Godown', 'Industrial Land', 'Industrial Building', 'Industrial Shed', 'Agricultural Land', 'Farm House', 'Others' or null\",\n" +
+    "  \"type\": \"Must be exactly one of: 'Flat/ Apartment', 'Residential House', 'Villa', 'Builder Floor Apartment', 'Residential Land/ Plot', 'Penthouse', 'Studio Apartment', 'Residential PG building', 'PG/ Hostel', 'Commercial Office Space', 'Office in IT Park/ SEZ', 'Commercial Shop', 'Commercial Showroom', 'Commercial Land', 'Warehouse/ Godown', 'Industrial Land', 'Industrial Building', 'Industrial Shed', 'Agricultural Land', 'Farm House', 'Others' or null\",\n" +
     "  \"sublocality\": \"Sublocality or neighborhood name or null\",\n" +
     "  \"city\": \"City name (default 'Bangalore')\",\n" +
     "  \"state\": \"State name (default 'Karnataka')\",\n" +
@@ -460,14 +480,18 @@ export async function parseListingFromImageOrText(
     "  \"gst\": Numeric GST percentage (e.g. '18% GST' -> 18) or flat GST amount in INR or null\n" +
     "}\n\n" +
     "Important parsing rules:\n" +
+    "0. CRITICAL: The 'title' field is a human-readable summary and will often restate details — like BHK count, area, or location — that ALSO belong in their own structured fields below. NEVER treat a detail as 'already handled' just because it appears in the title. You MUST still populate every matching structured field (bedrooms, area_sqft, land_area, location, type, etc.) independently and completely whenever that information is present anywhere in the input, even if it's redundant with the title.\n" +
     "1. For Price, Rent, Advance/Deposit: Convert terms like 'Crore', 'Cr', 'Lakhs', 'L', 'k' to standard numeric integer values (e.g., '80 Lakhs' -> 8000000, '1.5 Cr' -> 15000000, '2.5 L' -> 250000, '25k' -> 25000).\n" +
     "2. For Location: ALWAYS populate the top-level 'location' field with the primary area/neighborhood/address text mentioned anywhere in the input (e.g. if the text says '...for sale in Jayanagar 17th Main' or 'Location - Jayanagar 17th Main', set location to 'Jayanagar 17th Main'). Never leave 'location' null just because the same text is already part of the 'title' — 'location' is a separate required field. Additionally, if a distinct sublocality/layout name (e.g. HSR Layout, Koramangala) is identifiable, also set 'sublocality' — but 'location' must be filled whenever ANY area/address is mentioned, even if it's identical to 'sublocality'.\n" +
-    "3. For vacant land/plot without building details (e.g., no bedrooms/bathrooms/apartment mention), map 'type' intelligently based on keywords to 'Residential Land/ Plot', 'Commercial Land', 'Industrial Land', or 'Agricultural Land'. For example, commercial plots go to 'Commercial Land'.\n" +
-    "4. Set any fields that cannot be found or reasonably inferred to null.\n" +
-    "5. For Amenities/Features: Extract any amenities, specifications, or internal/external building features of the property (such as wood flooring, modular kitchen, power backup, gym, pool, gated community, library, basement, water supply, fenced boundary, security, etc.) into the `features` array.\n" +
-    "6. For Nearby Highlights/Landmark information: Extract any nearby landmarks, highlights, or proximity information (such as near metro station, opposite Starbucks, near shopping mall, hospital, school, tech park, etc.) into the `nearby_highlights` array. Do NOT confuse building details/features with nearby landmarks/highlights.\n" +
-    "7. For Listing/Owner Contact details: If the message/image details have any contact person or sender's name (e.g., 'Regards, Ramesh (Agent)' or 'Contact Suresh on 9876543210'), extract their name, phone (if present), and role ('Agent' or 'Owner'). If not mentioned, set to null.\n" +
-    "8. Output MUST be valid JSON.";
+    "3. For Bedrooms: 'X BHK' or 'X bhk' means bedrooms = X (numeric). Always set 'bedrooms' whenever a BHK count is mentioned anywhere in the input, even if that same count already appears in the title (e.g. title '5 BHK old house...' still requires bedrooms: 5).\n" +
+    "4. For Area vs Land Area: 'area_sqft' is the BUILT-UP / carpet / super built-up area of a structure (a flat's interior, a house's floor area, etc). 'land_area' (with 'land_area_unit') is the SITE/PLOT size the property sits on, or vacant land itself. If the input mentions a 'plot', 'site', or land size figure (e.g. '3870 sqft plot', '30x40 site'), put it in 'land_area', NOT 'area_sqft' — even when the listing is a house/villa built on that plot. Only put a figure in 'area_sqft' when it's explicitly described as built-up/carpet/floor area.\n" +
+    "5. For vacant land/plot without building details (e.g., no bedrooms/bathrooms/apartment mention), map 'type' intelligently based on keywords to 'Residential Land/ Plot', 'Commercial Land', 'Industrial Land', or 'Agricultural Land'. For example, commercial plots go to 'Commercial Land'.\n" +
+    "6. For PG/Hostel listings: if the input mentions 'PG', 'paying guest', or 'hostel', map 'type' to 'PG/ Hostel' (or 'Residential PG building' if it's clearly a whole building run as a PG business, not a single room/bed being offered).\n" +
+    "7. Set any fields that cannot be found or reasonably inferred to null.\n" +
+    "8. For Amenities/Features: Extract any amenities, specifications, or internal/external building features of the property (such as wood flooring, modular kitchen, power backup, gym, pool, gated community, library, basement, water supply, fenced boundary, security, etc.) into the `features` array.\n" +
+    "9. For Nearby Highlights/Landmark information: Extract any nearby landmarks, highlights, or proximity information (such as near metro station, opposite Starbucks, near shopping mall, hospital, school, tech park, etc.) into the `nearby_highlights` array. Do NOT confuse building details/features with nearby landmarks/highlights.\n" +
+    "10. For Listing/Owner Contact details: If the message/image details have any contact person or sender's name (e.g., 'Regards, Ramesh (Agent)' or 'Contact Suresh on 9876543210'), extract their name, phone (if present), and role ('Agent' or 'Owner'). If not mentioned, set to null.\n" +
+    "11. Output MUST be valid JSON.";
 
   const parts: GeminiPart[] = [];
 
@@ -510,7 +534,9 @@ export async function parseListingFromImageOrText(
       sublocality: parsed.sublocality || null,
       city: parsed.city || "Bangalore",
       state: parsed.state || "Karnataka",
-      bedrooms: parsed.bedrooms || null,
+      // Falls back to regex-extracting "X BHK" from the raw input text,
+      // then from the model's own generated title, before giving up.
+      bedrooms: parsed.bedrooms || extractBedroomsFromText(text) || extractBedroomsFromText(parsed.title) || null,
       bathrooms: parsed.bathrooms || null,
       area_sqft: parsed.area_sqft || null,
       land_area: parsed.land_area || null,
@@ -546,15 +572,18 @@ export async function updateListingDraft(
   currentDraft: ParsedPropertyDraft,
   updateRequest: string
 ): Promise<ParsedPropertyDraft> {
-  const systemInstruction = 
+  const systemInstruction =
     "You are an expert real estate data updater. You are given a current property draft JSON object and a natural language instruction from the user.\n" +
     "Your job is to apply the updates requested by the user and return the complete updated JSON object matching the exact structure.\n" +
     "Do not change any other fields unless requested by the user.\n" +
+    "CRITICAL: Only omit/null a field in your response if the user's instruction genuinely doesn't touch it. If the instruction clearly provides a value for a field visible in the current draft (title, description, city, state, sublocality, dimensions, facing_direction, bedrooms, bathrooms, area_sqft, land_area, etc.), you MUST set that exact field — never silently drop a value the user just gave you.\n" +
     "Convert terms like 'Crore', 'Cr', 'Lakhs', 'L', 'k' to standard numeric integer values for the price, rent_per_month, advance, and rental_income fields. Extracted Google Map links should be placed in 'google_map_link' field.\n" +
     "Handle updates to amenities (features) and nearby highlights (nearby_highlights) intelligently (e.g. if the user says 'add Gym to amenities', add 'Gym' to the features array; if they say 'add HSR Metro to landmarks', add 'HSR Metro' to the nearby_highlights array).\n" +
     "Handle updates to listing/owner contact details intelligently (e.g. if the user says 'contact name is Ramesh' or 'owner phone is 9876543210', update owner_contact_name or owner_contact_phone respectively).\n" +
     "Handle updates to location intelligently: if the user says 'location is X', 'Location - X', 'located in X', or similar, set the top-level 'location' field to X. 'location' is a required primary address field, separate from 'sublocality' — never leave it unset when the user has given any area/address text, even if you also record a more specific 'sublocality'.\n" +
-    "Handle updates to property type intelligently: if the user says 'type is X', 'Type - X', or describes the property category in any way, map it to the closest matching value from this exact list: 'Flat/ Apartment', 'Residential House', 'Villa', 'Builder Floor Apartment', 'Residential Land/ Plot', 'Penthouse', 'Studio Apartment', 'Commercial Office Space', 'Office in IT Park/ SEZ', 'Commercial Shop', 'Commercial Showroom', 'Commercial Land', 'Warehouse/ Godown', 'Industrial Land', 'Industrial Building', 'Industrial Shed', 'Agricultural Land', 'Farm House', 'Others'. For example, 'Type - Residential old house' or 'its an old independent house' both map to 'Residential House'. Never leave 'type' null when the user has specified any property category — always pick the closest match from the list above rather than leaving it unset.\n" +
+    "Handle updates to property type intelligently: if the user says 'type is X', 'Type - X', or describes the property category in any way, map it to the closest matching value from this exact list: 'Flat/ Apartment', 'Residential House', 'Villa', 'Builder Floor Apartment', 'Residential Land/ Plot', 'Penthouse', 'Studio Apartment', 'Residential PG building', 'PG/ Hostel', 'Commercial Office Space', 'Office in IT Park/ SEZ', 'Commercial Shop', 'Commercial Showroom', 'Commercial Land', 'Warehouse/ Godown', 'Industrial Land', 'Industrial Building', 'Industrial Shed', 'Agricultural Land', 'Farm House', 'Others'. For example, 'Type - Residential old house' or 'its an old independent house' both map to 'Residential House'; 'PG for girls' or 'paying guest accommodation' maps to 'PG/ Hostel'. Never leave 'type' null when the user has specified any property category — always pick the closest match from the list above rather than leaving it unset.\n" +
+    "Handle updates to bedrooms intelligently: 'X BHK' or 'X bhk' means bedrooms = X. Always update 'bedrooms' when a BHK count is given.\n" +
+    "Handle updates to area intelligently: 'area_sqft' is the BUILT-UP/carpet area of a structure; 'land_area' (with 'land_area_unit') is the SITE/PLOT size. If the user gives a 'plot'/'site'/land size figure, set 'land_area', not 'area_sqft' — even for a house/villa on that plot.\n" +
     "Include fields for rental vertical updates: listing_type ('Sale' or 'Rent'), rent_per_month, maintenance, advance, and gst.\n" +
     "Output MUST be valid JSON.";
 
@@ -576,6 +605,9 @@ export async function updateListingDraft(
       // fall back to the prior value) rather than letting it revert to
       // null when the user clearly specified a category.
       type: normalizePropertyType(parsed.type ?? currentDraft.type) as ParsedPropertyDraft["type"],
+      // Same idea for 'bedrooms' — fall back to extracting "X BHK" from
+      // the raw correction text if the model didn't set it.
+      bedrooms: parsed.bedrooms ?? currentDraft.bedrooms ?? extractBedroomsFromText(updateRequest) ?? null,
       // Retain images and other fields if they were omitted in the response
       images: currentDraft.images || []
     };
