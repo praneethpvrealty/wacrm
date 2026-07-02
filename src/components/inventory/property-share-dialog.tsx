@@ -1115,7 +1115,7 @@ export function PropertyShareDialog({
                 </Button>
                 <Button
                   onClick={async () => {
-                    const shareData: Record<string, unknown> = {
+                    const shareData: ShareData = {
                       title: property.title || 'Property Details',
                       text: generateAgentMessage(),
                     };
@@ -1126,7 +1126,12 @@ export function PropertyShareDialog({
                       try {
                         const response = await fetch(imageUrl);
                         const blob = await response.blob();
-                        const file = new File([blob], `${property.title || 'property'}.jpg`, { type: blob.type || 'image/jpeg' });
+                        const sanitizedTitle = (property.title || 'property')
+                          .replace(/[^a-zA-Z0-9\s_-]/g, '')
+                          .trim()
+                          .replace(/\s+/g, '_')
+                          .slice(0, 50);
+                        const file = new File([blob], `${sanitizedTitle || 'property'}.jpg`, { type: blob.type || 'image/jpeg' });
                         if (navigator.canShare({ files: [file] })) {
                           shareData.files = [file];
                         }
@@ -1140,7 +1145,21 @@ export function PropertyShareDialog({
                         await navigator.share(shareData);
                       } catch (err) {
                         if ((err as Error).name !== 'AbortError') {
-                          toast.error('Failed to share');
+                          // If sharing with files failed, fall back to text-only share
+                          if (shareData.files) {
+                            try {
+                              await navigator.share({
+                                title: shareData.title,
+                                text: shareData.text,
+                              });
+                            } catch (fallbackErr) {
+                              if ((fallbackErr as Error).name !== 'AbortError') {
+                                toast.error('Failed to share');
+                              }
+                            }
+                          } else {
+                            toast.error('Failed to share');
+                          }
                         }
                       }
                     } else {
